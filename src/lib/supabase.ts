@@ -14,6 +14,9 @@ export function getSupabaseServer(): SupabaseClient<Database> | null {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceKey) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[CRITICAL] SUPABASE_URL または SUPABASE_SERVICE_ROLE_KEY が未設定。mockデータで動作中！');
+    }
     return null;
   }
 

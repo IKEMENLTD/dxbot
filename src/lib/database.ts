@@ -245,6 +245,36 @@ export interface Database {
           },
         ];
       };
+      conversation_states: {
+        Row: {
+          line_user_id: string;
+          state: Record<string, unknown>;
+          preferred_name: string | null;
+          industry: string | null;
+          lead_source: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          line_user_id: string;
+          state: Record<string, unknown>;
+          preferred_name?: string | null;
+          industry?: string | null;
+          lead_source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          line_user_id?: string;
+          state?: Record<string, unknown>;
+          preferred_name?: string | null;
+          industry?: string | null;
+          lead_source?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       recommend_scores: {
         Row: {
           id: string;

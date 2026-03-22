@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import UserHeader from "@/components/user-card/UserHeader";
 import RadarChartComponent from "@/components/user-card/RadarChart";
@@ -9,28 +9,121 @@ import Timeline from "@/components/user-card/Timeline";
 import LtvHistory from "@/components/user-card/LtvHistory";
 import NotesActions from "@/components/user-card/NotesActions";
 import { mockUsers, mockTimeline, mockStumbles, mockDeals } from "@/lib/mock-data";
+import type { User, Deal, TimelineEvent, StumbleRecord } from "@/lib/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+interface UserDetailData {
+  user: User;
+  deals: Deal[];
+  timeline: TimelineEvent[];
+  stumbles: StumbleRecord[];
+}
+
+function BackButton() {
+  return (
+    <Link
+      href="/dashboard"
+      className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M19 12H5m7-7l-7 7 7 7" />
+      </svg>
+      一覧に戻る
+    </Link>
+  );
+}
+
+function SkeletonPage() {
+  return (
+    <div className="min-h-screen bg-[#F7F8FA]">
+      <div className="max-w-[1400px] mx-auto p-6">
+        <BackButton />
+        <div className="mt-6 space-y-6">
+          <div className="h-40 bg-gray-100 animate-pulse rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-2 h-64 bg-gray-100 animate-pulse rounded-2xl" />
+            <div className="lg:col-span-3 h-64 bg-gray-100 animate-pulse rounded-2xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-3 h-64 bg-gray-100 animate-pulse rounded-2xl" />
+            <div className="lg:col-span-2 h-64 bg-gray-100 animate-pulse rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserCardPage({ params }: PageProps) {
   const { id } = use(params);
-  const user = mockUsers.find((u) => u.id === id);
+  const [data, setData] = useState<UserDetailData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  if (!user) {
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`/api/users/${id}`, { signal: controller.signal })
+      .then((res) => {
+        if (res.status === 404) {
+          setNotFound(true);
+          return null;
+        }
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        return res.json();
+      })
+      .then((json: { data?: UserDetailData } | null) => {
+        if (!json) return;
+        if (json.data) {
+          setData(json.data);
+        } else {
+          // APIがデータを返さなかった場合、mockにfallback
+          const mockUser = mockUsers.find((u) => u.id === id);
+          if (!mockUser) {
+            setNotFound(true);
+            return;
+          }
+          setData({
+            user: mockUser,
+            deals: mockDeals.filter((d) => d.user_id === id),
+            timeline: mockTimeline.filter((e) => e.user_id === id),
+            stumbles: mockStumbles.filter((s) => s.user_id === id),
+          });
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[UserCard] データ取得エラー:", err);
+        // mockにfallback
+        const mockUser = mockUsers.find((u) => u.id === id);
+        if (!mockUser) {
+          setNotFound(true);
+          return;
+        }
+        setData({
+          user: mockUser,
+          deals: mockDeals.filter((d) => d.user_id === id),
+          timeline: mockTimeline.filter((e) => e.user_id === id),
+          stumbles: mockStumbles.filter((s) => s.user_id === id),
+        });
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, [id]);
+
+  if (loading) {
+    return <SkeletonPage />;
+  }
+
+  if (notFound || !data) {
     return (
       <div className="min-h-screen bg-[#F7F8FA]">
         <div className="max-w-[1400px] mx-auto p-6">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5m7-7l-7 7 7 7" />
-            </svg>
-            一覧に戻る
-          </Link>
+          <BackButton />
           <div className="flex items-center justify-center h-[60vh]">
             <p className="text-gray-400 text-sm">ID: {id} に該当するユーザーが見つかりません</p>
           </div>
@@ -39,23 +132,15 @@ export default function UserCardPage({ params }: PageProps) {
     );
   }
 
-  const userTimeline = mockTimeline.filter((e) => e.user_id === user.id);
-  const userStumbles = mockStumbles.filter((s) => s.user_id === user.id);
-  const userDeals = mockDeals.filter((d) => d.user_id === user.id);
+  const { user, deals: userDeals, timeline: userTimeline, stumbles: userStumbles } = data;
 
   return (
     <div className="min-h-screen bg-[#F7F8FA]">
       <div className="max-w-[1400px] mx-auto p-6">
         {/* Back button */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm mb-6"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5m7-7l-7 7 7 7" />
-          </svg>
-          一覧に戻る
-        </Link>
+        <div className="mb-6">
+          <BackButton />
+        </div>
 
         <main className="space-y-6">
           {/* Row 1: UserHeader (full width) */}

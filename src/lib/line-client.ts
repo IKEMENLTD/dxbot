@@ -19,7 +19,11 @@ function getChannelSecret(): string | null {
 export function verifySignature(body: string, signature: string): boolean {
   const secret = getChannelSecret();
   if (!secret) {
-    console.log('[LINE Mock] 署名検証スキップ（LINE_CHANNEL_SECRET 未設定）');
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[LINE] LINE_CHANNEL_SECRET 未設定。署名検証不可');
+      return false;
+    }
+    console.log('[LINE Mock] 署名検証スキップ（開発モード）');
     return true;
   }
 
@@ -40,7 +44,11 @@ export async function replyMessage(
 ): Promise<void> {
   const token = getChannelAccessToken();
   if (!token) {
-    console.log('[LINE Mock] replyMessage:', JSON.stringify({ replyToken, messages }, null, 2));
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。replyMessage 送信不可');
+    } else {
+      console.log('[LINE Mock] replyMessage:', JSON.stringify({ replyToken, messages }, null, 2));
+    }
     return;
   }
 
@@ -76,7 +84,11 @@ export async function pushMessage(
 ): Promise<void> {
   const token = getChannelAccessToken();
   if (!token) {
-    console.log('[LINE Mock] pushMessage:', JSON.stringify({ to: userId, messages }, null, 2));
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。pushMessage 送信不可');
+    } else {
+      console.log('[LINE Mock] pushMessage:', JSON.stringify({ to: userId, messages }, null, 2));
+    }
     return;
   }
 
@@ -109,6 +121,10 @@ export async function pushMessage(
 export async function getProfile(userId: string): Promise<LineProfile | null> {
   const token = getChannelAccessToken();
   if (!token) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。getProfile 取得不可');
+      return null;
+    }
     console.log('[LINE Mock] getProfile:', userId);
     return {
       displayName: 'テストユーザー',

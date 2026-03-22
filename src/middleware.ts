@@ -36,10 +36,22 @@ export function middleware(request: NextRequest): NextResponse | undefined {
     return undefined;
   }
 
-  // ADMIN_PASSWORD 未設定時は認証スキップ（開発時の利便性）
+  // ADMIN_PASSWORD 未設定時の処理
   // ※MiddlewareではNode.js APIが使えないためprocess.envで直接参照
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
+    // 本番環境ではパスワード未設定でもログインを強制
+    if (process.env.NODE_ENV === "production") {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "ADMIN_PASSWORD が未設定です" },
+          { status: 503 }
+        );
+      }
+      const loginUrl = new URL("/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+    // 開発時のみスキップ
     return undefined;
   }
 

@@ -19,8 +19,14 @@ function generateToken(password: string): string {
 export async function verifySession(): Promise<boolean> {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  // 環境変数未設定の場合は認証スキップ（開発時の利便性）
+  // 環境変数未設定時の処理
   if (!adminPassword) {
+    // 本番環境では認証必須 - パスワード未設定はアクセス拒否
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Auth] ADMIN_PASSWORD 未設定。本番環境のため認証拒否");
+      return false;
+    }
+    // 開発時のみ認証スキップ
     return true;
   }
 
@@ -44,6 +50,10 @@ export async function createSession(password: string): Promise<boolean> {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (!adminPassword) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Auth] ADMIN_PASSWORD 未設定。本番環境のためセッション作成拒否");
+      return false;
+    }
     return true;
   }
 

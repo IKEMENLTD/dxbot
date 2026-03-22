@@ -1,7 +1,9 @@
 // ===== 会話状態管理 =====
+// Supabase接続時はDBに永続化、未接続時はインメモリfallback
 
 import type { AxisScores } from './types';
 import type { LineProfile } from './line-types';
+import { getSupabaseServer } from './supabase';
 
 /** 会話フェーズ */
 export type ConversationState =
@@ -23,8 +25,19 @@ export interface UserConversation {
   createdAt: string;
 }
 
+/** Supabase conversation_states テーブルの行型 */
+interface ConversationStateRow {
+  line_user_id: string;
+  state: ConversationState;
+  preferred_name: string | null;
+  industry: string | null;
+  lead_source: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
- * インメモリの会話状態ストア（将来的にはSupabase移行）
+ * インメモリの会話状態ストア（Supabase未接続時のfallback + キャッシュ）
  * LRU的に500件上限
  */
 const MAX_STORE_SIZE = 500;
@@ -53,31 +66,96 @@ function enforceMaxSize(): void {
 }
 
 /**
+ * DBの行をUserConversationに変換
+ */
+function mapRowToConversation(row: ConversationStateRow): UserConversation {
+  return {
+    lineUserId: row.line_user_id,
+    state: row.state,
+    preferredName: row.preferred_name,
+    industry: row.industry,
+    leadSource: row.lead_source,
+    createdAt: row.created_at,
+  };
+}
+
+/**
  * ユーザーの会話状態を取得
  */
-export function getState(lineUserId: string): UserConversation | null {
-  return conversationStore.get(lineUserId) ?? null;
+export async function getState(lineUserId: string): Promise<UserConversation | null> {
+  // まずインメモリキャッシュを確認
+  const cached = conversationStore.get(lineUserId);
+
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('conversation_states')
+        .select('*')
+        .eq('line_user_id', lineUserId)
+        .single();
+
+      if (error || !data) {
+        // DBにない場合はキャッシュを返す
+        return cached ?? null;
+      }
+
+      const conversation = mapRowToConversation(data as unknown as ConversationStateRow);
+      // キャッシュも更新
+      conversationStore.delete(lineUserId);
+      conversationStore.set(lineUserId, conversation);
+      return conversation;
+    } catch (err) {
+      console.error('[ConversationState] Supabase getState エラー:', err);
+      return cached ?? null;
+    }
+  }
+
+  // Supabase未接続: インメモリのみ
+  return cached ?? null;
 }
 
 /**
  * ユーザーの会話状態を更新
  */
-export function setState(lineUserId: string, update: Partial<UserConversation>): void {
+export async function setState(lineUserId: string, update: Partial<UserConversation>): Promise<void> {
   const existing = conversationStore.get(lineUserId);
   if (!existing) {
     console.warn(`[ConversationState] ユーザー未作成: ${lineUserId}`);
     return;
   }
 
-  // Mapの順序を更新するため一度削除して再挿入
+  const updated: UserConversation = { ...existing, ...update };
+
+  // インメモリ更新（Mapの順序を更新するため一度削除して再挿入）
   conversationStore.delete(lineUserId);
-  conversationStore.set(lineUserId, { ...existing, ...update });
+  conversationStore.set(lineUserId, updated);
+
+  // Supabase永続化
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      await supabase
+        .from('conversation_states')
+        .upsert({
+          line_user_id: lineUserId,
+          state: updated.state,
+          preferred_name: updated.preferredName,
+          industry: updated.industry,
+          lead_source: updated.leadSource,
+          created_at: updated.createdAt,
+          updated_at: new Date().toISOString(),
+        });
+    } catch (err) {
+      console.error('[ConversationState] Supabase setState エラー:', err);
+    }
+  }
 }
 
 /**
  * 新しいユーザーを作成
  */
-export function createUser(lineUserId: string, profile: LineProfile): UserConversation {
+export async function createUser(lineUserId: string, profile: LineProfile): Promise<UserConversation> {
   const conversation: UserConversation = {
     lineUserId,
     state: { phase: 'idle' },
@@ -89,6 +167,26 @@ export function createUser(lineUserId: string, profile: LineProfile): UserConver
 
   conversationStore.set(lineUserId, conversation);
   enforceMaxSize();
+
+  // Supabase永続化
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      await supabase
+        .from('conversation_states')
+        .upsert({
+          line_user_id: lineUserId,
+          state: conversation.state,
+          preferred_name: conversation.preferredName,
+          industry: conversation.industry,
+          lead_source: conversation.leadSource,
+          created_at: conversation.createdAt,
+          updated_at: new Date().toISOString(),
+        });
+    } catch (err) {
+      console.error('[ConversationState] Supabase createUser エラー:', err);
+    }
+  }
 
   return conversation;
 }

@@ -29,36 +29,48 @@ import {
  * LINE Webhook受信エンドポイント
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  let bodyText: string;
+
   try {
-    const bodyText = await request.text();
-    const signature = request.headers.get('x-line-signature') ?? '';
+    bodyText = await request.text();
+  } catch (error) {
+    console.error('[Webhook] リクエストボディ読み取りエラー:', error);
+    return NextResponse.json({ error: 'リクエスト読み取り失敗' }, { status: 400 });
+  }
 
-    // 署名検証
-    if (!verifySignature(bodyText, signature)) {
-      console.error('[Webhook] 署名検証失敗');
-      return NextResponse.json({ error: '署名検証失敗' }, { status: 401 });
-    }
+  const signature = request.headers.get('x-line-signature') ?? '';
 
-    const body: WebhookBody = JSON.parse(bodyText) as WebhookBody;
+  // 署名検証
+  if (!verifySignature(bodyText, signature)) {
+    console.error('[Webhook] 署名検証失敗');
+    return NextResponse.json({ error: '署名検証失敗' }, { status: 401 });
+  }
 
-    // 非同期でイベント処理（LINEの仕様: 200を即座に返す）
-    processEventsInBackground(body.events);
+  let body: WebhookBody;
+  try {
+    body = JSON.parse(bodyText) as WebhookBody;
+  } catch (error) {
+    console.error('[Webhook] JSONパースエラー:', error);
+    return NextResponse.json({ error: 'JSONパースエラー' }, { status: 400 });
+  }
 
+  try {
+    // イベント処理（同期で待つ - エラー検知のため）
+    await processEvents(body.events);
     return NextResponse.json({ status: 'ok' });
   } catch (error) {
-    console.error('[Webhook] リクエスト処理エラー:', error);
-    return NextResponse.json({ status: 'ok' });
+    console.error('[Webhook] イベント処理エラー:', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
 
 /**
- * イベントをバックグラウンドで処理
+ * イベントを処理（awaitで待つ）
+ * メッセージ送信は同期、DB書き込みエラーは個別catchで吸収
  */
-function processEventsInBackground(events: WebhookEvent[]): void {
+async function processEvents(events: WebhookEvent[]): Promise<void> {
   for (const event of events) {
-    handleEvent(event).catch((err) => {
-      console.error('[Webhook] イベント処理エラー:', err);
-    });
+    await handleEvent(event);
   }
 }
 
@@ -96,14 +108,14 @@ async function handleFollow(event: FollowEvent): Promise<void> {
     if (!profile) return;
 
     // ユーザー作成
-    const conversation = createUser(userId, profile);
+    const conversation = await createUser(userId, profile);
 
     // Welcome + 同意確認
     const msg = welcomeMessage(conversation.preferredName);
     await replyMessage(event.replyToken, [msg]);
 
     // 状態更新: consent_pending
-    setState(userId, { state: { phase: 'consent_pending' } });
+    await setState(userId, { state: { phase: 'consent_pending' } });
   } catch (error) {
     console.error('[Webhook] handleFollow エラー:', error);
   }
@@ -117,18 +129,18 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
     if (!userId) return;
 
     const text = event.message.text.trim();
-    const conversation = getState(userId);
+    const conversation = await getState(userId);
 
     // ユーザーが存在しない場合、新規作成
     if (!conversation) {
       const profile = await getProfile(userId);
       if (!profile) return;
-      createUser(userId, profile);
+      await createUser(userId, profile);
 
       // 「診断」キーワードなら同意確認
       if (text === '診断') {
         await replyMessage(event.replyToken, [consentMessage()]);
-        setState(userId, { state: { phase: 'consent_pending' } });
+        await setState(userId, { state: { phase: 'consent_pending' } });
         return;
       }
 
@@ -139,7 +151,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
     // 「診断」キーワードで再開
     if (text === '診断') {
       await replyMessage(event.replyToken, [consentMessage()]);
-      setState(userId, { state: { phase: 'consent_pending' } });
+      await setState(userId, { state: { phase: 'consent_pending' } });
       return;
     }
 
@@ -151,7 +163,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
           await startIndustrySelect(userId, event.replyToken);
         } else {
           await replyMessage(event.replyToken, [laterMessage()]);
-          setState(userId, { state: { phase: 'idle' } });
+          await setState(userId, { state: { phase: 'idle' } });
         }
         break;
 
@@ -174,7 +186,7 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
     const params = parsePostbackData(event.postback.data);
     const action = params.get('action') ?? '';
 
-    const conversation = getState(userId);
+    const conversation = await getState(userId);
     if (!conversation) {
       console.warn('[Webhook] ユーザー未登録のPostback:', userId);
       return;
@@ -218,7 +230,7 @@ async function handleConsent(
     await startIndustrySelect(userId, replyToken);
   } else {
     await replyMessage(replyToken, [laterMessage()]);
-    setState(userId, { state: { phase: 'idle' } });
+    await setState(userId, { state: { phase: 'idle' } });
   }
 }
 
@@ -227,7 +239,7 @@ async function handleConsent(
  */
 async function startIndustrySelect(userId: string, replyToken: string): Promise<void> {
   await replyMessage(replyToken, [industrySelectMessage()]);
-  setState(userId, { state: { phase: 'industry_select' } });
+  await setState(userId, { state: { phase: 'industry_select' } });
 }
 
 /**
@@ -241,7 +253,7 @@ async function handleIndustrySelect(
   const industry = params.get('value') ?? '';
 
   // 業種を保存
-  setState(userId, {
+  await setState(userId, {
     industry,
     state: { phase: 'diagnosis', questionIndex: 1, scores: {} },
   });
@@ -263,7 +275,7 @@ async function handleDiagnosisAnswer(
   replyToken: string,
   params: Map<string, string>
 ): Promise<void> {
-  const conversation = getState(userId);
+  const conversation = await getState(userId);
   if (!conversation) return;
 
   const state = conversation.state;
@@ -285,7 +297,7 @@ async function handleDiagnosisAnswer(
     const nextQ = getQuestion(nextIndex);
     if (!nextQ) return;
 
-    setState(userId, {
+    await setState(userId, {
       state: {
         phase: 'diagnosis',
         questionIndex: nextIndex,
@@ -323,7 +335,7 @@ async function completeDiagnosis(
   const weakAxis = determineWeakAxis(scores);
 
   // 状態更新
-  setState(userId, {
+  await setState(userId, {
     state: { phase: 'diagnosis_complete', scores },
   });
 
@@ -334,7 +346,7 @@ async function completeDiagnosis(
   await replyMessage(replyToken, [resultMsg, stepMsg]);
 
   // ステップフェーズへ
-  setState(userId, {
+  await setState(userId, {
     state: { phase: 'step_active', currentStep: 1 },
   });
 }

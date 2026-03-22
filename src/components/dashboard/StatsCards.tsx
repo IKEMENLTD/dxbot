@@ -1,12 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import { mockUsers, mockCtaHistory, mockFunnelKpi, mockDeals } from "@/lib/mock-data";
+import { useState, useEffect, useMemo } from "react";
+import type { User, Deal, CtaHistory, FunnelKpi } from "@/lib/types";
+import { mockCtaHistory, mockFunnelKpi, mockDeals } from "@/lib/mock-data";
 
 interface StatCardData {
   label: string;
   value: number;
   highlight?: boolean;
+}
+
+interface StatsCardsProps {
+  users: User[];
 }
 
 function StatCard({ label, value, highlight }: StatCardData) {
@@ -22,18 +27,51 @@ function StatCard({ label, value, highlight }: StatCardData) {
   );
 }
 
-function computeStats() {
-  const totalUsers = mockUsers.length;
-  const ctaFired = mockCtaHistory.length;
-  const latestWeek = mockFunnelKpi[mockFunnelKpi.length - 1];
-  const weeklyInflow = latestWeek ? latestWeek.inflow : 0;
-  const completedDeals = mockDeals.filter((d) => d.status === "completed").length;
-
-  return { totalUsers, weeklyInflow, ctaFired, completedDeals };
+interface KpiData {
+  deals: Deal[];
+  ctaHistory: CtaHistory[];
+  funnelKpi: FunnelKpi[];
 }
 
-export default function StatsCards() {
-  const stats = useMemo(() => computeStats(), []);
+export default function StatsCards({ users }: StatsCardsProps) {
+  const [kpiData, setKpiData] = useState<KpiData>({
+    deals: mockDeals,
+    ctaHistory: mockCtaHistory,
+    funnelKpi: mockFunnelKpi,
+  });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.all([
+      fetch("/api/deals", { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json: { data?: Deal[] } | null) => json?.data ?? mockDeals)
+        .catch(() => mockDeals),
+      fetch("/api/kpi", { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json: { data?: { funnel?: FunnelKpi[] } } | null) => json?.data?.funnel ?? mockFunnelKpi)
+        .catch(() => mockFunnelKpi),
+    ]).then(([deals, funnelKpi]) => {
+      setKpiData({
+        deals: deals as Deal[],
+        ctaHistory: mockCtaHistory, // CTA履歴のAPIは個別エンドポイントがないのでmock維持
+        funnelKpi: funnelKpi as FunnelKpi[],
+      });
+    });
+
+    return () => controller.abort();
+  }, []);
+
+  const stats = useMemo(() => {
+    const totalUsers = users.length;
+    const ctaFired = kpiData.ctaHistory.length;
+    const latestWeek = kpiData.funnelKpi[kpiData.funnelKpi.length - 1];
+    const weeklyInflow = latestWeek ? latestWeek.inflow : 0;
+    const completedDeals = kpiData.deals.filter((d) => d.status === "completed").length;
+
+    return { totalUsers, weeklyInflow, ctaFired, completedDeals };
+  }, [users, kpiData]);
 
   const cards: StatCardData[] = [
     { label: "池の総人数", value: stats.totalUsers },

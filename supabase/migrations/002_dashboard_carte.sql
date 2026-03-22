@@ -18,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_users_tags ON users USING GIN (tags);
 -- ===================================================================
 CREATE TABLE user_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   created_by TEXT NOT NULL DEFAULT 'admin',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -38,6 +38,7 @@ CREATE POLICY "user_notes_delete" ON user_notes FOR DELETE USING (true);
 
 -- ===================================================================
 -- 既存テーブルの不足RLSポリシー追加
+-- schema.sql で定義済みのポリシーとは別名で追加
 -- ===================================================================
 CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY "user_steps_insert" ON user_steps FOR INSERT WITH CHECK (true);
@@ -70,8 +71,9 @@ CREATE OR REPLACE FUNCTION log_status_change_to_timeline()
 RETURNS TRIGGER AS $$
 BEGIN
   IF OLD.customer_status IS DISTINCT FROM NEW.customer_status THEN
-    INSERT INTO user_timeline (user_id, type, description, metadata)
+    INSERT INTO user_timeline (id, user_id, type, description, metadata)
     VALUES (
+      'tl-auto-' || gen_random_uuid(),
       NEW.id,
       'status_change',
       'ステータス変更: ' || OLD.customer_status || ' → ' || NEW.customer_status,
@@ -93,8 +95,9 @@ CREATE TRIGGER trg_log_status_change
 CREATE OR REPLACE FUNCTION log_note_to_timeline()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO user_timeline (user_id, type, description, metadata)
+  INSERT INTO user_timeline (id, user_id, type, description, metadata)
   VALUES (
+    'tl-note-' || gen_random_uuid(),
     NEW.user_id,
     'note_added',
     '営業メモ: ' || LEFT(NEW.content, 50) || CASE WHEN LENGTH(NEW.content) > 50 THEN '...' ELSE '' END,
@@ -111,6 +114,7 @@ CREATE TRIGGER trg_log_note_added
 
 -- ===================================================================
 -- VIEW: hot_users_view（改善版）
+-- tags.id は TEXT、users.tags も TEXT[] なので直接照合
 -- ===================================================================
 DROP VIEW IF EXISTS hot_users_view;
 
@@ -118,7 +122,7 @@ CREATE OR REPLACE VIEW hot_users_view AS
 SELECT
   u.*,
   COALESCE(
-    (SELECT ARRAY_AGG(t.label ORDER BY t.label) FROM tags t WHERE t.id::TEXT = ANY(u.tags)),
+    (SELECT ARRAY_AGG(t.label ORDER BY t.label) FROM tags t WHERE t.id = ANY(u.tags)),
     '{}'
   ) AS tag_labels,
   (u.customer_status = 'techstars_grad') AS is_techstars_grad,
@@ -137,7 +141,7 @@ CREATE OR REPLACE VIEW user_detail_view AS
 SELECT
   u.*,
   COALESCE(
-    (SELECT ARRAY_AGG(t.label ORDER BY t.label) FROM tags t WHERE t.id::TEXT = ANY(u.tags)),
+    (SELECT ARRAY_AGG(t.label ORDER BY t.label) FROM tags t WHERE t.id = ANY(u.tags)),
     '{}'
   ) AS tag_labels,
   COALESCE(

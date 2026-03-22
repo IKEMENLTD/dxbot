@@ -9,9 +9,10 @@ CREATE TYPE chat_sender AS ENUM ('user', 'admin');
 
 -- ===================================================================
 -- tags マスターテーブル
+-- id は TEXT（users.tags の 'tag-1' 等と照合するため）
 -- ===================================================================
 CREATE TABLE tags (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   color tag_color NOT NULL DEFAULT 'gray',
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -30,8 +31,8 @@ CREATE INDEX idx_tags_sort_order ON tags (sort_order);
 -- ===================================================================
 CREATE TABLE user_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  tag_id UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -46,7 +47,7 @@ CREATE INDEX idx_user_tags_tag_id ON user_tags (tag_id);
 -- ===================================================================
 CREATE TABLE chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   sender chat_sender NOT NULL,
   content TEXT NOT NULL DEFAULT '',
   media_attachments JSONB NOT NULL DEFAULT '[]',
@@ -68,6 +69,7 @@ CREATE INDEX idx_chat_messages_unread ON chat_messages (user_id, read) WHERE rea
 
 -- ===================================================================
 -- VIEW: contact_list_view
+-- tags.id は TEXT、users.tags も TEXT[] なので直接照合可能
 -- ===================================================================
 CREATE OR REPLACE VIEW contact_list_view AS
 SELECT
@@ -94,7 +96,7 @@ LEFT JOIN LATERAL (
 ) unread ON TRUE
 LEFT JOIN LATERAL (
   SELECT JSONB_AGG(JSONB_BUILD_OBJECT('id', t.id, 'label', t.label, 'color', t.color) ORDER BY t.sort_order) AS tags
-  FROM user_tags ut JOIN tags t ON t.id = ut.tag_id WHERE ut.user_id = u.id
+  FROM tags t WHERE t.id = ANY(u.tags)
 ) tg ON TRUE
 ORDER BY lm.last_message_time DESC NULLS LAST;
 
@@ -121,16 +123,16 @@ CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT WITH CHECK (tru
 CREATE POLICY "chat_messages_update" ON chat_messages FOR UPDATE USING (true);
 
 -- ===================================================================
--- 初期データ: タグマスター
+-- 初期データ: タグマスター（id を TEXT で明示指定）
 -- ===================================================================
-INSERT INTO tags (label, color, sort_order) VALUES
-  ('高確度',           'green',  1),
-  ('補助金候補',       'green',  2),
-  ('フォロー必要',     'orange', 3),
-  ('要再アプローチ',   'orange', 4),
-  ('IT苦手',           'gray',   5),
-  ('決裁者',           'green',  6),
-  ('紹介可能',         'green',  7),
-  ('予算あり',         'green',  8),
-  ('繁忙期',           'orange', 9),
-  ('インボイス対応済', 'gray',  10);
+INSERT INTO tags (id, label, color, sort_order) VALUES
+  ('tag-1',  '高確度',           'green',  1),
+  ('tag-2',  '補助金候補',       'green',  2),
+  ('tag-3',  'フォロー必要',     'orange', 3),
+  ('tag-4',  '要再アプローチ',   'orange', 4),
+  ('tag-5',  'IT苦手',           'gray',   5),
+  ('tag-6',  '決裁者',           'green',  6),
+  ('tag-7',  '紹介可能',         'green',  7),
+  ('tag-8',  '予算あり',         'green',  8),
+  ('tag-9',  '繁忙期',           'orange', 9),
+  ('tag-10', 'インボイス対応済', 'gray',  10);

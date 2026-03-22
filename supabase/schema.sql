@@ -1,5 +1,6 @@
--- ===== DXBOT Schema v5.3 =====
+-- ===== DXBOT Schema v5.4 =====
 -- Supabase PostgreSQL DDL
+-- 全テーブルの id は TEXT PRIMARY KEY（seed_data との整合性確保）
 
 -- ENUMs
 CREATE TYPE exit_type AS ENUM ('techstars', 'taskmate', 'veteran_ai', 'custom_dev');
@@ -14,7 +15,7 @@ CREATE TYPE step_status AS ENUM ('not_started', 'in_progress', 'completed', 'ski
 
 -- ===== users =====
 CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   preferred_name TEXT NOT NULL,
   company_name TEXT NOT NULL,
   industry TEXT NOT NULL DEFAULT '',
@@ -47,8 +48,8 @@ CREATE INDEX idx_users_created_at ON users (created_at DESC);
 
 -- ===== deals =====
 CREATE TABLE deals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   exit_type exit_type NOT NULL,
   deal_amount INTEGER NOT NULL DEFAULT 0,
   subsidy_amount INTEGER NOT NULL DEFAULT 0,
@@ -67,8 +68,8 @@ CREATE INDEX idx_deals_started_at ON deals (started_at DESC);
 
 -- ===== user_steps =====
 CREATE TABLE user_steps (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   step_id TEXT NOT NULL,
   step_name TEXT NOT NULL,
   status step_status NOT NULL DEFAULT 'not_started',
@@ -85,8 +86,8 @@ CREATE UNIQUE INDEX idx_user_steps_user_step ON user_steps (user_id, step_id);
 
 -- ===== cta_history =====
 CREATE TABLE cta_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   trigger cta_trigger NOT NULL,
   recommended_exit exit_type NOT NULL,
   fired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -100,8 +101,8 @@ CREATE INDEX idx_cta_history_result ON cta_history (result);
 
 -- ===== user_timeline =====
 CREATE TABLE user_timeline (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type timeline_type NOT NULL,
   description TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}',
@@ -114,8 +115,8 @@ CREATE INDEX idx_user_timeline_type ON user_timeline (type);
 
 -- ===== recommend_scores =====
 CREATE TABLE recommend_scores (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   exit_type exit_type NOT NULL,
   score NUMERIC(5,2) NOT NULL DEFAULT 0,
   reason TEXT NOT NULL DEFAULT '',

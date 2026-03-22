@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { CustomerStatus } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/types";
+import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
 
 interface StatusItem {
   id: CustomerStatus;
@@ -19,9 +20,28 @@ function buildInitialStatuses(): StatusItem[] {
 }
 
 export default function StatusSettings() {
-  const [statuses, setStatuses] = useState<StatusItem[]>(buildInitialStatuses);
+  const [statuses, setStatuses] = useState<StatusItem[]>(() =>
+    loadFromStorage<StatusItem[]>(STORAGE_KEYS.STATUSES, buildInitialStatuses())
+  );
   const [editingId, setEditingId] = useState<CustomerStatus | null>(null);
   const [editLabel, setEditLabel] = useState("");
+
+  // Focus management
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingId !== null) {
+      editInputRef.current?.focus();
+    }
+  }, [editingId]);
+
+  const updateStatuses = useCallback((updater: (prev: StatusItem[]) => StatusItem[]) => {
+    setStatuses((prev) => {
+      const next = updater(prev);
+      saveToStorage(STORAGE_KEYS.STATUSES, next);
+      return next;
+    });
+  }, []);
 
   const handleEditStart = (item: StatusItem) => {
     setEditingId(item.id);
@@ -32,7 +52,7 @@ export default function StatusSettings() {
     if (editingId === null) return;
     const trimmed = editLabel.trim();
     if (!trimmed) return;
-    setStatuses((prev) =>
+    updateStatuses((prev) =>
       prev.map((s) => (s.id === editingId ? { ...s, label: trimmed } : s))
     );
     setEditingId(null);
@@ -42,6 +62,14 @@ export default function StatusSettings() {
   const handleEditCancel = () => {
     setEditingId(null);
     setEditLabel("");
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      handleEditCancel();
+    } else if (e.key === "Enter") {
+      handleEditSave();
+    }
   };
 
   return (
@@ -64,9 +92,11 @@ export default function StatusSettings() {
                 <td className="px-4 py-3">
                   {editingId === item.id ? (
                     <input
+                      ref={editInputRef}
                       type="text"
                       value={editLabel}
                       onChange={(e) => setEditLabel(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
                       className="bg-white border border-green-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-green-200 transition-colors w-full"
                     />
                   ) : (

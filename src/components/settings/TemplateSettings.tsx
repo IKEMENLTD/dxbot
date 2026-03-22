@@ -1,56 +1,102 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
 
-const INITIAL_TEMPLATES: string[] = [
-  "ステップの進捗はいかがですか？",
-  "補助金の申請受付が始まりました",
-  "次回のステップをお送りします",
-  "面談のご都合はいかがでしょうか？",
-  "研修お疲れ様でした。次のステップについてご相談しませんか？",
+const MAX_TEMPLATE_LENGTH = 200;
+
+interface TemplateItem {
+  id: string;
+  text: string;
+}
+
+const INITIAL_TEMPLATES: TemplateItem[] = [
+  { id: "tpl-1", text: "ステップの進捗はいかがですか？" },
+  { id: "tpl-2", text: "補助金の申請受付が始まりました" },
+  { id: "tpl-3", text: "次回のステップをお送りします" },
+  { id: "tpl-4", text: "面談のご都合はいかがでしょうか？" },
+  { id: "tpl-5", text: "研修お疲れ様でした。次のステップについてご相談しませんか？" },
 ];
 
 export default function TemplateSettings() {
-  const [templates, setTemplates] = useState<string[]>([...INITIAL_TEMPLATES]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<TemplateItem[]>(() =>
+    loadFromStorage<TemplateItem[]>(STORAGE_KEYS.TEMPLATES, [...INITIAL_TEMPLATES])
+  );
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newText, setNewText] = useState("");
+
+  // Delete confirmation
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Focus management
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editingId !== null) {
+      editTextareaRef.current?.focus();
+    }
+  }, [editingId]);
+
+  const updateTemplates = useCallback((updater: (prev: TemplateItem[]) => TemplateItem[]) => {
+    setTemplates((prev) => {
+      const next = updater(prev);
+      saveToStorage(STORAGE_KEYS.TEMPLATES, next);
+      return next;
+    });
+  }, []);
 
   const handleAdd = () => {
     const trimmed = newText.trim();
     if (!trimmed) return;
-    setTemplates((prev) => [...prev, trimmed]);
+    if (trimmed.length > MAX_TEMPLATE_LENGTH) return;
+    const newItem: TemplateItem = {
+      id: `tpl-${Date.now()}`,
+      text: trimmed,
+    };
+    updateTemplates((prev) => [...prev, newItem]);
     setNewText("");
   };
 
-  const handleDelete = (index: number) => {
-    setTemplates((prev) => prev.filter((_, i) => i !== index));
-    if (editingIndex === index) {
-      setEditingIndex(null);
+  const handleDeleteConfirm = (id: string) => {
+    updateTemplates((prev) => prev.filter((t) => t.id !== id));
+    setDeletingId(null);
+    if (editingId === id) {
+      setEditingId(null);
       setEditValue("");
     }
   };
 
-  const handleEditStart = (index: number) => {
-    setEditingIndex(index);
-    setEditValue(templates[index]);
+  const handleEditStart = (item: TemplateItem) => {
+    setEditingId(item.id);
+    setEditValue(item.text);
   };
 
   const handleEditSave = () => {
-    if (editingIndex === null) return;
+    if (editingId === null) return;
     const trimmed = editValue.trim();
     if (!trimmed) return;
-    setTemplates((prev) =>
-      prev.map((t, i) => (i === editingIndex ? trimmed : t))
+    if (trimmed.length > MAX_TEMPLATE_LENGTH) return;
+    updateTemplates((prev) =>
+      prev.map((t) => (t.id === editingId ? { ...t, text: trimmed } : t))
     );
-    setEditingIndex(null);
+    setEditingId(null);
     setEditValue("");
   };
 
   const handleEditCancel = () => {
-    setEditingIndex(null);
+    setEditingId(null);
     setEditValue("");
   };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      handleEditCancel();
+    }
+  };
+
+  const isNewTextOverLimit = newText.length > MAX_TEMPLATE_LENGTH;
+  const isEditValueOverLimit = editValue.length > MAX_TEMPLATE_LENGTH;
 
   return (
     <div>
@@ -64,27 +110,57 @@ export default function TemplateSettings() {
             </tr>
           </thead>
           <tbody>
-            {templates.map((template, index) => (
-              <tr key={`${index}-${template.slice(0, 10)}`} className="border-b border-gray-100">
+            {templates.map((template) => (
+              <tr key={template.id} className="border-b border-gray-100">
                 <td className="px-4 py-3">
-                  {editingIndex === index ? (
-                    <textarea
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      rows={2}
-                      className="w-full bg-white border border-green-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-green-200 transition-colors resize-none"
-                    />
+                  {editingId === template.id ? (
+                    <div>
+                      <textarea
+                        ref={editTextareaRef}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={handleEditKeyDown}
+                        rows={2}
+                        className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 transition-colors resize-none ${
+                          isEditValueOverLimit
+                            ? "border-orange-400 focus:ring-orange-200"
+                            : "border-green-300 focus:ring-green-200"
+                        }`}
+                      />
+                      <span className={`text-[10px] ${isEditValueOverLimit ? "text-orange-600" : "text-gray-400"}`}>
+                        {editValue.length}/{MAX_TEMPLATE_LENGTH}
+                      </span>
+                    </div>
                   ) : (
-                    <span className="text-gray-800">{template}</span>
+                    <span className="text-gray-800">{template.text}</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {editingIndex === index ? (
+                  {deletingId === template.id ? (
+                    <div className="bg-orange-50 rounded-xl p-2 flex items-center gap-2">
+                      <span className="text-xs text-gray-600">削除しますか？</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConfirm(template.id)}
+                        className="bg-orange-600 text-white rounded-lg text-xs px-2 py-1"
+                      >
+                        はい
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(null)}
+                        className="bg-gray-100 text-gray-600 rounded-lg text-xs px-2 py-1"
+                      >
+                        いいえ
+                      </button>
+                    </div>
+                  ) : editingId === template.id ? (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={handleEditSave}
-                        className="text-green-600 hover:text-green-700 transition-colors text-xs font-medium"
+                        disabled={isEditValueOverLimit}
+                        className="text-green-600 hover:text-green-700 transition-colors text-xs font-medium disabled:text-gray-300"
                       >
                         保存
                       </button>
@@ -100,14 +176,14 @@ export default function TemplateSettings() {
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => handleEditStart(index)}
+                        onClick={() => handleEditStart(template)}
                         className="text-gray-400 hover:text-gray-700 transition-colors text-xs"
                       >
                         編集
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(index)}
+                        onClick={() => setDeletingId(template.id)}
                         className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
                       >
                         削除
@@ -137,15 +213,23 @@ export default function TemplateSettings() {
             <textarea
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
               placeholder="定型文を入力"
               rows={2}
-              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors resize-none"
+              className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 transition-colors resize-none ${
+                isNewTextOverLimit
+                  ? "border-orange-400 focus:border-orange-400 focus:ring-orange-200"
+                  : "border-gray-200 focus:border-green-400 focus:ring-green-200"
+              }`}
             />
+            <span className={`text-[10px] ${isNewTextOverLimit ? "text-orange-600" : "text-gray-400"}`}>
+              {newText.length}/{MAX_TEMPLATE_LENGTH}
+            </span>
           </div>
           <button
             type="button"
             onClick={handleAdd}
-            disabled={!newText.trim()}
+            disabled={!newText.trim() || isNewTextOverLimit}
             className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
             追加

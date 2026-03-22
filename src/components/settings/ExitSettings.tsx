@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { ExitType } from "@/lib/types";
 import { EXIT_CONFIG } from "@/lib/types";
+import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
 
 interface ExitItem {
   id: ExitType;
@@ -35,9 +36,28 @@ const COLOR_MAP: Record<"green" | "orange", { colorClass: string; bgClass: strin
 };
 
 export default function ExitSettings() {
-  const [exits, setExits] = useState<ExitItem[]>(buildInitialExits);
+  const [exits, setExits] = useState<ExitItem[]>(() =>
+    loadFromStorage<ExitItem[]>(STORAGE_KEYS.EXITS, buildInitialExits())
+  );
   const [editingId, setEditingId] = useState<ExitType | null>(null);
   const [editLabel, setEditLabel] = useState("");
+
+  // Focus management
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingId !== null) {
+      editInputRef.current?.focus();
+    }
+  }, [editingId]);
+
+  const updateExits = useCallback((updater: (prev: ExitItem[]) => ExitItem[]) => {
+    setExits((prev) => {
+      const next = updater(prev);
+      saveToStorage(STORAGE_KEYS.EXITS, next);
+      return next;
+    });
+  }, []);
 
   const handleEditStart = (item: ExitItem) => {
     setEditingId(item.id);
@@ -48,7 +68,7 @@ export default function ExitSettings() {
     if (editingId === null) return;
     const trimmed = editLabel.trim();
     if (!trimmed) return;
-    setExits((prev) =>
+    updateExits((prev) =>
       prev.map((e) => (e.id === editingId ? { ...e, label: trimmed } : e))
     );
     setEditingId(null);
@@ -60,9 +80,17 @@ export default function ExitSettings() {
     setEditLabel("");
   };
 
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      handleEditCancel();
+    } else if (e.key === "Enter") {
+      handleEditSave();
+    }
+  };
+
   const handleColorChange = (id: ExitType, colorType: "green" | "orange") => {
     const mapped = COLOR_MAP[colorType];
-    setExits((prev) =>
+    updateExits((prev) =>
       prev.map((e) =>
         e.id === id
           ? { ...e, colorType, colorClass: mapped.colorClass, bgClass: mapped.bgClass }
@@ -92,9 +120,11 @@ export default function ExitSettings() {
                 <td className="px-4 py-3">
                   {editingId === item.id ? (
                     <input
+                      ref={editInputRef}
                       type="text"
                       value={editLabel}
                       onChange={(e) => setEditLabel(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
                       className="bg-white border border-green-300 rounded-lg px-3 py-1.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-green-200 transition-colors w-full"
                     />
                   ) : (

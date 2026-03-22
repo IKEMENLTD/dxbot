@@ -53,11 +53,15 @@ export default function StatsCards({ users }: StatsCardsProps) {
         .then((json: { data?: { funnel?: FunnelKpi[] } } | null) => json?.data?.funnel ?? mockFunnelKpi)
         .catch(() => mockFunnelKpi),
     ]).then(([deals, funnelKpi]) => {
-      setKpiData({
-        deals: deals as Deal[],
-        ctaHistory: mockCtaHistory, // CTA履歴のAPIは個別エンドポイントがないのでmock維持
-        funnelKpi: funnelKpi as FunnelKpi[],
-      });
+      if (!controller.signal.aborted) {
+        setKpiData({
+          deals: Array.isArray(deals) ? deals : mockDeals,
+          ctaHistory: mockCtaHistory,
+          funnelKpi: Array.isArray(funnelKpi) ? funnelKpi : mockFunnelKpi,
+        });
+      }
+    }).catch(() => {
+      // abort含む全エラーをキャッチ
     });
 
     return () => controller.abort();

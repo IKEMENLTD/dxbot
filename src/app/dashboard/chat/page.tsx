@@ -69,6 +69,7 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, newMsg]);
       setIsSending(true);
 
+      const controller = new AbortController();
       try {
         await fetch("/api/chat", {
           method: "POST",
@@ -77,9 +78,10 @@ export default function ChatPage() {
             userId: selectedUserId,
             message: text,
           }),
+          signal: controller.signal,
         });
       } catch {
-        // mock - ignore send errors
+        // abort含むエラーを無視
       } finally {
         setIsSending(false);
       }

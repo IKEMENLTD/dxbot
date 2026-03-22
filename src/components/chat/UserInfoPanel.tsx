@@ -53,6 +53,10 @@ export default function UserInfoPanel({
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [memo, setMemo] = useState(user.lead_note ?? "");
+  const [selectedStatus, setSelectedStatus] = useState(user.customer_status);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const isDragging = useRef(false);
@@ -89,12 +93,57 @@ export default function UserInfoPanel({
     [panelWidth]
   );
 
-  // Reset memo when user changes
+  // Reset state when user changes
   useEffect(() => {
     setMemo(user.lead_note ?? "");
+    setSelectedStatus(user.customer_status);
     setIsEditingTags(false);
     setShowTagDropdown(false);
-  }, [user.id, user.lead_note]);
+    setNoteSaved(false);
+  }, [user.id, user.lead_note, user.customer_status]);
+
+  const handleStatusChange = useCallback(
+    async (newStatus: string) => {
+      setSelectedStatus(newStatus as typeof user.customer_status);
+      setIsStatusUpdating(true);
+      try {
+        const res = await fetch(`/api/users/${user.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!res.ok) {
+          // 失敗時は元に戻す
+          setSelectedStatus(user.customer_status);
+        }
+      } catch {
+        setSelectedStatus(user.customer_status);
+      } finally {
+        setIsStatusUpdating(false);
+      }
+    },
+    [user.id, user.customer_status]
+  );
+
+  const handleSaveNote = useCallback(async () => {
+    setIsSavingNote(true);
+    setNoteSaved(false);
+    try {
+      const res = await fetch(`/api/users/${user.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: memo }),
+      });
+      if (res.ok) {
+        setNoteSaved(true);
+        setTimeout(() => setNoteSaved(false), 2000);
+      }
+    } catch {
+      // エラー時は何もしない（UIはそのまま）
+    } finally {
+      setIsSavingNote(false);
+    }
+  }, [user.id, memo]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -267,6 +316,18 @@ export default function UserInfoPanel({
           placeholder="メモを入力..."
           className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 resize-none"
         />
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            onClick={handleSaveNote}
+            disabled={isSavingNote}
+            className="bg-gray-900 text-white rounded-lg text-xs px-3 py-1.5 disabled:opacity-50 transition-opacity"
+          >
+            {isSavingNote ? "保存中..." : "保存"}
+          </button>
+          {noteSaved && (
+            <span className="text-xs text-green-600">保存しました</span>
+          )}
+        </div>
       </div>
 
       {/* Status Change */}
@@ -275,8 +336,10 @@ export default function UserInfoPanel({
           ステータス変更
         </h4>
         <select
-          defaultValue={user.customer_status}
-          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+          value={selectedStatus}
+          onChange={(e) => handleStatusChange(e.target.value)}
+          disabled={isStatusUpdating}
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 disabled:opacity-50"
         >
           <option value="prospect">見込み</option>
           <option value="contacted">コンタクト済</option>

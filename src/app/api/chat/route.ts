@@ -21,9 +21,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    if (userId.length > 100) {
+      return NextResponse.json(
+        { error: 'ユーザーIDが長すぎます（100文字以内）。' },
+        { status: 400 }
+      );
+    }
+
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
         { error: 'メッセージが空です。' },
+        { status: 400 }
+      );
+    }
+
+    if (message.length > 5000) {
+      return NextResponse.json(
+        { error: 'メッセージが長すぎます（5000文字以内）。' },
         { status: 400 }
       );
     }

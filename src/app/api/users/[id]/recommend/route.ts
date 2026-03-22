@@ -32,12 +32,14 @@ export async function GET(
 
     const stumbles = await getStumblesByUserId(id);
 
-    // 日数計算
+    // 日数計算（Invalid Date フォールバック）
     const now = new Date();
-    const createdAt = new Date(user.created_at);
+    const parsedCreatedAt = new Date(user.created_at);
+    const createdAt = Number.isNaN(parsedCreatedAt.getTime()) ? now : parsedCreatedAt;
     const daysSinceStart = Math.max(1, Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)));
 
-    const lastActionAt = new Date(user.last_action_at);
+    const parsedLastActionAt = new Date(user.last_action_at);
+    const lastActionAt = Number.isNaN(parsedLastActionAt.getTime()) ? now : parsedLastActionAt;
     const lastActionDaysAgo = Math.max(0, Math.floor((now.getTime() - lastActionAt.getTime()) / (1000 * 60 * 60 * 24)));
 
     // weakAxisを型安全に変換

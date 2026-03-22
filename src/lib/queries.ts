@@ -227,20 +227,26 @@ export async function getExitMetrics(): Promise<ExitMetrics[]> {
     return mockExitMetrics;
   }
 
-  // クライアント側で集計
+  // クライアント側で集計（null/undefined安全）
   const metricsMap = new Map<string, { count: number; revenue: number; subsidy_total: number }>();
 
   for (const row of data ?? []) {
+    // exit_type が null/undefined の行はスキップ
+    if (row.exit_type == null) continue;
+
+    const dealAmount = typeof row.deal_amount === 'number' ? row.deal_amount : 0;
+    const subsidyAmount = typeof row.subsidy_amount === 'number' ? row.subsidy_amount : 0;
+
     const existing = metricsMap.get(row.exit_type);
     if (existing) {
       existing.count += 1;
-      existing.revenue += row.deal_amount;
-      existing.subsidy_total += row.subsidy_amount;
+      existing.revenue += dealAmount;
+      existing.subsidy_total += subsidyAmount;
     } else {
       metricsMap.set(row.exit_type, {
         count: 1,
-        revenue: row.deal_amount,
-        subsidy_total: row.subsidy_amount,
+        revenue: dealAmount,
+        subsidy_total: subsidyAmount,
       });
     }
   }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import LineSettings from "@/components/settings/LineSettings";
 import TagSettings from "@/components/settings/TagSettings";
 import LeadSourceSettings from "@/components/settings/LeadSourceSettings";
 import TemplateSettings from "@/components/settings/TemplateSettings";
 import ExitSettings from "@/components/settings/ExitSettings";
 import StatusSettings from "@/components/settings/StatusSettings";
 
-type TabKey = "tags" | "leadSource" | "templates" | "exit" | "status";
+type TabKey = "line" | "tags" | "leadSource" | "templates" | "exit" | "status";
 
 interface TabDef {
   key: TabKey;
@@ -15,6 +16,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { key: "line", label: "LINE連携" },
   { key: "tags", label: "タグ" },
   { key: "leadSource", label: "流入元" },
   { key: "templates", label: "定型文" },
@@ -24,6 +26,8 @@ const TABS: TabDef[] = [
 
 function TabContent({ tab }: { tab: TabKey }) {
   switch (tab) {
+    case "line":
+      return <LineSettings />;
     case "tags":
       return <TagSettings />;
     case "leadSource":
@@ -38,7 +42,7 @@ function TabContent({ tab }: { tab: TabKey }) {
 }
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("tags");
+  const [activeTab, setActiveTab] = useState<TabKey>("line");
 
   return (
     <div>

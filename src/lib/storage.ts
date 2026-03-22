@@ -29,4 +29,5 @@ export const STORAGE_KEYS = {
   TEMPLATES: "dxbot_templates",
   EXITS: "dxbot_exits",
   STATUSES: "dxbot_statuses",
+  LINE_CONFIG: "dxbot_line_config",
 } as const;

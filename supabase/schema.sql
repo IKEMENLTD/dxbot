@@ -153,8 +153,7 @@ GROUP BY DATE_TRUNC('week', t.created_at)
 ORDER BY DATE_TRUNC('week', t.created_at);
 
 -- ===== RLS (Row Level Security) =====
--- 管理画面用のため、service_role での全アクセスを前提
--- 本番環境では適宜 RLS ポリシーを追加してください
+-- service_role キーで全アクセス。anon キーでは一切拒否（2重防御）。
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
@@ -163,16 +162,38 @@ ALTER TABLE cta_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommend_scores ENABLE ROW LEVEL SECURITY;
 
--- anon/authenticated に全読み取り許可（管理画面用）
-CREATE POLICY "Allow read all users" ON users FOR SELECT USING (true);
-CREATE POLICY "Allow read all deals" ON deals FOR SELECT USING (true);
-CREATE POLICY "Allow read all user_steps" ON user_steps FOR SELECT USING (true);
-CREATE POLICY "Allow read all cta_history" ON cta_history FOR SELECT USING (true);
-CREATE POLICY "Allow read all user_timeline" ON user_timeline FOR SELECT USING (true);
-CREATE POLICY "Allow read all recommend_scores" ON recommend_scores FOR SELECT USING (true);
+-- users: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_users" ON users FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_users" ON users FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_users" ON users FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_users" ON users FOR DELETE USING (false);
 
--- 書き込み権限（管理画面からの更新用）
-CREATE POLICY "Allow update users" ON users FOR UPDATE USING (true);
-CREATE POLICY "Allow insert user_timeline" ON user_timeline FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow insert deals" ON deals FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow update deals" ON deals FOR UPDATE USING (true);
+-- deals: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_deals" ON deals FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_deals" ON deals FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_deals" ON deals FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_deals" ON deals FOR DELETE USING (false);
+
+-- user_steps: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_user_steps" ON user_steps FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_user_steps" ON user_steps FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_user_steps" ON user_steps FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_user_steps" ON user_steps FOR DELETE USING (false);
+
+-- cta_history: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_cta_history" ON cta_history FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_cta_history" ON cta_history FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_cta_history" ON cta_history FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_cta_history" ON cta_history FOR DELETE USING (false);
+
+-- user_timeline: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_user_timeline" ON user_timeline FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_user_timeline" ON user_timeline FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_user_timeline" ON user_timeline FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_user_timeline" ON user_timeline FOR DELETE USING (false);
+
+-- recommend_scores: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_recommend_scores" ON recommend_scores FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_recommend_scores" ON recommend_scores FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_recommend_scores" ON recommend_scores FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_recommend_scores" ON recommend_scores FOR DELETE USING (false);

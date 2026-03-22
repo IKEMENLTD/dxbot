@@ -3,22 +3,24 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "dxbot_session";
 
 /**
- * 保護対象パスの判定
- */
-function isProtectedPath(pathname: string): boolean {
-  return pathname.startsWith("/dashboard");
-}
-
-/**
- * 認証スキップ対象パスの判定
+ * 認証不要パスの判定
  */
 function isPublicPath(pathname: string): boolean {
   return (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/api/webhook" ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico"
   );
+}
+
+/**
+ * 保護対象パスの判定
+ * /dashboard 以下 + /api 以下（公開パス除く）
+ */
+function isProtectedPath(pathname: string): boolean {
+  return pathname.startsWith("/dashboard") || pathname.startsWith("/api/");
 }
 
 export function middleware(request: NextRequest): NextResponse | undefined {
@@ -44,6 +46,14 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   // セッションcookieの存在チェック
   const sessionCookie = request.cookies.get(COOKIE_NAME);
   if (!sessionCookie?.value) {
+    // API Routeの場合は401を返す
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "認証が必要です" },
+        { status: 401 }
+      );
+    }
+    // ダッシュボードの場合はログインページにリダイレクト
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
@@ -56,8 +66,8 @@ export function middleware(request: NextRequest): NextResponse | undefined {
 export const config = {
   matcher: [
     /*
-     * /dashboard以下すべてにマッチ
-     * _next, api/auth, favicon.ico は isPublicPath で除外
+     * /dashboard以下 + /api以下すべてにマッチ
+     * _next, favicon.ico は除外
      */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],

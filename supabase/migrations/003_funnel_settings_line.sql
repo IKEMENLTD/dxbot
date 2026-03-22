@@ -70,7 +70,10 @@ CREATE TABLE IF NOT EXISTS monthly_goals (
 COMMENT ON TABLE monthly_goals IS '月間目標設定（GoalProgress用）';
 
 ALTER TABLE monthly_goals ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "monthly_goals_all" ON monthly_goals FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deny_anon_select_monthly_goals" ON monthly_goals FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_monthly_goals" ON monthly_goals FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_monthly_goals" ON monthly_goals FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_monthly_goals" ON monthly_goals FOR DELETE USING (false);
 
 -- ===================================================================
 -- app_settings テーブル（KVストア）
@@ -84,7 +87,10 @@ CREATE TABLE IF NOT EXISTS app_settings (
 COMMENT ON TABLE app_settings IS 'アプリ設定KVストア（LINE設定等）';
 
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "app_settings_all" ON app_settings FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deny_anon_select_app_settings" ON app_settings FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_app_settings" ON app_settings FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_app_settings" ON app_settings FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_app_settings" ON app_settings FOR DELETE USING (false);
 
 -- ===================================================================
 -- templates テーブル（定型文マスター）
@@ -102,7 +108,10 @@ COMMENT ON TABLE templates IS '定型文テンプレート';
 CREATE INDEX idx_templates_sort_order ON templates (sort_order);
 
 ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "templates_all" ON templates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deny_anon_select_templates" ON templates FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_templates" ON templates FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_templates" ON templates FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_templates" ON templates FOR DELETE USING (false);
 
 -- ===================================================================
 -- custom_lead_sources テーブル
@@ -119,7 +128,10 @@ COMMENT ON TABLE custom_lead_sources IS 'ENUM以外のカスタム流入元';
 CREATE INDEX idx_custom_lead_sources_sort ON custom_lead_sources (sort_order);
 
 ALTER TABLE custom_lead_sources ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "custom_lead_sources_all" ON custom_lead_sources FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deny_anon_select_custom_lead_sources" ON custom_lead_sources FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_custom_lead_sources" ON custom_lead_sources FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_custom_lead_sources" ON custom_lead_sources FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_custom_lead_sources" ON custom_lead_sources FOR DELETE USING (false);
 
 -- ===================================================================
 -- conversation_states テーブル（LINE会話状態）
@@ -142,7 +154,10 @@ CREATE INDEX idx_conversation_states_user_id ON conversation_states (user_id);
 CREATE INDEX idx_conversation_states_phase ON conversation_states ((state->>'phase'));
 
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "conversation_states_all" ON conversation_states FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "deny_anon_select_conversation_states" ON conversation_states FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_conversation_states" ON conversation_states FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_conversation_states" ON conversation_states FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_conversation_states" ON conversation_states FOR DELETE USING (false);
 
 -- ===================================================================
 -- diagnosis_results テーブル（診断結果履歴）
@@ -165,8 +180,10 @@ CREATE INDEX idx_diagnosis_results_user_id ON diagnosis_results (user_id);
 CREATE INDEX idx_diagnosis_results_diagnosed_at ON diagnosis_results (diagnosed_at DESC);
 
 ALTER TABLE diagnosis_results ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "diagnosis_results_select" ON diagnosis_results FOR SELECT USING (true);
-CREATE POLICY "diagnosis_results_insert" ON diagnosis_results FOR INSERT WITH CHECK (true);
+CREATE POLICY "deny_anon_select_diagnosis_results" ON diagnosis_results FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_diagnosis_results" ON diagnosis_results FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_diagnosis_results" ON diagnosis_results FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_diagnosis_results" ON diagnosis_results FOR DELETE USING (false);
 
 -- ===================================================================
 -- recommend_scores 拡張カラム

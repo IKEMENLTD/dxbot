@@ -1,7 +1,7 @@
 // ===== データ取得関数群 =====
 // Supabase 接続時は DB から、未接続時は mock-data にフォールバック
 
-import { supabaseServer } from './supabase';
+import { getSupabaseServer } from './supabase';
 import {
   mockUsers,
   mockDeals,
@@ -28,11 +28,12 @@ import type {
 
 /** 全ユーザー取得（スコア降順） */
 export async function getUsers(): Promise<User[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return [...mockUsers].sort((a, b) => b.score - a.score);
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('users')
     .select('*')
     .order('score', { ascending: false });
@@ -47,11 +48,12 @@ export async function getUsers(): Promise<User[]> {
 
 /** ユーザー詳細取得 */
 export async function getUserById(id: string): Promise<User | null> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockUsers.find((u) => u.id === id) ?? null;
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('id', id)
@@ -71,11 +73,12 @@ export async function getUserById(id: string): Promise<User | null> {
 
 /** 全成約取得 */
 export async function getDeals(): Promise<Deal[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockDeals;
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('deals')
     .select('*')
     .order('started_at', { ascending: false });
@@ -90,11 +93,12 @@ export async function getDeals(): Promise<Deal[]> {
 
 /** ユーザーの成約履歴 */
 export async function getDealsByUserId(userId: string): Promise<Deal[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockDeals.filter((d) => d.user_id === userId);
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('deals')
     .select('*')
     .eq('user_id', userId)
@@ -114,11 +118,12 @@ export async function getDealsByUserId(userId: string): Promise<Deal[]> {
 
 /** ユーザーのタイムライン */
 export async function getTimelineByUserId(userId: string): Promise<TimelineEvent[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockTimeline.filter((t) => t.user_id === userId);
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('user_timeline')
     .select('*')
     .eq('user_id', userId)
@@ -138,11 +143,12 @@ export async function getTimelineByUserId(userId: string): Promise<TimelineEvent
 
 /** ユーザーのstumble履歴 */
 export async function getStumblesByUserId(userId: string): Promise<StumbleRecord[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockStumbles.filter((s) => s.user_id === userId);
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('user_steps')
     .select('id, user_id, step_id, step_name, stumble_type, created_at')
     .eq('user_id', userId)
@@ -163,11 +169,12 @@ export async function getStumblesByUserId(userId: string): Promise<StumbleRecord
 
 /** CTA履歴全件 */
 export async function getCtaHistory(): Promise<CtaHistory[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockCtaHistory;
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('cta_history')
     .select('*')
     .order('fired_at', { ascending: false });
@@ -186,11 +193,12 @@ export async function getCtaHistory(): Promise<CtaHistory[]> {
 
 /** ファネルKPI */
 export async function getFunnelKpi(): Promise<FunnelKpi[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockFunnelKpi;
   }
 
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('weekly_kpi_view')
     .select('*');
 
@@ -204,12 +212,13 @@ export async function getFunnelKpi(): Promise<FunnelKpi[]> {
 
 /** 出口別メトリクス */
 export async function getExitMetrics(): Promise<ExitMetrics[]> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return mockExitMetrics;
   }
 
   // 集計クエリ: deals テーブルから exit_type 別に集計
-  const { data, error } = await supabaseServer
+  const { data, error } = await supabase
     .from('deals')
     .select('exit_type, deal_amount, subsidy_amount');
 
@@ -256,7 +265,8 @@ export async function updateUserStatus(
   userId: string,
   status: CustomerStatus
 ): Promise<{ success: boolean; error?: string }> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     // mock: ローカル配列を更新
     const user = mockUsers.find((u) => u.id === userId);
     if (!user) {
@@ -266,7 +276,7 @@ export async function updateUserStatus(
     return { success: true };
   }
 
-  const { error } = await supabaseServer
+  const { error } = await supabase
     .from('users')
     .update({ customer_status: status })
     .eq('id', userId);
@@ -284,7 +294,8 @@ export async function addUserNote(
   userId: string,
   note: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!supabaseServer) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     // mock: タイムラインに追加
     const newEvent: TimelineEvent = {
       id: `t-mock-${Date.now()}`,
@@ -298,7 +309,7 @@ export async function addUserNote(
     return { success: true };
   }
 
-  const { error } = await supabaseServer
+  const { error } = await supabase
     .from('user_timeline')
     .insert({
       user_id: userId,

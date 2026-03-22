@@ -1,9 +1,13 @@
 // GET /api/kpi - ファネルKPI取得
 
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { getFunnelKpi, getExitMetrics } from '@/lib/queries';
 
 export async function GET(): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const [funnel, exitMetrics] = await Promise.all([
       getFunnelKpi(),

@@ -29,24 +29,18 @@ COMMENT ON TABLE user_notes IS '個人カルテのメモ履歴';
 CREATE INDEX idx_user_notes_user_id ON user_notes (user_id);
 CREATE INDEX idx_user_notes_created_at ON user_notes (created_at DESC);
 
--- RLS
+-- RLS: anon キーでの全操作を拒否
 ALTER TABLE user_notes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "user_notes_select" ON user_notes FOR SELECT USING (true);
-CREATE POLICY "user_notes_insert" ON user_notes FOR INSERT WITH CHECK (true);
-CREATE POLICY "user_notes_update" ON user_notes FOR UPDATE USING (true);
-CREATE POLICY "user_notes_delete" ON user_notes FOR DELETE USING (true);
+CREATE POLICY "deny_anon_select_user_notes" ON user_notes FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_user_notes" ON user_notes FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_user_notes" ON user_notes FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_user_notes" ON user_notes FOR DELETE USING (false);
 
 -- ===================================================================
--- 既存テーブルの不足RLSポリシー追加
--- schema.sql で定義済みのポリシーとは別名で追加
+-- 既存テーブルの不足RLSポリシー追加（deny_anon で統一）
+-- schema.sql の deny_anon ポリシーで全操作を拒否済みのため、
+-- 追加のポリシーは不要。schema.sql 側で全操作 USING(false) 済み。
 -- ===================================================================
-CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (true);
-CREATE POLICY "user_steps_insert" ON user_steps FOR INSERT WITH CHECK (true);
-CREATE POLICY "user_steps_update" ON user_steps FOR UPDATE USING (true);
-CREATE POLICY "cta_history_insert" ON cta_history FOR INSERT WITH CHECK (true);
-CREATE POLICY "cta_history_update" ON cta_history FOR UPDATE USING (true);
-CREATE POLICY "recommend_scores_insert" ON recommend_scores FOR INSERT WITH CHECK (true);
-CREATE POLICY "recommend_scores_update" ON recommend_scores FOR UPDATE USING (true);
 
 -- ===================================================================
 -- トリガー: users.updated_at 自動更新

@@ -2,6 +2,7 @@
 // PATCH /api/users/[id] - ステータス更新
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { getUserById, updateUserStatus, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
 import type { CustomerStatus } from '@/lib/types';
 
@@ -17,6 +18,9 @@ export async function GET(
   _request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const { id } = await context.params;
     const user = await getUserById(id);
@@ -57,6 +61,9 @@ export async function PATCH(
   request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const { id } = await context.params;
     const body: unknown = await request.json();

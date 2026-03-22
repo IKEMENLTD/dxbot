@@ -1,9 +1,13 @@
 // GET /api/users - 全ユーザー取得
 
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { getUsers } from '@/lib/queries';
 
 export async function GET(): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const users = await getUsers();
     return NextResponse.json({ data: users });

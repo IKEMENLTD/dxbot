@@ -1,6 +1,7 @@
 // POST /api/users/[id]/notes - メモ追加
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { addUserNote } from '@/lib/queries';
 
 interface RouteContext {
@@ -11,6 +12,9 @@ export async function POST(
   request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const { id } = await context.params;
     const body: unknown = await request.json();

@@ -103,24 +103,26 @@ ORDER BY lm.last_message_time DESC NULLS LAST;
 COMMENT ON VIEW contact_list_view IS 'チャットコンタクト一覧: ユーザー+最新メッセージ+未読数+タグ';
 
 -- ===================================================================
--- RLS
+-- RLS: anon キーでの全操作を拒否（service_role のみバイパス）
 -- ===================================================================
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "tags_select" ON tags FOR SELECT USING (true);
-CREATE POLICY "tags_insert" ON tags FOR INSERT WITH CHECK (true);
-CREATE POLICY "tags_update" ON tags FOR UPDATE USING (true);
-CREATE POLICY "tags_delete" ON tags FOR DELETE USING (true);
+CREATE POLICY "deny_anon_select_tags" ON tags FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_tags" ON tags FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_tags" ON tags FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_tags" ON tags FOR DELETE USING (false);
 
-CREATE POLICY "user_tags_select" ON user_tags FOR SELECT USING (true);
-CREATE POLICY "user_tags_insert" ON user_tags FOR INSERT WITH CHECK (true);
-CREATE POLICY "user_tags_delete" ON user_tags FOR DELETE USING (true);
+CREATE POLICY "deny_anon_select_user_tags" ON user_tags FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_user_tags" ON user_tags FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_user_tags" ON user_tags FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_user_tags" ON user_tags FOR DELETE USING (false);
 
-CREATE POLICY "chat_messages_select" ON chat_messages FOR SELECT USING (true);
-CREATE POLICY "chat_messages_insert" ON chat_messages FOR INSERT WITH CHECK (true);
-CREATE POLICY "chat_messages_update" ON chat_messages FOR UPDATE USING (true);
+CREATE POLICY "deny_anon_select_chat_messages" ON chat_messages FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_chat_messages" ON chat_messages FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_chat_messages" ON chat_messages FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_chat_messages" ON chat_messages FOR DELETE USING (false);
 
 -- ===================================================================
 -- 初期データ: タグマスター（id を TEXT で明示指定）

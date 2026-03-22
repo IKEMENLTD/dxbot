@@ -1,6 +1,7 @@
 // GET /api/users/[id]/sales-email - 営業武器メール生成
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import { getUserById, getStumblesByUserId } from '@/lib/queries';
 import { calculateRecommendation } from '@/lib/recommend-engine';
 import { generateSalesEmail } from '@/lib/sales-email';
@@ -14,6 +15,9 @@ export async function GET(
   _request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
+  const authError = await requireAuth();
+  if (authError) return authError;
+
   try {
     const { id } = await context.params;
     const user = await getUserById(id);

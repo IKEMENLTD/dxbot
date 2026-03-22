@@ -1,6 +1,7 @@
 // ===== LINE接続テスト API Route =====
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 
 interface LineBotInfo {
   userId: string;
@@ -29,6 +30,9 @@ type TestResponse = TestSuccessResponse | TestErrorResponse;
  * チャネルアクセストークンでBot情報を取得し接続テスト
  */
 export async function POST(request: NextRequest): Promise<NextResponse<TestResponse>> {
+  const authError = await requireAuth();
+  if (authError) return authError as NextResponse<TestResponse>;
+
   try {
     const body: unknown = await request.json();
 

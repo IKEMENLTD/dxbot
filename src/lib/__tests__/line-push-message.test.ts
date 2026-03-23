@@ -20,7 +20,7 @@ describe('pushMessage', () => {
   });
 
   const testMessages: TextMessage[] = [{ type: 'text', text: 'テストメッセージ' }];
-  const testLineUserId = 'U1234567890abcdef';
+  const testLineUserId = 'U1234567890abcdef1234567890abcdef';
 
   it('トークン未設定（開発モード）: mockモードで成功を返す', async () => {
     vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', '');

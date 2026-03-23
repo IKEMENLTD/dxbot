@@ -3,69 +3,48 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "dxbot_session";
 
 /**
- * 認証不要パスの判定
+ * Middleware: API routeの認証のみ担当
+ * ページの認証チェックはlayout.tsxのサーバーサイドで行う
+ * （Next.js 16 + Netlify でmiddleware redirectがダブルスラッシュになる問題の回避）
  */
-function isPublicPath(pathname: string): boolean {
-  return (
-    pathname === "/admindashboard/login" ||
-    pathname.startsWith("/api/auth/") ||
-    pathname === "/api/webhook" ||
-    pathname.startsWith("/api/cron/")
-  );
-}
-
 export function middleware(request: NextRequest): NextResponse | undefined {
   const { pathname } = request.nextUrl;
 
-  // 公開パスはスキップ（matcherで既に/admindashboard/*と/api/*に限定済み）
-  if (isPublicPath(pathname)) {
+  // 公開APIはスキップ
+  if (
+    pathname.startsWith("/api/auth/") ||
+    pathname === "/api/webhook" ||
+    pathname.startsWith("/api/cron/")
+  ) {
     return undefined;
   }
 
-  // ADMIN_PASSWORD 未設定時の処理
-  // ※MiddlewareではNode.js APIが使えないためprocess.envで直接参照
+  // ADMIN_PASSWORD 未設定時
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) {
-    // 本番環境ではパスワード未設定でもログインを強制
     if (process.env.NODE_ENV === "production") {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          { error: "ADMIN_PASSWORD が未設定です" },
-          { status: 503 }
-        );
-      }
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/admindashboard/login";
-      return NextResponse.redirect(loginUrl);
+      return NextResponse.json(
+        { error: "ADMIN_PASSWORD が未設定です" },
+        { status: 503 }
+      );
     }
-    // 開発時のみスキップ
     return undefined;
   }
 
-  // セッションcookieの存在チェック
+  // セッションcookieチェック
   const sessionCookie = request.cookies.get(COOKIE_NAME);
   if (!sessionCookie?.value) {
-    // API Routeの場合は401を返す
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { error: "認証が必要です" },
-        { status: 401 }
-      );
-    }
-    // 管理ダッシュボードの場合は管理者ログインページにリダイレクト
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/admindashboard/login";
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.json(
+      { error: "認証が必要です" },
+      { status: 401 }
+    );
   }
 
-  // cookieが存在すればアクセス許可
-  // (トークンの詳細検証はAPI側で行う)
   return undefined;
 }
 
 export const config = {
   matcher: [
-    "/admindashboard/:path*",
-    "/api/:path*",
+    "/api/((?!auth/|webhook|cron/).*)",
   ],
 };

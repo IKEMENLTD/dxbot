@@ -10,23 +10,21 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 describe('pushMessage', () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
     vi.resetAllMocks();
-    process.env = { ...originalEnv };
+    vi.unstubAllEnvs();
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   const testMessages: TextMessage[] = [{ type: 'text', text: 'テストメッセージ' }];
   const testLineUserId = 'U1234567890abcdef';
 
   it('トークン未設定（開発モード）: mockモードで成功を返す', async () => {
-    delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', '');
+    vi.stubEnv('NODE_ENV', 'development');
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const result: PushMessageResult = await pushMessage(testLineUserId, testMessages);
@@ -38,8 +36,8 @@ describe('pushMessage', () => {
   });
 
   it('トークン未設定（本番モード）: エラーを返す', async () => {
-    delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', '');
+    vi.stubEnv('NODE_ENV', 'production');
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = await pushMessage(testLineUserId, testMessages);

@@ -219,7 +219,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added';
+          type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added' | 'reminder_sent';
           description: string;
           metadata: Record<string, unknown>;
           created_at: string;
@@ -227,14 +227,14 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added';
+          type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added' | 'reminder_sent';
           description: string;
           metadata?: Record<string, unknown>;
         };
         Update: {
           id?: string;
           user_id?: string;
-          type?: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added';
+          type?: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired' | 'status_change' | 'techstars_start' | 'techstars_complete' | 'rediagnosis' | 'deal_created' | 'note_added' | 'reminder_sent';
           description?: string;
           metadata?: Record<string, unknown>;
         };

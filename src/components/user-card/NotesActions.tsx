@@ -64,10 +64,9 @@ export default function NotesActions({ user, onUserUpdated }: NotesActionsProps)
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        setNoteFeedback({
-          type: "error",
-          message: data.error ?? "メモの保存に失敗しました",
-        });
+        const errorMsg = data.error ?? "メモの保存に失敗しました";
+        setNoteFeedback({ type: "error", message: errorMsg });
+        addToast("error", errorMsg);
         return;
       }
 

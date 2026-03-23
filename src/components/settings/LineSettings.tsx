@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { useToast } from "@/contexts/ToastContext";
 
 // ===== 型定義 =====
 
@@ -271,6 +272,7 @@ export default function LineSettings() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const { addToast } = useToast();
 
   // 初回ロード
   useEffect(() => {
@@ -286,23 +288,29 @@ export default function LineSettings() {
     if (!tokenInput.trim() || !secretInput.trim()) return;
 
     setSaving(true);
-    const updatedConfig: LineConfig = {
-      ...config,
-      channelAccessToken: tokenInput.trim(),
-      channelSecret: secretInput.trim(),
-      webhookUrl: getWebhookUrl(),
-      verified: false,
-      botName: null,
-    };
-    setConfig(updatedConfig);
-    saveToStorage(STORAGE_KEYS.LINE_CONFIG, updatedConfig);
+    try {
+      const updatedConfig: LineConfig = {
+        ...config,
+        channelAccessToken: tokenInput.trim(),
+        channelSecret: secretInput.trim(),
+        webhookUrl: getWebhookUrl(),
+        verified: false,
+        botName: null,
+      };
+      setConfig(updatedConfig);
+      saveToStorage(STORAGE_KEYS.LINE_CONFIG, updatedConfig);
 
-    setSaved(true);
-    setSaving(false);
-    setTestResult(null);
+      setSaved(true);
+      setSaving(false);
+      setTestResult(null);
+      addToast("success", "認証情報を保存しました");
 
-    setTimeout(() => setSaved(false), 3000);
-  }, [tokenInput, secretInput, config]);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaving(false);
+      addToast("error", "認証情報の保存に失敗しました");
+    }
+  }, [tokenInput, secretInput, config, addToast]);
 
   // 接続テスト
   const handleTest = useCallback(async () => {
@@ -335,16 +343,20 @@ export default function LineSettings() {
         };
         setConfig(updatedConfig);
         saveToStorage(STORAGE_KEYS.LINE_CONFIG, updatedConfig);
+        addToast("success", `接続成功 - Bot名: ${data.botName}`);
+      } else {
+        addToast("error", data.error ?? "接続テストに失敗しました");
       }
     } catch {
       setTestResult({
         success: false,
         error: "接続テストに失敗しました。ネットワーク接続を確認してください。",
       });
+      addToast("error", "接続テストに失敗しました。ネットワーク接続を確認してください。");
     } finally {
       setTesting(false);
     }
-  }, [config]);
+  }, [config, addToast]);
 
   // クリップボードコピー
   const handleCopy = useCallback(async () => {

@@ -760,6 +760,157 @@ export async function updateUserLineUserId(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reminder (リマインダー)
+// ---------------------------------------------------------------------------
+
+/** リマインダー対象ユーザーの型 */
+export interface ReminderTargetUser {
+  id: string;
+  line_user_id: string;
+  last_action_at: string;
+  customer_status: CustomerStatus;
+  last_completed_step: string | null;
+  paused_until: string | null;
+}
+
+/**
+ * リマインダー対象ユーザーを取得
+ * - last_action_at が minDaysAgo 日以上前
+ * - paused_until が null または過去
+ * - customer_status が active/prospect のみ
+ * - line_user_id が設定されている
+ */
+export async function getReminderTargetUsers(
+  minDaysAgo: number
+): Promise<ReminderTargetUser[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return [];
+  }
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - minDaysAgo);
+    const cutoffIso = cutoffDate.toISOString();
+    const nowIso = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, line_user_id, last_action_at, customer_status, last_completed_step, paused_until')
+      .lt('last_action_at', cutoffIso)
+      .in('customer_status', ['prospect', 'contacted'])
+      .not('line_user_id', 'is', null);
+
+    if (error) {
+      console.error('[getReminderTargetUsers] Supabase error:', error.message);
+      return [];
+    }
+
+    // paused_until が未来のユーザーをフィルタリング
+    const filtered = (data ?? []).filter((user) => {
+      if (user.paused_until && new Date(user.paused_until as string) > new Date(nowIso)) {
+        return false;
+      }
+      return true;
+    });
+
+    return filtered as unknown as ReminderTargetUser[];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'リマインダー対象ユーザー取得中にエラーが発生しました';
+    console.error('[getReminderTargetUsers] エラー:', msg);
+    return [];
+  }
+}
+
+/**
+ * 本日すでにリマインダーを送信済みかチェック
+ */
+export async function hasReminderSentToday(userId: string): Promise<boolean> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return false;
+  }
+
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { count, error } = await supabase
+      .from('user_timeline')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('type', 'reminder_sent')
+      .gte('created_at', todayStart.toISOString());
+
+    if (error) {
+      console.error('[hasReminderSentToday] Supabase error:', error.message);
+      return false;
+    }
+
+    return (count ?? 0) > 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'リマインダー送信チェック中にエラーが発生しました';
+    console.error('[hasReminderSentToday] エラー:', msg);
+    return false;
+  }
+}
+
+/**
+ * リマインダー送信をタイムラインに記録
+ */
+export async function recordReminderSent(
+  userId: string,
+  reminderLevel: string
+): Promise<void> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return;
+
+  try {
+    await supabase
+      .from('user_timeline')
+      .insert({
+        id: `${userId}_reminder_${Date.now()}`,
+        user_id: userId,
+        type: 'reminder_sent',
+        description: `リマインダー送信（${reminderLevel}）`,
+        metadata: { reminder_level: reminderLevel },
+      });
+  } catch (err) {
+    console.error('[recordReminderSent] エラー:', err);
+  }
+}
+
+/**
+ * paused_until を更新（一時停止設定）
+ */
+export async function updatePausedUntil(
+  userId: string,
+  pausedUntil: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ paused_until: pausedUntil })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[updatePausedUntil] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'paused_until更新中にエラーが発生しました';
+    console.error('[updatePausedUntil] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 /** ユーザーの未読数を取得 */
 export async function getUnreadCount(
   userId: string

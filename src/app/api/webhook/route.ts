@@ -5,7 +5,7 @@ import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, Postback
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
-import { saveMessage, updateUserLineUserId } from '@/lib/queries';
+import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus } from '@/lib/queries';
 import type { MessageType } from '@/lib/chat-types';
 import {
   getQuestion,
@@ -27,6 +27,11 @@ import {
   calculateScoreForStep,
 } from '@/lib/step-delivery';
 import {
+  checkAndFireCta,
+  handleCtaInterested,
+  handleCtaDeclined,
+} from '@/lib/cta-service';
+import {
   welcomeMessage,
   consentMessage,
   industrySelectMessage,
@@ -42,6 +47,11 @@ import {
   stepActiveGuideMessage,
   laterMessage,
   fallbackMessage,
+  ctaInterestedReplyMessage,
+  ctaDeclineReplyMessage,
+  reminderPauseConfirmMessage,
+  reminderStopConfirmMessage,
+  reminderResumeConfirmMessage,
 } from '@/lib/line-messages';
 
 /** つまずきタイプの検証 */
@@ -341,6 +351,18 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
       case 'step_pause':
         await handleStepPause(userId, event.replyToken);
         break;
+      case 'cta_response':
+        await handleCtaResponse(userId, event.replyToken, params);
+        break;
+      case 'reminder_resume':
+        await handleReminderResume(userId, event.replyToken);
+        break;
+      case 'reminder_pause':
+        await handleReminderPause(userId, event.replyToken);
+        break;
+      case 'reminder_stop':
+        await handleReminderStop(userId, event.replyToken);
+        break;
       default:
         console.warn('[Webhook] 不明なPostbackアクション:', action);
         break;
@@ -489,6 +511,13 @@ async function completeDiagnosis(
       stumbleCount: 0,
     },
   });
+
+  // 診断完了時にCTAチェック（エラーがあってもステップ配信を止めない）
+  try {
+    await checkAndFireCta(userId);
+  } catch (ctaErr) {
+    console.error('[Webhook] 診断完了後CTA チェックエラー（処理は続行）:', ctaErr);
+  }
 }
 
 // ===== ステップハンドラ =====
@@ -650,6 +679,13 @@ async function handleStepComplete(
       stumbleCount: state.stumbleCount,
     },
   });
+
+  // CTA発火チェック（エラーがあってもステップ配信を止めない）
+  try {
+    await checkAndFireCta(userId);
+  } catch (ctaErr) {
+    console.error('[Webhook] ステップ完了後CTA チェックエラー（処理は続行）:', ctaErr);
+  }
 }
 
 /**
@@ -833,6 +869,107 @@ async function resendCurrentStep(
 function findStepById(stepId: string): StepDefinition | null {
   const allSteps = getAllSteps();
   return allSteps.find((s) => s.id === stepId) ?? null;
+}
+
+// ===== CTA応答ハンドラ =====
+
+/**
+ * CTA応答処理（「詳しく聞く」「今はいい」）
+ */
+async function handleCtaResponse(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const ctaId = params.get('ctaId') ?? '';
+  const value = params.get('value') ?? '';
+
+  if (!ctaId) {
+    console.warn('[Webhook] cta_response: ctaId なし');
+    return;
+  }
+
+  if (value === 'interested') {
+    // 「詳しく聞く」
+    await handleCtaInterested(userId, ctaId);
+    await replyMessage(replyToken, [ctaInterestedReplyMessage()]);
+  } else if (value === 'decline') {
+    // 「今はいい」
+    await handleCtaDeclined(userId, ctaId);
+    await replyMessage(replyToken, [ctaDeclineReplyMessage()]);
+  } else {
+    console.warn('[Webhook] cta_response: 不明なvalue:', value);
+  }
+}
+
+// ===== リマインダー応答ハンドラ =====
+
+/**
+ * リマインダー「再開する」処理
+ * paused_untilをクリアし、最新ステップを案内
+ */
+async function handleReminderResume(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  try {
+    // paused_until をクリア
+    await updatePausedUntil(userId, null);
+
+    // 現在の会話状態から最新ステップ名を取得
+    const conversation = await getState(userId);
+    let stepName: string | null = null;
+
+    if (conversation) {
+      const { state } = conversation;
+      if (state.phase === 'step_active') {
+        const step = findStepById(state.currentStepId);
+        stepName = step?.name ?? null;
+      } else if (state.phase === 'step_ready') {
+        const nextStep = getNextStep(state.completedStepIds, state.weakAxis);
+        stepName = nextStep?.name ?? null;
+      }
+    }
+
+    await replyMessage(replyToken, [reminderResumeConfirmMessage(stepName)]);
+  } catch (error) {
+    console.error('[Webhook] handleReminderResume エラー:', error);
+  }
+}
+
+/**
+ * リマインダー「一時停止」処理
+ * paused_untilを7日後に設定
+ */
+async function handleReminderPause(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  try {
+    const pauseUntil = new Date();
+    pauseUntil.setDate(pauseUntil.getDate() + 7);
+
+    await updatePausedUntil(userId, pauseUntil.toISOString());
+    await replyMessage(replyToken, [reminderPauseConfirmMessage()]);
+  } catch (error) {
+    console.error('[Webhook] handleReminderPause エラー:', error);
+  }
+}
+
+/**
+ * リマインダー「配信停止」処理
+ * customer_status を churned に変更
+ */
+async function handleReminderStop(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  try {
+    await updateUserStatus(userId, 'churned');
+    await replyMessage(replyToken, [reminderStopConfirmMessage()]);
+  } catch (error) {
+    console.error('[Webhook] handleReminderStop エラー:', error);
+  }
 }
 
 // ===== ユーティリティ =====

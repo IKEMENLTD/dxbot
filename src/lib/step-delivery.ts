@@ -117,7 +117,7 @@ export async function recordStepSkipped(
  */
 export async function recordTimelineEvent(
   userId: string,
-  type: 'step_completed' | 'stumble' | 'step_skipped',
+  type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired',
   description: string,
   metadata: Record<string, string>
 ): Promise<void> {

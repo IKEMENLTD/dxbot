@@ -165,23 +165,25 @@ export default function FunnelPage() {
       </div>
 
       {/* 上段: ファネル図 (左60%) | 出口別カード (右40%) */}
-      {latestWeek && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          <div className="col-span-1 md:col-span-1 lg:col-span-3 bg-white rounded-2xl border border-gray-200 p-6">
-            <p className="text-sm font-semibold text-gray-600 mb-4">
-              ファネル
-            </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="col-span-1 md:col-span-1 lg:col-span-3 bg-white rounded-2xl border border-gray-200 p-6">
+          <p className="text-sm font-semibold text-gray-600 mb-4">
+            ファネル
+          </p>
+          {latestWeek ? (
             <FunnelChart data={latestWeek} />
-          </div>
-
-          <div className="col-span-1 md:col-span-1 lg:col-span-2">
-            <p className="text-sm font-semibold text-gray-600 mb-3">
-              出口別成約
-            </p>
-            <ExitCards data={exitMetrics} />
-          </div>
+          ) : (
+            <p className="text-sm text-gray-400 py-8 text-center">ファネルデータがありません</p>
+          )}
         </div>
-      )}
+
+        <div className="col-span-1 md:col-span-1 lg:col-span-2">
+          <p className="text-sm font-semibold text-gray-600 mb-3">
+            出口別成約
+          </p>
+          <ExitCards data={exitMetrics} />
+        </div>
+      </div>
 
       {/* 中段: 週次推移グラフ (全幅) */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">

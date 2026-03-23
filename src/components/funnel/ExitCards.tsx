@@ -9,6 +9,14 @@ interface ExitCardsProps {
 }
 
 export default function ExitCards({ data }: ExitCardsProps) {
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 p-6">
+        <p className="text-sm text-gray-400 text-center">出口別成約データがありません</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {data.map((metric) => {

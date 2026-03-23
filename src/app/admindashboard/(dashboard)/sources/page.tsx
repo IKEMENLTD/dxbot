@@ -357,6 +357,7 @@ export default function SourcesPage() {
   // ===== レンダー =====
 
   return (
+    <>
     <div className="p-6 space-y-6 animate-fade-in max-w-[1400px]">
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
@@ -519,6 +520,10 @@ export default function SourcesPage() {
           </table>
         </div>
       </div>
+
+    </div>
+
+    {/* ===== モーダル（コンテナ外に配置） ===== */}
 
       {/* ===== 作成モーダル ===== */}
       {showCreateModal && (
@@ -746,6 +751,6 @@ export default function SourcesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -267,7 +267,6 @@ export default function LineSettings() {
     setValue: setConfig,
     save: saveConfig,
     loading: configLoading,
-    saving: configDbSaving,
     error: dbError,
   } = useAppSetting<LineConfig>("line_config", DEFAULT_CONFIG, STORAGE_KEYS.LINE_CONFIG);
 

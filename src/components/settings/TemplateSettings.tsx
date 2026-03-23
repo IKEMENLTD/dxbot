@@ -25,7 +25,6 @@ export default function TemplateSettings() {
     setValue: setTemplates,
     save: saveTemplates,
     loading,
-    saving: dbSaving,
     error: dbError,
   } = useAppSetting<TemplateItem[]>("templates", [...INITIAL_TEMPLATES], STORAGE_KEYS.TEMPLATES);
 

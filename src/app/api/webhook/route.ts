@@ -7,10 +7,6 @@ import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
 import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus } from '@/lib/queries';
 import {
-  getQuestion,
-  getQuestionCount,
-  calculateScores,
-  determineBand,
   determineWeakAxis,
   getQuestionAsync,
   getQuestionCountAsync,

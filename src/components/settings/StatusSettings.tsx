@@ -26,7 +26,6 @@ export default function StatusSettings() {
     setValue: setStatuses,
     save: saveStatuses,
     loading,
-    saving: dbSaving,
     error: dbError,
   } = useAppSetting<StatusItem[]>("statuses", buildInitialStatuses(), STORAGE_KEYS.STATUSES);
 

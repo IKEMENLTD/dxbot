@@ -42,7 +42,6 @@ export default function ExitSettings() {
     setValue: setExits,
     save: saveExits,
     loading,
-    saving: dbSaving,
     error: dbError,
   } = useAppSetting<ExitItem[]>("exits", buildInitialExits(), STORAGE_KEYS.EXITS);
 

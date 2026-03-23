@@ -26,7 +26,6 @@ export default function LeadSourceSettings() {
     setValue: setSources,
     save: saveSources,
     loading,
-    saving: dbSaving,
     error: dbError,
   } = useAppSetting<LeadSourceItem[]>("lead_sources", [...INITIAL_SOURCES], STORAGE_KEYS.LEAD_SOURCES);
 

@@ -109,7 +109,7 @@ export default function DashboardPage() {
     <div className="p-8 space-y-6 max-w-[1400px]">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900">熱い人リスト</h1>
+        <h1 className="text-xl font-bold text-gray-900">リード管理</h1>
         <p className="text-sm text-gray-500 mt-1">
           スコア順 -- 全ユーザー一覧
         </p>

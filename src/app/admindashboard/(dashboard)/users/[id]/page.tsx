@@ -27,7 +27,7 @@ function BackButton() {
   return (
     <Link
       href="/admindashboard"
-      aria-label="熱い人リストに戻る"
+      aria-label="リード管理に戻る"
       className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

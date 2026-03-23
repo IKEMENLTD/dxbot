@@ -21,7 +21,7 @@ const navItems = [
   },
   {
     href: "/admindashboard",
-    label: "熱い人リスト",
+    label: "リード管理",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M10 2.5C10 2.5 4 6.5 4 11C4 14.3 6.7 17 10 17C13.3 17 16 14.3 16 11C16 6.5 10 2.5 10 2.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>

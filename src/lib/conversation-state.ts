@@ -13,7 +13,8 @@ export type ConversationState =
   | { phase: 'industry_select' }
   | { phase: 'diagnosis'; questionIndex: number; scores: Partial<AxisScores> }
   | { phase: 'diagnosis_complete'; scores: AxisScores }
-  | { phase: 'step_active'; currentStep: number };
+  | { phase: 'step_ready'; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number }
+  | { phase: 'step_active'; currentStepId: string; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number };
 
 /** ユーザーごとの会話データ */
 export interface UserConversation {

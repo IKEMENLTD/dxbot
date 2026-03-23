@@ -152,6 +152,31 @@ WHERE t.created_at >= NOW() - INTERVAL '8 weeks'
 GROUP BY DATE_TRUNC('week', t.created_at)
 ORDER BY DATE_TRUNC('week', t.created_at);
 
+-- ===== chat_messages =====
+CREATE TABLE chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender chat_sender NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  media_attachments JSONB NOT NULL DEFAULT '[]',
+  read BOOLEAN NOT NULL DEFAULT FALSE,
+  direction TEXT NOT NULL DEFAULT 'inbound' CHECK (direction IN ('inbound', 'outbound')),
+  line_user_id TEXT,
+  line_message_id TEXT,
+  message_type TEXT NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'sticker', 'postback')),
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_chat_messages_user_id ON chat_messages (user_id);
+CREATE INDEX idx_chat_messages_created_at ON chat_messages (created_at DESC);
+CREATE INDEX idx_chat_messages_user_created ON chat_messages (user_id, created_at DESC);
+CREATE INDEX idx_chat_messages_unread ON chat_messages (user_id, read) WHERE read = FALSE;
+CREATE INDEX idx_chat_messages_sent_at ON chat_messages (sent_at DESC);
+CREATE INDEX idx_chat_messages_line_user_id ON chat_messages (line_user_id);
+CREATE INDEX idx_chat_messages_direction ON chat_messages (direction);
+
 -- ===== RLS (Row Level Security) =====
 -- service_role キーで全アクセス。anon キーでは一切拒否（2重防御）。
 
@@ -161,6 +186,7 @@ ALTER TABLE user_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cta_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommend_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- users: anon キーでの全操作を拒否
 CREATE POLICY "deny_anon_select_users" ON users FOR SELECT USING (false);
@@ -197,3 +223,9 @@ CREATE POLICY "deny_anon_select_recommend_scores" ON recommend_scores FOR SELECT
 CREATE POLICY "deny_anon_insert_recommend_scores" ON recommend_scores FOR INSERT WITH CHECK (false);
 CREATE POLICY "deny_anon_update_recommend_scores" ON recommend_scores FOR UPDATE USING (false);
 CREATE POLICY "deny_anon_delete_recommend_scores" ON recommend_scores FOR DELETE USING (false);
+
+-- chat_messages: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_chat_messages" ON chat_messages FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_chat_messages" ON chat_messages FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_chat_messages" ON chat_messages FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_chat_messages" ON chat_messages FOR DELETE USING (false);

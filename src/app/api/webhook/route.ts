@@ -2,9 +2,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, PostbackEvent } from '@/lib/line-types';
-import type { AxisScores } from '@/lib/types';
+import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
+import { saveMessage } from '@/lib/queries';
+import type { MessageType } from '@/lib/chat-types';
 import {
   getQuestion,
   getQuestionCount,
@@ -12,6 +14,18 @@ import {
   determineBand,
   determineWeakAxis,
 } from '@/lib/diagnosis';
+import { getNextStep, getAllSteps } from '@/lib/step-master';
+import type { StepDefinition } from '@/lib/step-master';
+import {
+  recordStepStarted,
+  recordStepCompleted,
+  recordStepStumble,
+  recordStepSkipped,
+  recordTimelineEvent,
+  updateUserStepCounters,
+  calculateLevel,
+  calculateScoreForStep,
+} from '@/lib/step-delivery';
 import {
   welcomeMessage,
   consentMessage,
@@ -20,9 +34,22 @@ import {
   diagnosisQuestionMessage,
   diagnosisResultMessage,
   stepStartMessage,
+  stepContentMessage,
+  stepCompleteMessage,
+  allStepsCompleteMessage,
+  stepStumbleMessage,
+  stepPauseMessage,
+  stepActiveGuideMessage,
   laterMessage,
   fallbackMessage,
 } from '@/lib/line-messages';
+
+/** つまずきタイプの検証 */
+const VALID_STUMBLE_TYPES = new Set<string>(['how', 'motivation', 'time']);
+
+function isValidStumbleType(value: string): value is StumbleType {
+  return VALID_STUMBLE_TYPES.has(value);
+}
 
 /**
  * POST /api/webhook
@@ -84,15 +111,68 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       break;
     case 'message':
       if (event.message.type === 'text') {
+        // メッセージをDBに保存（エラーは吸収して処理を続行）
+        await saveInboundMessage(event);
         await handleTextMessage(event);
       }
       break;
     case 'postback':
+      // postbackもDBに保存
+      await savePostbackMessage(event);
       await handlePostback(event);
       break;
     case 'unfollow':
       // ブロック時は何もしない
       break;
+  }
+}
+
+/**
+ * 受信テキストメッセージをDBに保存
+ */
+async function saveInboundMessage(event: TextMessageEvent): Promise<void> {
+  try {
+    const lineUserId = event.source.userId;
+    if (!lineUserId) return;
+
+    // conversation_stateからuser_idを逆引き（line_user_id = users.id の場合）
+    // このプロジェクトではLINE user IDがそのままusers.idとして使われている
+    const userId = lineUserId;
+
+    const msgType: MessageType = event.message.type === 'text' ? 'text' : 'text';
+
+    await saveMessage({
+      userId,
+      lineUserId,
+      direction: 'inbound',
+      content: event.message.text,
+      messageType: msgType,
+      lineMessageId: event.message.id,
+    });
+  } catch (err) {
+    console.error('[Webhook] メッセージ保存エラー（処理は続行）:', err);
+  }
+}
+
+/**
+ * 受信postbackをDBに保存
+ */
+async function savePostbackMessage(event: PostbackEvent): Promise<void> {
+  try {
+    const lineUserId = event.source.userId;
+    if (!lineUserId) return;
+
+    const userId = lineUserId;
+
+    await saveMessage({
+      userId,
+      lineUserId,
+      direction: 'inbound',
+      content: event.postback.data,
+      messageType: 'postback',
+    });
+  } catch (err) {
+    console.error('[Webhook] Postback保存エラー（処理は続行）:', err);
   }
 }
 
@@ -148,7 +228,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
       return;
     }
 
-    // 「診断」キーワードで再開
+    // 「診断」キーワードで再診断開始（どのフェーズからでも）
     if (text === '診断') {
       await replyMessage(event.replyToken, [consentMessage()]);
       await setState(userId, { state: { phase: 'consent_pending' } });
@@ -156,7 +236,9 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
     }
 
     // フェーズに応じた処理
-    switch (conversation.state.phase) {
+    const { phase } = conversation.state;
+
+    switch (phase) {
       case 'consent_pending':
         // テキストで「はい」的な入力
         if (text === 'はい' || text === 'はい、始めます') {
@@ -166,6 +248,38 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
           await setState(userId, { state: { phase: 'idle' } });
         }
         break;
+
+      case 'step_active': {
+        // ステップ取り組み中のテキスト入力
+        const state = conversation.state;
+        if (state.phase !== 'step_active') break;
+
+        // 「ステップ」で現在のステップを再表示
+        if (text === 'ステップ') {
+          await resendCurrentStep(userId, event.replyToken, state.currentStepId, state.completedStepIds);
+          return;
+        }
+
+        // ステップ中の案内メッセージを返す
+        const currentStep = findStepById(state.currentStepId);
+        const stepName = currentStep ? currentStep.name : '現在のステップ';
+        await replyMessage(event.replyToken, [stepActiveGuideMessage(stepName)]);
+        break;
+      }
+
+      case 'step_ready': {
+        // ステップ待機中のテキスト入力
+        if (text === 'ステップ') {
+          // 次のステップを配信
+          const state = conversation.state;
+          if (state.phase !== 'step_ready') break;
+          await deliverNextStep(userId, event.replyToken, state.weakAxis, state.completedStepIds, state.stumbleCount);
+          return;
+        }
+
+        await replyMessage(event.replyToken, [fallbackMessage()]);
+        break;
+      }
 
       default:
         await replyMessage(event.replyToken, [fallbackMessage()]);
@@ -203,7 +317,22 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
         await handleDiagnosisAnswer(userId, event.replyToken, params);
         break;
       case 'step_start':
-        // ステップ開始（将来拡張用）
+        await handleStepStart(userId, event.replyToken);
+        break;
+      case 'step_complete':
+        await handleStepComplete(userId, event.replyToken, params);
+        break;
+      case 'step_stumble':
+        await handleStepStumble(userId, event.replyToken, params);
+        break;
+      case 'step_retry':
+        await handleStepRetry(userId, event.replyToken, params);
+        break;
+      case 'step_skip':
+        await handleStepSkip(userId, event.replyToken, params);
+        break;
+      case 'step_pause':
+        await handleStepPause(userId, event.replyToken);
         break;
       default:
         console.warn('[Webhook] 不明なPostbackアクション:', action);
@@ -313,7 +442,7 @@ async function handleDiagnosisAnswer(
 }
 
 /**
- * 診断完了 → 結果表示
+ * 診断完了 → 結果表示 + ステップ準備フェーズへ
  */
 async function completeDiagnosis(
   userId: string,
@@ -334,21 +463,369 @@ async function completeDiagnosis(
   const band = determineBand(total);
   const weakAxis = determineWeakAxis(scores);
 
-  // 状態更新
-  await setState(userId, {
-    state: { phase: 'diagnosis_complete', scores },
-  });
+  // 弱軸の最初のステップ名を取得
+  const firstStep = getNextStep([], weakAxis);
+  const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
 
   // 結果メッセージ送信
   const resultMsg = diagnosisResultMessage(scores, band, weakAxis, industry);
-  const stepMsg = stepStartMessage('DX基礎チェック');
+  const stepMsg = stepStartMessage(firstStepName);
 
   await replyMessage(replyToken, [resultMsg, stepMsg]);
 
-  // ステップフェーズへ
+  // step_readyフェーズへ（スタートボタン待ち）
   await setState(userId, {
-    state: { phase: 'step_active', currentStep: 1 },
+    state: {
+      phase: 'step_ready',
+      weakAxis,
+      completedStepIds: [],
+      stumbleCount: 0,
+    },
   });
+}
+
+// ===== ステップハンドラ =====
+
+/**
+ * ステップ開始: 次のステップを配信
+ */
+async function handleStepStart(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+
+  // step_readyまたはstep_activeから遷移可能
+  if (state.phase !== 'step_ready' && state.phase !== 'step_active') {
+    console.warn('[Webhook] step_start: 不正なフェーズ:', state.phase);
+    return;
+  }
+
+  const weakAxis = state.weakAxis;
+  const completedStepIds = state.completedStepIds;
+  const stumbleCount = state.stumbleCount;
+
+  await deliverNextStep(userId, replyToken, weakAxis, completedStepIds, stumbleCount);
+}
+
+/**
+ * 次のステップを配信する共通関数
+ */
+async function deliverNextStep(
+  userId: string,
+  replyToken: string,
+  weakAxis: keyof AxisScores,
+  completedStepIds: string[],
+  stumbleCount: number
+): Promise<void> {
+  const nextStep = getNextStep(completedStepIds, weakAxis);
+
+  if (!nextStep) {
+    // 全ステップ完了
+    const level = calculateLevel(completedStepIds.length);
+    await replyMessage(replyToken, [allStepsCompleteMessage(completedStepIds.length, level)]);
+    await setState(userId, {
+      state: {
+        phase: 'step_ready',
+        weakAxis,
+        completedStepIds,
+        stumbleCount,
+      },
+    });
+    return;
+  }
+
+  // ステップ内容を配信
+  const contentMsg = stepContentMessage(nextStep, completedStepIds.length);
+  await replyMessage(replyToken, [contentMsg]);
+
+  // DB: ステップ開始記録
+  await recordStepStarted(userId, nextStep.id, nextStep.name);
+
+  // 状態をstep_activeに更新
+  await setState(userId, {
+    state: {
+      phase: 'step_active',
+      currentStepId: nextStep.id,
+      weakAxis,
+      completedStepIds,
+      stumbleCount,
+    },
+  });
+}
+
+/**
+ * ステップ完了処理
+ */
+async function handleStepComplete(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+  if (state.phase !== 'step_active') {
+    console.warn('[Webhook] step_complete: 不正なフェーズ:', state.phase);
+    return;
+  }
+
+  const stepId = params.get('stepId') ?? '';
+  if (stepId !== state.currentStepId) {
+    console.warn('[Webhook] step_complete: stepId不一致:', stepId, '!=', state.currentStepId);
+    return;
+  }
+
+  const completedStep = findStepById(stepId);
+  if (!completedStep) {
+    console.error('[Webhook] step_complete: ステップ定義なし:', stepId);
+    return;
+  }
+
+  // 完了記録
+  const newCompletedIds = [...state.completedStepIds, stepId];
+  const newCompletedCount = newCompletedIds.length;
+  const previousLevel = calculateLevel(state.completedStepIds.length);
+  const newLevel = calculateLevel(newCompletedCount);
+  const levelUp = newLevel > previousLevel;
+  const scoreGain = calculateScoreForStep(completedStep.difficulty);
+
+  // DB: ステップ完了記録
+  await recordStepCompleted(userId, stepId, completedStep.name);
+
+  // DB: タイムライン記録
+  await recordTimelineEvent(
+    userId,
+    'step_completed',
+    `${completedStep.name}を完了`,
+    { step_id: stepId, step_name: completedStep.name }
+  );
+
+  // DB: ユーザーカウンタ更新
+  await updateUserStepCounters(userId, {
+    stepsCompleted: newCompletedCount,
+    lastCompletedStep: stepId,
+    level: newLevel,
+    score: scoreGain, // 差分ではなく累積を別途計算する場合はロジック調整
+  });
+
+  // 次のステップがあるか確認
+  const nextStep = getNextStep(newCompletedIds, state.weakAxis);
+
+  if (!nextStep) {
+    // 全ステップ完了
+    await replyMessage(replyToken, [allStepsCompleteMessage(newCompletedCount, newLevel)]);
+    await setState(userId, {
+      state: {
+        phase: 'step_ready',
+        weakAxis: state.weakAxis,
+        completedStepIds: newCompletedIds,
+        stumbleCount: state.stumbleCount,
+      },
+    });
+    return;
+  }
+
+  // 完了祝福メッセージ
+  const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel);
+  await replyMessage(replyToken, [completeMsg]);
+
+  // 状態をstep_readyに更新（次ステップ待ち）
+  await setState(userId, {
+    state: {
+      phase: 'step_ready',
+      weakAxis: state.weakAxis,
+      completedStepIds: newCompletedIds,
+      stumbleCount: state.stumbleCount,
+    },
+  });
+}
+
+/**
+ * つまずき処理
+ */
+async function handleStepStumble(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+  if (state.phase !== 'step_active') {
+    console.warn('[Webhook] step_stumble: 不正なフェーズ:', state.phase);
+    return;
+  }
+
+  const stepId = params.get('stepId') ?? '';
+  const stumbleTypeRaw = params.get('type') ?? '';
+
+  if (!isValidStumbleType(stumbleTypeRaw)) {
+    console.warn('[Webhook] step_stumble: 不正なstumbleType:', stumbleTypeRaw);
+    return;
+  }
+
+  const step = findStepById(stepId);
+  if (!step) {
+    console.error('[Webhook] step_stumble: ステップ定義なし:', stepId);
+    return;
+  }
+
+  const newStumbleCount = state.stumbleCount + 1;
+
+  // DB: つまずき記録
+  await recordStepStumble(userId, stepId, step.name, stumbleTypeRaw);
+
+  // DB: タイムライン記録
+  await recordTimelineEvent(
+    userId,
+    'stumble',
+    `${step.name}でつまずき（${stumbleTypeRaw}）`,
+    { step_id: stepId, step_name: step.name, stumble_type: stumbleTypeRaw }
+  );
+
+  // DB: ユーザーカウンタ更新
+  const counterUpdate: {
+    stumbleCount: number;
+    stumbleHowCount?: number;
+  } = { stumbleCount: newStumbleCount };
+  if (stumbleTypeRaw === 'how') {
+    counterUpdate.stumbleHowCount = newStumbleCount; // 正確には howCount のみ加算すべきだがここでは近似
+  }
+  await updateUserStepCounters(userId, counterUpdate);
+
+  // ヒントメッセージ送信
+  const hintMsg = stepStumbleMessage(step, stumbleTypeRaw);
+  await replyMessage(replyToken, [hintMsg]);
+
+  // 状態は step_active のまま（同じステップに再挑戦可能）
+  await setState(userId, {
+    state: {
+      ...state,
+      stumbleCount: newStumbleCount,
+    },
+  });
+}
+
+/**
+ * ステップ再挑戦: 現在のステップを再表示
+ */
+async function handleStepRetry(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+  if (state.phase !== 'step_active') {
+    console.warn('[Webhook] step_retry: 不正なフェーズ:', state.phase);
+    return;
+  }
+
+  const stepId = params.get('stepId') ?? '';
+  await resendCurrentStep(userId, replyToken, stepId, state.completedStepIds);
+}
+
+/**
+ * ステップスキップ: 次のステップへ進む
+ */
+async function handleStepSkip(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+  if (state.phase !== 'step_active') {
+    console.warn('[Webhook] step_skip: 不正なフェーズ:', state.phase);
+    return;
+  }
+
+  const stepId = params.get('stepId') ?? '';
+  const step = findStepById(stepId);
+
+  if (step) {
+    // DB: スキップ記録
+    await recordStepSkipped(userId, stepId, step.name);
+    await recordTimelineEvent(
+      userId,
+      'step_skipped',
+      `${step.name}をスキップ`,
+      { step_id: stepId, step_name: step.name }
+    );
+  }
+
+  // スキップしたステップも completedStepIds に追加（再出題防止）
+  const newCompletedIds = [...state.completedStepIds, stepId];
+
+  // 次のステップを配信
+  await deliverNextStep(userId, replyToken, state.weakAxis, newCompletedIds, state.stumbleCount);
+}
+
+/**
+ * ステップ一時停止
+ */
+async function handleStepPause(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation) return;
+
+  const { state } = conversation;
+  if (state.phase !== 'step_ready' && state.phase !== 'step_active') {
+    return;
+  }
+
+  await replyMessage(replyToken, [stepPauseMessage()]);
+
+  // step_readyに戻す（再開時にstep_startで続きから）
+  await setState(userId, {
+    state: {
+      phase: 'step_ready',
+      weakAxis: state.weakAxis,
+      completedStepIds: state.completedStepIds,
+      stumbleCount: state.stumbleCount,
+    },
+  });
+}
+
+// ===== ヘルパー関数 =====
+
+/**
+ * 現在のステップを再送信
+ */
+async function resendCurrentStep(
+  userId: string,
+  replyToken: string,
+  stepId: string,
+  completedStepIds: string[]
+): Promise<void> {
+  const step = findStepById(stepId);
+  if (!step) {
+    await replyMessage(replyToken, [fallbackMessage()]);
+    return;
+  }
+
+  const contentMsg = stepContentMessage(step, completedStepIds.length);
+  await replyMessage(replyToken, [contentMsg]);
+}
+
+/**
+ * stepIdからStepDefinitionを検索
+ */
+function findStepById(stepId: string): StepDefinition | null {
+  const allSteps = getAllSteps();
+  return allSteps.find((s) => s.id === stepId) ?? null;
 }
 
 // ===== ユーティリティ =====

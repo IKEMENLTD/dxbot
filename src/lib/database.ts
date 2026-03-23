@@ -245,6 +245,60 @@ export interface Database {
           },
         ];
       };
+      chat_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          sender: 'user' | 'admin';
+          content: string;
+          media_attachments: Record<string, unknown>[];
+          read: boolean;
+          direction: 'inbound' | 'outbound';
+          line_user_id: string | null;
+          line_message_id: string | null;
+          message_type: 'text' | 'image' | 'sticker' | 'postback';
+          sent_at: string;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          sender: 'user' | 'admin';
+          content: string;
+          media_attachments?: Record<string, unknown>[];
+          read?: boolean;
+          direction: 'inbound' | 'outbound';
+          line_user_id?: string | null;
+          line_message_id?: string | null;
+          message_type?: 'text' | 'image' | 'sticker' | 'postback';
+          sent_at?: string;
+          read_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          sender?: 'user' | 'admin';
+          content?: string;
+          media_attachments?: Record<string, unknown>[];
+          read?: boolean;
+          direction?: 'inbound' | 'outbound';
+          line_user_id?: string | null;
+          line_message_id?: string | null;
+          message_type?: 'text' | 'image' | 'sticker' | 'postback';
+          sent_at?: string;
+          read_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'chat_messages_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       conversation_states: {
         Row: {
           line_user_id: string;

@@ -11,6 +11,7 @@ import {
   mockFunnelKpi,
   mockExitMetrics,
 } from './mock-data';
+import { mockMessages } from './mock-messages';
 import type {
   User,
   Deal,
@@ -21,6 +22,12 @@ import type {
   ExitMetrics,
   CustomerStatus,
 } from './types';
+import type {
+  ChatMessageRow,
+  SaveMessageParams,
+  ChatMessage,
+} from './chat-types';
+import { toClientMessage } from './chat-types';
 
 // ---------------------------------------------------------------------------
 // Users
@@ -330,4 +337,251 @@ export async function addUserNote(
   }
 
   return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Chat Messages
+// ---------------------------------------------------------------------------
+
+const DEFAULT_MESSAGE_LIMIT = 50;
+const MAX_MESSAGE_LIMIT = 200;
+
+/** メッセージを保存 */
+export async function saveMessage(
+  params: SaveMessageParams
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: ローカル配列に追加
+    const mockMsg: ChatMessage = {
+      id: `msg-mock-${Date.now()}`,
+      userId: params.userId,
+      sender: params.direction === 'inbound' ? 'user' : 'admin',
+      content: params.content,
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    mockMessages.push(mockMsg);
+    return { success: true, id: mockMsg.id };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        user_id: params.userId,
+        sender: params.direction === 'inbound' ? 'user' : 'admin',
+        content: params.content,
+        direction: params.direction,
+        line_user_id: params.lineUserId ?? null,
+        line_message_id: params.lineMessageId ?? null,
+        message_type: params.messageType ?? 'text',
+        sent_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('[saveMessage] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, id: data?.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'メッセージ保存中に不明なエラーが発生しました';
+    console.error('[saveMessage] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** ユーザーのメッセージ一覧を取得 */
+export async function getMessages(
+  userId: string,
+  limit?: number,
+  offset?: number
+): Promise<ChatMessage[]> {
+  const safeLimit = Math.min(limit ?? DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+  const safeOffset = offset ?? 0;
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const userMsgs = mockMessages
+      .filter((m) => m.userId === userId)
+      .slice(safeOffset, safeOffset + safeLimit);
+    return userMsgs;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sent_at', { ascending: true })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (error) {
+      console.error('[getMessages] Supabase error:', error.message);
+      return mockMessages.filter((m) => m.userId === userId);
+    }
+
+    return (data ?? []).map((row) => toClientMessage(row as unknown as ChatMessageRow));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'メッセージ取得中に不明なエラーが発生しました';
+    console.error('[getMessages] エラー:', msg);
+    return [];
+  }
+}
+
+/** since以降の新着メッセージ取得（ポーリング用） */
+export async function getMessagesSince(
+  userId: string,
+  since: string,
+  limit?: number
+): Promise<ChatMessage[]> {
+  const safeLimit = Math.min(limit ?? DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return mockMessages.filter(
+      (m) => m.userId === userId && new Date(m.timestamp) > new Date(since)
+    );
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('sent_at', since)
+      .order('sent_at', { ascending: true })
+      .limit(safeLimit);
+
+    if (error) {
+      console.error('[getMessagesSince] Supabase error:', error.message);
+      return [];
+    }
+
+    return (data ?? []).map((row) => toClientMessage(row as unknown as ChatMessageRow));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '新着メッセージ取得中に不明なエラーが発生しました';
+    console.error('[getMessagesSince] エラー:', msg);
+    return [];
+  }
+}
+
+/** 複数ユーザーの最新メッセージ取得（コンタクトリスト用） */
+export async function getLatestMessages(
+  userIds: string[]
+): Promise<Record<string, ChatMessage>> {
+  if (userIds.length === 0) return {};
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const result: Record<string, ChatMessage> = {};
+    for (const uid of userIds) {
+      const msgs = mockMessages.filter((m) => m.userId === uid);
+      if (msgs.length > 0) {
+        result[uid] = msgs[msgs.length - 1];
+      }
+    }
+    return result;
+  }
+
+  try {
+    // 全件取得してクライアント側で各ユーザーの最新を抽出
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .in('user_id', userIds)
+      .order('sent_at', { ascending: false });
+
+    if (error) {
+      console.error('[getLatestMessages] Supabase error:', error.message);
+      return {};
+    }
+
+    const result: Record<string, ChatMessage> = {};
+    for (const row of data ?? []) {
+      const converted = toClientMessage(row as unknown as ChatMessageRow);
+      // 最初に見つかったものが最新（sent_at DESCでソート済み）
+      if (!result[converted.userId]) {
+        result[converted.userId] = converted;
+      }
+    }
+
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '最新メッセージ取得中に不明なエラーが発生しました';
+    console.error('[getLatestMessages] エラー:', msg);
+    return {};
+  }
+}
+
+/** ユーザーの未読メッセージを既読にする */
+export async function markAsRead(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: フラグを更新
+    for (const msg of mockMessages) {
+      if (msg.userId === userId && msg.sender === 'user' && !msg.read) {
+        msg.read = true;
+      }
+    }
+    return { success: true };
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ read: true, read_at: now })
+      .eq('user_id', userId)
+      .eq('sender', 'user')
+      .eq('read', false);
+
+    if (error) {
+      console.error('[markAsRead] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '既読更新中に不明なエラーが発生しました';
+    console.error('[markAsRead] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** ユーザーの未読数を取得 */
+export async function getUnreadCount(
+  userId: string
+): Promise<number> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return mockMessages.filter(
+      (m) => m.userId === userId && m.sender === 'user' && !m.read
+    ).length;
+  }
+
+  try {
+    const { count, error } = await supabase
+      .from('chat_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('sender', 'user')
+      .eq('read', false);
+
+    if (error) {
+      console.error('[getUnreadCount] Supabase error:', error.message);
+      return 0;
+    }
+
+    return count ?? 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '未読数取得中に不明なエラーが発生しました';
+    console.error('[getUnreadCount] エラー:', msg);
+    return 0;
+  }
 }

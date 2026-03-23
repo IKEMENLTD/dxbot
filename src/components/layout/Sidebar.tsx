@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
 
@@ -58,6 +59,39 @@ function LogoIcon() {
       <path d="M16 20V6" stroke="white" strokeWidth="2" strokeLinecap="round" />
       <path d="M11 10.5L16 6L21 10.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function LogoutButton({ collapsed }: { collapsed: boolean }) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/admindashboard/login";
+    }
+  };
+
+  return (
+    <button
+      onClick={handleLogout}
+      disabled={isLoading}
+      className={cn(
+        "flex items-center gap-2 rounded-xl py-2 text-white/50 hover:text-red-200 hover:bg-white/10 transition-colors w-full mb-1",
+        collapsed ? "justify-center px-0" : "px-3"
+      )}
+      title={collapsed ? "ログアウト" : undefined}
+      aria-label="ログアウト"
+    >
+      <LogOut size={16} />
+      {!collapsed && (
+        <span className="text-xs whitespace-nowrap">
+          {isLoading ? "ログアウト中..." : "ログアウト"}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -165,6 +199,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
             <div className="text-[11px] text-white/50 mt-0.5 whitespace-nowrap">池: 10人 / 成約: 4件</div>
           </div>
         )}
+        <LogoutButton collapsed={collapsed} />
         <button
           onClick={toggle}
           className={cn(

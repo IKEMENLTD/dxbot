@@ -61,7 +61,12 @@ function LogoIcon() {
   );
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  /** モバイルメニューでナビリンクをクリックした時のコールバック */
+  onNavigate?: () => void;
+}
+
+export default function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { width, setWidth, collapsed, toggle } = useSidebar();
   const isDragging = useRef(false);
@@ -129,6 +134,7 @@ export default function Sidebar() {
               href={item.href}
               aria-label={item.label}
               title={collapsed ? item.label : undefined}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center text-sm font-medium rounded-xl transition-colors relative group",
                 collapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",

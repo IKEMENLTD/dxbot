@@ -85,7 +85,7 @@ export default function StatsCards({ users }: StatsCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-4 gap-5">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
       {cards.map((card) => (
         <StatCard key={card.label} {...card} />
       ))}

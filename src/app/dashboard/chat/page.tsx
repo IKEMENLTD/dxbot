@@ -132,8 +132,10 @@ export default function ChatPage() {
         }
         setUserTags(newTags);
       }
-    } catch {
-      // ユーザー取得失敗はmockフォールバックのまま
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('[Chat] ユーザー取得エラー:', err);
+      }
     }
   }, []);
 
@@ -149,8 +151,10 @@ export default function ChatPage() {
       if (data.contacts) {
         setContactPreviews(data.contacts);
       }
-    } catch {
-      // mockフォールバック
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('[Chat] コンタクト取得エラー:', err);
+      }
     }
   }, []);
 
@@ -178,7 +182,10 @@ export default function ChatPage() {
             return [...otherMsgs, ...data.messages];
           });
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('[Chat] メッセージ取得エラー:', err);
+        }
         const userMockMsgs = mockMessages.filter((m) => m.userId === userId);
         setMessages((prev) => {
           const otherMsgs = prev.filter((m) => m.userId !== userId);
@@ -200,8 +207,10 @@ export default function ChatPage() {
         body: JSON.stringify({ userId }),
         signal,
       });
-    } catch {
-      // 既読マーク失敗は無視
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('[Chat] 既読マークエラー:', err);
+      }
     }
   }, []);
 
@@ -215,8 +224,10 @@ export default function ChatPage() {
           fetchUsers(controller.signal),
           fetchContacts(controller.signal),
         ]);
-      } catch {
-        // 初期化エラーはmockフォールバックで対応
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('[Chat] 初期化エラー:', err);
+        }
       } finally {
         setIsInitialLoading(false);
       }
@@ -315,8 +326,10 @@ export default function ChatPage() {
               clearTimeout(contactTimeout);
             }
           }
-        } catch {
-          // ポーリングエラーは無視
+        } catch (err) {
+          if (err instanceof Error && err.name !== 'AbortError') {
+            console.error('[Chat] ポーリングエラー:', err);
+          }
         } finally {
           clearTimeout(timeoutId);
         }
@@ -439,7 +452,10 @@ export default function ChatPage() {
               : c
           )
         );
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('[Chat] メッセージ送信エラー:', err);
+        }
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setError("メッセージ送信中にエラーが発生しました");
         addToast("error", "メッセージ送信中にエラーが発生しました");

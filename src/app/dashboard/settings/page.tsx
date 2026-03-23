@@ -52,7 +52,7 @@ export default function SettingsPage() {
       {/* メインカード */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
         {/* タブナビ */}
-        <div className="flex gap-2 mb-6" role="tablist" aria-label="設定タブ">
+        <div className="flex flex-wrap gap-2 mb-6" role="tablist" aria-label="設定タブ">
           {TABS.map((tab) => (
             <button
               key={tab.key}

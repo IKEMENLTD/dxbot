@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from "react";
 import type { User, UserTag } from "@/lib/types";
-import type { ChatMessage } from "@/lib/chat-types";
+import type { ChatMessage, ContactPreview } from "@/lib/chat-types";
 import { mockTags } from "@/lib/mock-data";
 
 interface ContactListProps {
   users: User[];
   messages: ChatMessage[];
+  contactPreviews: ContactPreview[];
   selectedUserId: string | null;
   userTags: Record<string, string[]>;
   onSelect: (userId: string) => void;
@@ -24,6 +25,7 @@ function getInitials(name: string): string {
 }
 
 function formatContactTime(timestamp: string): string {
+  if (!timestamp) return "";
   const d = new Date(timestamp);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
@@ -41,25 +43,73 @@ function formatContactTime(timestamp: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+interface ContactDataItem {
+  user: User;
+  lastMessage: string;
+  lastMessageTime: string;
+  unreadCount: number;
+  tags: UserTag[];
+}
+
 export default function ContactList({
   users,
   messages,
+  contactPreviews,
   selectedUserId,
   userTags,
   onSelect,
 }: ContactListProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const contactData = useMemo(() => {
+  // contactPreviewsをMapに変換
+  const previewMap = useMemo(() => {
+    const map = new Map<string, ContactPreview>();
+    for (const cp of contactPreviews) {
+      map.set(cp.userId, cp);
+    }
+    return map;
+  }, [contactPreviews]);
+
+  const contactData = useMemo((): ContactDataItem[] => {
     return users.map((user) => {
-      const userMessages = messages.filter((m) => m.userId === user.id);
-      const lastMsg =
-        userMessages.length > 0
-          ? userMessages[userMessages.length - 1]
-          : null;
-      const unreadCount = userMessages.filter(
-        (m) => m.sender === "user" && !m.read
-      ).length;
+      // DB由来のコンタクトプレビューがあればそちらを優先
+      const preview = previewMap.get(user.id);
+
+      let lastMessage: string;
+      let lastMessageTime: string;
+      let unreadCount: number;
+
+      if (preview) {
+        lastMessage = preview.lastMessage;
+        lastMessageTime = preview.lastMessageTime;
+        unreadCount = preview.unreadCount;
+      } else {
+        // fallback: messagesから算出
+        const userMessages = messages.filter((m) => m.userId === user.id);
+        const lastMsg =
+          userMessages.length > 0
+            ? userMessages[userMessages.length - 1]
+            : null;
+        lastMessage = lastMsg?.content ?? "";
+        lastMessageTime = lastMsg?.timestamp ?? user.created_at;
+        unreadCount = userMessages.filter(
+          (m) => m.sender === "user" && !m.read
+        ).length;
+      }
+
+      // ローカルmessagesからも未読数・最新メッセージを更新
+      // (楽観的更新されたメッセージを反映)
+      const localUserMsgs = messages.filter((m) => m.userId === user.id);
+      if (localUserMsgs.length > 0) {
+        const localLast = localUserMsgs[localUserMsgs.length - 1];
+        if (
+          !lastMessageTime ||
+          new Date(localLast.timestamp) > new Date(lastMessageTime)
+        ) {
+          lastMessage = localLast.content;
+          lastMessageTime = localLast.timestamp;
+        }
+      }
 
       const tagIds = userTags[user.id] ?? [];
       const tags = tagIds
@@ -68,13 +118,13 @@ export default function ContactList({
 
       return {
         user,
-        lastMessage: lastMsg?.content ?? "",
-        lastMessageTime: lastMsg?.timestamp ?? user.created_at,
+        lastMessage,
+        lastMessageTime: lastMessageTime || user.created_at,
         unreadCount,
         tags,
       };
     });
-  }, [users, messages, userTags]);
+  }, [users, messages, userTags, previewMap]);
 
   const sortedContacts = useMemo(() => {
     const filtered = contactData.filter((c) => {
@@ -86,7 +136,12 @@ export default function ContactList({
       );
     });
 
+    // 未読ありを上に、その後は最新メッセージ時刻で降順
     return [...filtered].sort((a, b) => {
+      // 未読ありを優先
+      if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+      if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+
       return (
         new Date(b.lastMessageTime).getTime() -
         new Date(a.lastMessageTime).getTime()
@@ -151,16 +206,24 @@ export default function ContactList({
               }`}
             >
               {/* Initials */}
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <div className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-medium text-gray-600">
                   {getInitials(contact.user.preferred_name)}
                 </span>
+                {/* 未読ドットインジケーター */}
+                {contact.unreadCount > 0 && !isSelected && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+                )}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900 truncate">
+                  <span className={`text-sm truncate ${
+                    contact.unreadCount > 0
+                      ? "font-bold text-gray-900"
+                      : "font-semibold text-gray-900"
+                  }`}>
                     {contact.user.preferred_name}
                   </span>
                   {contact.lastMessage && (
@@ -193,12 +256,16 @@ export default function ContactList({
                 )}
 
                 <div className="flex items-center justify-between mt-0.5">
-                  <p className="text-xs text-gray-500 truncate flex-1">
+                  <p className={`text-xs truncate flex-1 ${
+                    contact.unreadCount > 0
+                      ? "text-gray-700 font-medium"
+                      : "text-gray-500"
+                  }`}>
                     {contact.lastMessage || "メッセージなし"}
                   </p>
                   {contact.unreadCount > 0 && (
-                    <span className="bg-green-600 text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center flex-shrink-0 ml-2">
-                      {contact.unreadCount}
+                    <span className="bg-green-600 text-white rounded-full min-w-[20px] h-5 text-[10px] flex items-center justify-center flex-shrink-0 ml-2 px-1">
+                      {contact.unreadCount > 99 ? "99+" : contact.unreadCount}
                     </span>
                   )}
                 </div>

@@ -5,6 +5,7 @@ import type { ChatMessage, MediaAttachment } from "@/lib/chat-types";
 
 interface MessageListProps {
   messages: ChatMessage[];
+  isLoading?: boolean;
 }
 
 function formatTime(timestamp: string): string {
@@ -89,7 +90,15 @@ function MessageMedia({ media }: { media: MediaAttachment[] }) {
   );
 }
 
-export default function MessageList({ messages }: MessageListProps) {
+/** メッセージが直近N秒以内に作成されたかどうかを判定（フェードインアニメーション用） */
+const RECENT_MESSAGE_THRESHOLD_MS = 2000;
+
+function isRecentMessage(timestamp: string): boolean {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  return diff >= 0 && diff < RECENT_MESSAGE_THRESHOLD_MS;
+}
+
+export default function MessageList({ messages, isLoading = false }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,6 +121,17 @@ export default function MessageList({ messages }: MessageListProps) {
     return result;
   }, [messages]);
 
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[#F7F8FA]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          <p className="text-sm text-gray-400">メッセージを読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -122,6 +142,13 @@ export default function MessageList({ messages }: MessageListProps) {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-[#F7F8FA]">
+      {/* ローディングインジケーター（既存メッセージがある場合は上部に表示） */}
+      {isLoading && (
+        <div className="flex justify-center py-2">
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+        </div>
+      )}
+
       {grouped.map((item, index) => {
         if (item.type === "date") {
           return (
@@ -139,11 +166,21 @@ export default function MessageList({ messages }: MessageListProps) {
         const isAdmin = msg.sender === "admin";
         const hasText = msg.content.length > 0;
         const hasMedia = msg.media && msg.media.length > 0;
+        const isNew = isRecentMessage(msg.timestamp);
 
         return (
           <div
             key={msg.id}
-            className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}
+            className={`flex ${isAdmin ? "justify-end" : "justify-start"} ${
+              isNew ? "animate-fade-in" : ""
+            }`}
+            style={
+              isNew
+                ? {
+                    animation: "fadeInUp 0.3s ease-out forwards",
+                  }
+                : undefined
+            }
           >
             <div className="max-w-[70%]">
               {/* テキスト吹き出し */}
@@ -184,6 +221,20 @@ export default function MessageList({ messages }: MessageListProps) {
         );
       })}
       <div ref={bottomRef} />
+
+      {/* フェードインアニメーション用CSS */}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

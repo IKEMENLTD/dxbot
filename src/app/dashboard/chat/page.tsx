@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import ContactList from "@/components/chat/ContactList";
 import MessageList from "@/components/chat/MessageList";
 import ChatInput from "@/components/chat/ChatInput";
@@ -8,7 +8,33 @@ import UserInfoPanel from "@/components/chat/UserInfoPanel";
 import { mockUsers } from "@/lib/mock-data";
 import { mockMessages } from "@/lib/mock-messages";
 import { EXIT_CONFIG } from "@/lib/types";
-import type { ChatMessage, MediaAttachment } from "@/lib/chat-types";
+import type { User } from "@/lib/types";
+import type { ChatMessage, ContactPreview, MediaAttachment } from "@/lib/chat-types";
+
+const POLLING_INTERVAL_MS = 5000;
+const FETCH_TIMEOUT_MS = 10000;
+
+interface ContactsApiResponse {
+  contacts: ContactPreview[];
+  error?: string;
+}
+
+interface MessagesApiResponse {
+  messages: ChatMessage[];
+  error?: string;
+}
+
+interface SendApiResponse {
+  success: boolean;
+  messageId?: string;
+  timestamp?: string;
+  error?: string;
+}
+
+interface UsersApiResponse {
+  data: User[];
+  error?: string;
+}
 
 function buildInitialTags(): Record<string, string[]> {
   const result: Record<string, string[]> = {};
@@ -19,18 +45,25 @@ function buildInitialTags(): Record<string, string[]> {
 }
 
 export default function ChatPage() {
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(
-    mockUsers[0]?.id ?? null
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [contactPreviews, setContactPreviews] = useState<ContactPreview[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [userTags, setUserTags] = useState<Record<string, string[]>>(
     buildInitialTags
   );
 
+  // ポーリング用: 最新のタイムスタンプを管理
+  const lastPolledAtRef = useRef<string>(new Date().toISOString());
+  const pollingAbortRef = useRef<AbortController | null>(null);
+
   const selectedUser = useMemo(
-    () => mockUsers.find((u) => u.id === selectedUserId) ?? null,
-    [selectedUserId]
+    () => users.find((u) => u.id === selectedUserId) ?? null,
+    [selectedUserId, users]
   );
 
   const selectedMessages = useMemo(
@@ -41,37 +74,267 @@ export default function ChatPage() {
     [messages, selectedUserId]
   );
 
-  const handleSelectUser = useCallback((userId: string) => {
-    setSelectedUserId(userId);
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.userId === userId && m.sender === "user" && !m.read
-          ? { ...m, read: true }
-          : m
-      )
-    );
+  // ----- ユーザー一覧取得 -----
+  const fetchUsers = useCallback(async (signal: AbortSignal) => {
+    try {
+      const res = await fetch("/api/users", {
+        signal,
+        headers: { "Cache-Control": "no-cache" },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as UsersApiResponse;
+      if (data.data && data.data.length > 0) {
+        setUsers(data.data);
+        // タグも更新
+        const newTags: Record<string, string[]> = {};
+        for (const user of data.data) {
+          newTags[user.id] = user.tags ?? [];
+        }
+        setUserTags(newTags);
+      }
+    } catch {
+      // ユーザー取得失敗はmockフォールバックのまま
+    }
   }, []);
 
+  // ----- コンタクトプレビュー取得 -----
+  const fetchContacts = useCallback(async (signal: AbortSignal) => {
+    try {
+      const res = await fetch("/api/chat/contacts", {
+        signal,
+        headers: { "Cache-Control": "no-cache" },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as ContactsApiResponse;
+      if (data.contacts) {
+        setContactPreviews(data.contacts);
+      }
+    } catch {
+      // mockフォールバック - contactPreviewsが空のまま
+    }
+  }, []);
+
+  // ----- 特定ユーザーのメッセージ取得 -----
+  const fetchMessagesForUser = useCallback(
+    async (userId: string, signal: AbortSignal) => {
+      setIsLoadingMessages(true);
+      try {
+        const res = await fetch(`/api/chat?userId=${encodeURIComponent(userId)}`, {
+          signal,
+          headers: { "Cache-Control": "no-cache" },
+        });
+        if (!res.ok) {
+          // APIエラー時はmockフォールバック
+          const userMockMsgs = mockMessages.filter((m) => m.userId === userId);
+          setMessages((prev) => {
+            const otherMsgs = prev.filter((m) => m.userId !== userId);
+            return [...otherMsgs, ...userMockMsgs];
+          });
+          return;
+        }
+        const data = (await res.json()) as MessagesApiResponse;
+        if (data.messages) {
+          setMessages((prev) => {
+            const otherMsgs = prev.filter((m) => m.userId !== userId);
+            return [...otherMsgs, ...data.messages];
+          });
+        }
+      } catch {
+        // abortを含むエラー: mockフォールバック
+        const userMockMsgs = mockMessages.filter((m) => m.userId === userId);
+        setMessages((prev) => {
+          const otherMsgs = prev.filter((m) => m.userId !== userId);
+          return [...otherMsgs, ...userMockMsgs];
+        });
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    },
+    []
+  );
+
+  // ----- 既読マーク -----
+  const markAsReadApi = useCallback(async (userId: string, signal: AbortSignal) => {
+    try {
+      await fetch("/api/chat/mark-read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+        signal,
+      });
+    } catch {
+      // 既読マーク失敗は無視
+    }
+  }, []);
+
+  // ----- 初回ロード -----
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function init() {
+      try {
+        await Promise.all([
+          fetchUsers(controller.signal),
+          fetchContacts(controller.signal),
+        ]);
+      } catch {
+        // 初期化エラーはmockフォールバックで対応
+      } finally {
+        setIsInitialLoading(false);
+      }
+    }
+
+    init();
+
+    return () => {
+      controller.abort();
+    };
+  }, [fetchUsers, fetchContacts]);
+
+  // ----- 初回ロード後に最初のユーザーを選択 -----
+  useEffect(() => {
+    if (!isInitialLoading && !selectedUserId && users.length > 0) {
+      setSelectedUserId(users[0].id);
+    }
+  }, [isInitialLoading, selectedUserId, users]);
+
+  // ----- selectedUser変更時にメッセージ取得 + markAsRead -----
+  useEffect(() => {
+    if (!selectedUserId) return;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    async function loadMessages() {
+      if (!selectedUserId) return;
+      await fetchMessagesForUser(selectedUserId, controller.signal);
+      await markAsReadApi(selectedUserId, controller.signal);
+
+      // ローカルstateも既読に更新
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.userId === selectedUserId && m.sender === "user" && !m.read
+            ? { ...m, read: true }
+            : m
+        )
+      );
+
+      // コンタクトプレビューの未読数も更新
+      setContactPreviews((prev) =>
+        prev.map((c) =>
+          c.userId === selectedUserId ? { ...c, unreadCount: 0 } : c
+        )
+      );
+    }
+
+    loadMessages();
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [selectedUserId, fetchMessagesForUser, markAsReadApi]);
+
+  // ----- ポーリング: 5秒間隔で全ユーザー横断の新着取得 -----
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // 前回のポーリングが完了前にabort
+      if (pollingAbortRef.current) {
+        pollingAbortRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      pollingAbortRef.current = controller;
+
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+      async function poll() {
+        try {
+          const sinceParam = encodeURIComponent(lastPolledAtRef.current);
+          const res = await fetch(`/api/chat?since=${sinceParam}`, {
+            signal: controller.signal,
+            headers: { "Cache-Control": "no-cache" },
+          });
+          if (!res.ok) return;
+          const data = (await res.json()) as MessagesApiResponse;
+
+          if (data.messages && data.messages.length > 0) {
+            // 新着メッセージをstateにマージ
+            setMessages((prev) => {
+              const existingIds = new Set(prev.map((m) => m.id));
+              const newMsgs = data.messages.filter((m) => !existingIds.has(m.id));
+              if (newMsgs.length === 0) return prev;
+              return [...prev, ...newMsgs];
+            });
+
+            // 最新のタイムスタンプを更新
+            const latestTs = data.messages[data.messages.length - 1].timestamp;
+            lastPolledAtRef.current = latestTs;
+
+            // コンタクトプレビューも再取得
+            const contactController = new AbortController();
+            const contactTimeout = setTimeout(
+              () => contactController.abort(),
+              FETCH_TIMEOUT_MS
+            );
+            try {
+              await fetchContacts(contactController.signal);
+            } finally {
+              clearTimeout(contactTimeout);
+            }
+          }
+        } catch {
+          // ポーリングエラーは無視
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+      poll();
+    }, POLLING_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+      if (pollingAbortRef.current) {
+        pollingAbortRef.current.abort();
+      }
+    };
+  }, [fetchContacts]);
+
+  // ----- ユーザー選択 -----
+  const handleSelectUser = useCallback((userId: string) => {
+    setSelectedUserId(userId);
+    setError(null);
+  }, []);
+
+  // ----- メッセージ送信（楽観的更新） -----
   const handleSend = useCallback(
     async (text: string, media?: MediaAttachment[]) => {
       if (!selectedUserId || isSending) return;
 
-      const newMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
+      const tempId = `msg-temp-${Date.now()}`;
+      const now = new Date().toISOString();
+
+      // 楽観的更新: ローカルstateに即時追加
+      const optimisticMsg: ChatMessage = {
+        id: tempId,
         userId: selectedUserId,
         sender: "admin",
         content: text,
-        timestamp: new Date().toISOString(),
+        timestamp: now,
         read: false,
         media,
       };
 
-      setMessages((prev) => [...prev, newMsg]);
+      setMessages((prev) => [...prev, optimisticMsg]);
       setIsSending(true);
+      setError(null);
 
       const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
       try {
-        await fetch("/api/chat", {
+        const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -80,15 +343,52 @@ export default function ChatPage() {
           }),
           signal: controller.signal,
         });
+
+        if (!res.ok) {
+          const data = (await res.json()) as SendApiResponse;
+          setError(data.error ?? "メッセージ送信に失敗しました");
+          // 楽観的更新をロールバック
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          return;
+        }
+
+        const data = (await res.json()) as SendApiResponse;
+
+        // 楽観的メッセージのIDを実際のIDに置換
+        if (data.messageId) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? { ...m, id: data.messageId as string, timestamp: data.timestamp ?? now }
+                : m
+            )
+          );
+        }
+
+        // lastPolledAtを更新して重複取得を防ぐ
+        lastPolledAtRef.current = data.timestamp ?? now;
+
+        // コンタクトプレビューの最新メッセージを更新
+        setContactPreviews((prev) =>
+          prev.map((c) =>
+            c.userId === selectedUserId
+              ? { ...c, lastMessage: text, lastMessageTime: data.timestamp ?? now }
+              : c
+          )
+        );
       } catch {
-        // abort含むエラーを無視
+        // abort含むエラー: ロールバック
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setError("メッセージ送信中にエラーが発生しました");
       } finally {
+        clearTimeout(timeoutId);
         setIsSending(false);
       }
     },
     [selectedUserId, isSending]
   );
 
+  // ----- タグ操作 -----
   const handleAddTag = useCallback((userId: string, tagId: string) => {
     setUserTags((prev) => {
       const current = prev[userId] ?? [];
@@ -108,8 +408,9 @@ export default function ChatPage() {
     <div className="h-screen flex bg-white overflow-hidden">
       {/* Left Pane: Contact List */}
       <ContactList
-        users={mockUsers}
+        users={users}
         messages={messages}
+        contactPreviews={contactPreviews}
         selectedUserId={selectedUserId}
         userTags={userTags}
         onSelect={handleSelectUser}
@@ -145,17 +446,42 @@ export default function ChatPage() {
               </div>
             </div>
 
+            {/* Error Banner */}
+            {error && (
+              <div className="px-6 py-2 bg-red-50 border-b border-red-200 flex items-center justify-between">
+                <p className="text-xs text-red-600">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             {/* Messages */}
-            <MessageList messages={selectedMessages} />
+            <MessageList
+              messages={selectedMessages}
+              isLoading={isLoadingMessages}
+            />
 
             {/* Input */}
             <ChatInput onSend={handleSend} disabled={isSending} />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-gray-400">
-              ユーザーを選択してください
-            </p>
+            {isInitialLoading ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-6 h-6 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+                <p className="text-sm text-gray-400">読み込み中...</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">
+                ユーザーを選択してください
+              </p>
+            )}
           </div>
         )}
       </div>

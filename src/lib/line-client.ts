@@ -75,21 +75,33 @@ export async function replyMessage(
   }
 }
 
+/** pushMessage の結果型 */
+export interface PushMessageResult {
+  success: boolean;
+  /** mockモードで送信された場合 true */
+  mock: boolean;
+  /** エラー時のメッセージ */
+  error?: string;
+  /** LINE API の HTTP ステータスコード */
+  statusCode?: number;
+}
+
 /**
  * LINE Push Message API
+ * 成功/失敗を判定できるよう PushMessageResult を返す
  */
 export async function pushMessage(
-  userId: string,
+  lineUserId: string,
   messages: LineMessage[]
-): Promise<void> {
+): Promise<PushMessageResult> {
   const token = getChannelAccessToken();
   if (!token) {
     if (process.env.NODE_ENV === 'production') {
       console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。pushMessage 送信不可');
-    } else {
-      console.log('[LINE Mock] pushMessage:', JSON.stringify({ to: userId, messages }, null, 2));
+      return { success: false, mock: false, error: 'LINE_CHANNEL_ACCESS_TOKEN が未設定です' };
     }
-    return;
+    console.log('[LINE Mock] pushMessage:', JSON.stringify({ to: lineUserId, messages }, null, 2));
+    return { success: true, mock: true };
   }
 
   const controller = new AbortController();
@@ -102,14 +114,36 @@ export async function pushMessage(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ to: userId, messages }),
+      body: JSON.stringify({ to: lineUserId, messages }),
       signal: controller.signal,
     });
 
     if (!res.ok) {
       const errorBody = await res.text();
       console.error('[LINE] pushMessage エラー:', res.status, errorBody);
+
+      if (res.status === 429) {
+        return { success: false, mock: false, error: 'LINE APIのレート制限に達しました。しばらく待ってから再送信してください。', statusCode: 429 };
+      }
+      if (res.status === 401) {
+        return { success: false, mock: false, error: 'LINE APIの認証に失敗しました。アクセストークンを確認してください。', statusCode: 401 };
+      }
+      if (res.status === 400) {
+        return { success: false, mock: false, error: `LINE APIリクエストが不正です: ${errorBody}`, statusCode: 400 };
+      }
+
+      return { success: false, mock: false, error: `LINE API エラー (HTTP ${res.status}): ${errorBody}`, statusCode: res.status };
     }
+
+    return { success: true, mock: false };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('[LINE] pushMessage タイムアウト（30秒）');
+      return { success: false, mock: false, error: 'LINE APIへのリクエストがタイムアウトしました（30秒）' };
+    }
+    const errorMessage = err instanceof Error ? err.message : 'pushMessage送信中に不明なエラーが発生しました';
+    console.error('[LINE] pushMessage 例外:', errorMessage);
+    return { success: false, mock: false, error: errorMessage };
   } finally {
     clearTimeout(timeoutId);
   }

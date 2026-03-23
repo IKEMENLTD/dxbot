@@ -5,7 +5,7 @@ import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, Postback
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
-import { saveMessage } from '@/lib/queries';
+import { saveMessage, updateUserLineUserId } from '@/lib/queries';
 import type { MessageType } from '@/lib/chat-types';
 import {
   getQuestion,
@@ -189,6 +189,13 @@ async function handleFollow(event: FollowEvent): Promise<void> {
 
     // ユーザー作成
     const conversation = await createUser(userId, profile);
+
+    // usersテーブルにline_user_idを紐付け（エラーは吸収して処理を続行）
+    try {
+      await updateUserLineUserId(userId, userId);
+    } catch (linkErr) {
+      console.error('[Webhook] handleFollow line_user_id紐付けエラー（処理は続行）:', linkErr);
+    }
 
     // Welcome + 同意確認
     const msg = welcomeMessage(conversation.preferredName);

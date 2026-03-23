@@ -554,6 +554,148 @@ export async function markAsRead(
   }
 }
 
+/** 全ユーザー横断で since 以降の新着メッセージを取得（ポーリング用） */
+export async function getAllMessagesSince(
+  since: string,
+  limit?: number
+): Promise<ChatMessage[]> {
+  const safeLimit = Math.min(limit ?? DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT);
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return mockMessages.filter(
+      (m) => new Date(m.timestamp) > new Date(since)
+    ).slice(0, safeLimit);
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .gt('sent_at', since)
+      .order('sent_at', { ascending: true })
+      .limit(safeLimit);
+
+    if (error) {
+      console.error('[getAllMessagesSince] Supabase error:', error.message);
+      return [];
+    }
+
+    return (data ?? []).map((row) => toClientMessage(row as unknown as ChatMessageRow));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '全ユーザー新着メッセージ取得中に不明なエラーが発生しました';
+    console.error('[getAllMessagesSince] エラー:', msg);
+    return [];
+  }
+}
+
+/** 全ユーザーの未読数を一括取得（コンタクトリスト用） */
+export async function getUnreadCounts(
+  userIds: string[]
+): Promise<Record<string, number>> {
+  if (userIds.length === 0) return {};
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const result: Record<string, number> = {};
+    for (const uid of userIds) {
+      result[uid] = mockMessages.filter(
+        (m) => m.userId === uid && m.sender === 'user' && !m.read
+      ).length;
+    }
+    return result;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('user_id')
+      .in('user_id', userIds)
+      .eq('sender', 'user')
+      .eq('read', false);
+
+    if (error) {
+      console.error('[getUnreadCounts] Supabase error:', error.message);
+      return {};
+    }
+
+    const result: Record<string, number> = {};
+    for (const row of data ?? []) {
+      const uid = (row as { user_id: string }).user_id;
+      result[uid] = (result[uid] ?? 0) + 1;
+    }
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '未読数一括取得中に不明なエラーが発生しました';
+    console.error('[getUnreadCounts] エラー:', msg);
+    return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// LINE User ID 取得
+// ---------------------------------------------------------------------------
+
+/** usersテーブルからline_user_idを取得 */
+export async function getLineUserIdByUserId(
+  userId: string
+): Promise<string | null> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: mockUsersにline_user_idフィールドがないためnullを返す
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('line_user_id')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('[getLineUserIdByUserId] Supabase error:', error.message);
+      return null;
+    }
+
+    return (data as { line_user_id: string | null } | null)?.line_user_id ?? null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'LINE User ID取得中に不明なエラーが発生しました';
+    console.error('[getLineUserIdByUserId] エラー:', msg);
+    return null;
+  }
+}
+
+/** usersテーブルのline_user_idを更新（followイベント時に使用） */
+export async function updateUserLineUserId(
+  userId: string,
+  lineUserId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: 何もしない
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ line_user_id: lineUserId })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[updateUserLineUserId] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'LINE User ID更新中に不明なエラーが発生しました';
+    console.error('[updateUserLineUserId] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 /** ユーザーの未読数を取得 */
 export async function getUnreadCount(
   userId: string

@@ -7,9 +7,13 @@ import { requireAuth } from '@/lib/api-auth';
 import {
   getMessages,
   getMessagesSince,
+  getAllMessagesSince,
   saveMessage,
   markAsRead,
+  getLineUserIdByUserId,
 } from '@/lib/queries';
+import { pushMessage } from '@/lib/line-client';
+import type { TextMessage } from '@/lib/line-types';
 
 // ---------------------------------------------------------------------------
 // GET /api/chat?userId=xxx&limit=50&since=2026-03-20T00:00:00Z
@@ -25,6 +29,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const limitParam = searchParams.get('limit');
     const since = searchParams.get('since');
 
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+    // userIdなし + since指定: 全ユーザー横断のポーリング
+    if (!userId && since) {
+      const sinceDate = new Date(since);
+      if (isNaN(sinceDate.getTime())) {
+        return NextResponse.json(
+          { error: 'sinceパラメータの日時形式が不正です。' },
+          { status: 400 }
+        );
+      }
+
+      const messages = await getAllMessagesSince(since, limit);
+      return NextResponse.json({ messages });
+    }
+
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json(
         { error: 'ユーザーIDが必要です。' },
@@ -39,9 +59,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
-
-    // since指定がある場合はポーリング（新着のみ取得）
+    // since指定がある場合はポーリング（特定ユーザーの新着のみ取得）
     if (since) {
       const sinceDate = new Date(since);
       if (isNaN(sinceDate.getTime())) {
@@ -117,10 +135,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // DBにoutboundメッセージを保存
+    // usersテーブルからline_user_idを取得
+    const lineUserId = await getLineUserIdByUserId(userId);
+
+    // LINE送信: line_user_id がある場合のみ
+    let lineSent = false;
+    let lineMock = false;
+
+    if (lineUserId) {
+      const lineMsg: TextMessage = { type: 'text', text: message };
+      const pushResult = await pushMessage(lineUserId, [lineMsg]);
+
+      if (!pushResult.success) {
+        // LINE送信失敗 → DBには保存しない（エラーを返す）
+        const statusCode = pushResult.statusCode === 429 ? 429 : 502;
+        return NextResponse.json(
+          { error: `LINE送信に失敗しました: ${pushResult.error ?? '不明なエラー'}` },
+          { status: statusCode }
+        );
+      }
+
+      lineSent = true;
+      lineMock = pushResult.mock;
+    }
+
+    // LINE送信成功（or LINE未接続）→ DBに保存
     const result = await saveMessage({
       userId,
-      lineUserId: null, // outboundではLINE user IDは不要（user_idから逆引き可能）
+      lineUserId: lineUserId,
       direction: 'outbound',
       content: message,
       messageType: 'text',
@@ -133,14 +175,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // TODO: 将来的にLINE Messaging API Push Messageに接続
-    // const lineResponse = await sendLinePushMessage(userId, message);
-
     return NextResponse.json({
       success: true,
       userId,
       messageId: result.id ?? `msg-${Date.now()}`,
       timestamp: new Date().toISOString(),
+      lineSent,
+      lineMock,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';

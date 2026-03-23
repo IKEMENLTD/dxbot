@@ -7,6 +7,7 @@ export interface Database {
       users: {
         Row: {
           id: string;
+          line_user_id: string | null;
           preferred_name: string;
           company_name: string;
           industry: string;
@@ -32,6 +33,7 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          line_user_id?: string | null;
           preferred_name: string;
           company_name: string;
           industry: string;
@@ -56,6 +58,7 @@ export interface Database {
         };
         Update: {
           id?: string;
+          line_user_id?: string | null;
           preferred_name?: string;
           company_name?: string;
           industry?: string;
@@ -367,6 +370,7 @@ export interface Database {
       hot_users_view: {
         Row: {
           id: string;
+          line_user_id: string | null;
           preferred_name: string;
           company_name: string;
           industry: string;

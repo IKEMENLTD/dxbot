@@ -2,6 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { getChannelAccessTokenAsync } from '@/lib/line-client';
+import { getAppSetting, setAppSetting } from '@/lib/queries';
 
 interface LineBotInfo {
   userId: string;
@@ -10,6 +12,15 @@ interface LineBotInfo {
   pictureUrl?: string;
   chatMode: string;
   markAsReadMode: string;
+}
+
+/** DB上の暗号化済みLINE設定の型 */
+interface EncryptedLineConfig {
+  encryptedAccessToken?: string;
+  encryptedSecret?: string;
+  webhookUrl?: string;
+  botName?: string | null;
+  verified?: boolean;
 }
 
 interface TestSuccessResponse {
@@ -27,7 +38,8 @@ type TestResponse = TestSuccessResponse | TestErrorResponse;
 
 /**
  * POST /api/settings/line/test
- * チャネルアクセストークンでBot情報を取得し接続テスト
+ * DB設定のアクセストークンでBot情報を取得し接続テスト。
+ * リクエストボディにトークンが含まれていればそちらを優先（新規入力時用）。
  */
 export async function POST(request: NextRequest): Promise<NextResponse<TestResponse>> {
   const authError = await requireAuth();
@@ -36,23 +48,27 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
   try {
     const body: unknown = await request.json();
 
+    // リクエストボディにトークンがあればそちらを使用（新規入力のテスト時）
+    let tokenToTest: string | null = null;
+
     if (
-      typeof body !== 'object' ||
-      body === null ||
-      !('channelAccessToken' in body) ||
-      typeof (body as Record<string, unknown>).channelAccessToken !== 'string'
+      typeof body === 'object' &&
+      body !== null &&
+      'channelAccessToken' in body &&
+      typeof (body as Record<string, unknown>).channelAccessToken === 'string' &&
+      ((body as Record<string, unknown>).channelAccessToken as string).trim().length > 0
     ) {
-      return NextResponse.json(
-        { success: false, error: 'チャネルアクセストークンが指定されていません' },
-        { status: 400 }
-      );
+      tokenToTest = ((body as Record<string, unknown>).channelAccessToken as string).trim();
     }
 
-    const { channelAccessToken } = body as { channelAccessToken: string };
+    // リクエストにトークンがない場合はDB設定を使用
+    if (!tokenToTest) {
+      tokenToTest = await getChannelAccessTokenAsync();
+    }
 
-    if (!channelAccessToken.trim()) {
+    if (!tokenToTest) {
       return NextResponse.json(
-        { success: false, error: 'チャネルアクセストークンが空です' },
+        { success: false, error: 'アクセストークンが設定されていません。先にStep 3で認証情報を保存してください。' },
         { status: 400 }
       );
     }
@@ -64,7 +80,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
       const res = await fetch('https://api.line.me/v2/bot/info', {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${channelAccessToken}`,
+          Authorization: `Bearer ${tokenToTest}`,
         },
         signal: controller.signal,
       });
@@ -81,6 +97,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
       }
 
       const data = (await res.json()) as LineBotInfo;
+
+      // テスト成功時、DB上のline_configのverifiedとbotNameを更新
+      try {
+        const existing = await getAppSetting<EncryptedLineConfig>('line_config');
+        if (existing && typeof existing === 'object') {
+          const updated: Record<string, unknown> = {
+            ...existing,
+            verified: true,
+            botName: data.displayName,
+          };
+          await setAppSetting('line_config', updated);
+        }
+      } catch (updateErr) {
+        console.error('[LINE Test] DB更新エラー（テスト結果は返す）:', updateErr);
+      }
 
       return NextResponse.json({
         success: true,

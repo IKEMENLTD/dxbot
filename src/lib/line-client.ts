@@ -2,25 +2,60 @@
 
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { LineMessage, LineProfile } from './line-types';
+import { getAppSetting } from './queries';
+import { decrypt } from './crypto';
 
 const LINE_API_BASE = 'https://api.line.me/v2';
 
-function getChannelAccessToken(): string | null {
+/** DB上の line_config の暗号化フィールド型 */
+interface EncryptedLineConfig {
+  encryptedAccessToken?: string;
+  encryptedSecret?: string;
+  webhookUrl?: string;
+  botName?: string | null;
+  verified?: boolean;
+}
+
+/**
+ * DB（app_settings.line_config）から暗号化されたアクセストークンを取得し復号する。
+ * 取得できない場合は環境変数にフォールバック。
+ */
+export async function getChannelAccessTokenAsync(): Promise<string | null> {
+  try {
+    const config = await getAppSetting<EncryptedLineConfig>('line_config');
+    if (config && typeof config === 'object' && config.encryptedAccessToken) {
+      return decrypt(config.encryptedAccessToken);
+    }
+  } catch (err) {
+    console.error('[LINE] DB からアクセストークン取得失敗。環境変数にフォールバック:', err instanceof Error ? err.message : err);
+  }
   return process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
 }
 
-function getChannelSecret(): string | null {
+/**
+ * DB（app_settings.line_config）から暗号化されたチャネルシークレットを取得し復号する。
+ * 取得できない場合は環境変数にフォールバック。
+ */
+export async function getChannelSecretAsync(): Promise<string | null> {
+  try {
+    const config = await getAppSetting<EncryptedLineConfig>('line_config');
+    if (config && typeof config === 'object' && config.encryptedSecret) {
+      return decrypt(config.encryptedSecret);
+    }
+  } catch (err) {
+    console.error('[LINE] DB からチャネルシークレット取得失敗。環境変数にフォールバック:', err instanceof Error ? err.message : err);
+  }
   return process.env.LINE_CHANNEL_SECRET || null;
 }
 
 /**
- * LINE署名を検証する
+ * LINE署名を検証する（キーを引数で受け取る同期版）
+ * webhookハンドラで事前にgetChannelSecretAsync()で取得したキーを渡す。
  */
-export function verifySignature(body: string, signature: string): boolean {
-  const secret = getChannelSecret();
+export function verifySignatureWithKey(body: string, signature: string, secret: string | null): boolean {
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[LINE] LINE_CHANNEL_SECRET 未設定。署名検証不可');
+      console.error('[LINE] チャネルシークレット未設定。署名検証不可');
       return false;
     }
     console.log('[LINE Mock] 署名検証スキップ（開発モード）');
@@ -44,10 +79,10 @@ export async function replyMessage(
   replyToken: string,
   messages: LineMessage[]
 ): Promise<void> {
-  const token = getChannelAccessToken();
+  const token = await getChannelAccessTokenAsync();
   if (!token) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。replyMessage 送信不可');
+      console.error('[LINE] アクセストークン未設定。replyMessage 送信不可');
     } else {
       console.log('[LINE Mock] replyMessage:', JSON.stringify({ replyToken, messages }, null, 2));
     }
@@ -111,11 +146,11 @@ export async function pushMessage(
     return { success: false, mock: false, error: 'LINE User IDの形式が不正です' };
   }
 
-  const token = getChannelAccessToken();
+  const token = await getChannelAccessTokenAsync();
   if (!token) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。pushMessage 送信不可');
-      return { success: false, mock: false, error: 'LINE_CHANNEL_ACCESS_TOKEN が未設定です' };
+      console.error('[LINE] アクセストークン未設定。pushMessage 送信不可');
+      return { success: false, mock: false, error: 'アクセストークンが未設定です' };
     }
     console.log('[LINE Mock] pushMessage:', JSON.stringify({ to: lineUserId, messages }, null, 2));
     return { success: true, mock: true };
@@ -170,10 +205,10 @@ export async function pushMessage(
  * LINE プロフィール取得
  */
 export async function getProfile(userId: string): Promise<LineProfile | null> {
-  const token = getChannelAccessToken();
+  const token = await getChannelAccessTokenAsync();
   if (!token) {
     if (process.env.NODE_ENV === 'production') {
-      console.error('[LINE] LINE_CHANNEL_ACCESS_TOKEN 未設定。getProfile 取得不可');
+      console.error('[LINE] アクセストークン未設定。getProfile 取得不可');
       return null;
     }
     console.log('[LINE Mock] getProfile:', userId);

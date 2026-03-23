@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, PostbackEvent, LineMessage } from '@/lib/line-types';
 import type { AxisScores, StumbleType } from '@/lib/types';
-import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
+import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
 import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus } from '@/lib/queries';
 import {
@@ -113,8 +113,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // 署名検証
-  if (!verifySignature(bodyText, signature)) {
+  // 署名検証（DBから秘密鍵を非同期取得）
+  const lineSecret = await getChannelSecretAsync();
+  if (!verifySignatureWithKey(bodyText, signature, lineSecret)) {
     console.error('[Webhook] 署名検証失敗');
     return NextResponse.json({ error: '署名検証失敗' }, { status: 401 });
   }

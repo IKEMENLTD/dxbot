@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { STORAGE_KEYS } from "@/lib/storage";
-import { useAppSetting } from "@/hooks/useAppSetting";
-import { useToast } from "@/contexts/ToastContext";
 
 // ===== 型定義 =====
 
-interface LineConfig {
-  channelAccessToken: string;
-  channelSecret: string;
-  webhookUrl: string;
+/** サーバーから返却されるLINE設定の状態 */
+interface LineConfigState {
+  configured: boolean;
+  maskedAccessToken: string | null;
+  maskedSecret: string | null;
+  webhookUrl: string | null;
   botName: string | null;
   verified: boolean;
 }
@@ -25,14 +24,6 @@ interface TestResult {
 type ConnectionStatus = "unconfigured" | "unverified" | "connected";
 
 // ===== 定数 =====
-
-const DEFAULT_CONFIG: LineConfig = {
-  channelAccessToken: "",
-  channelSecret: "",
-  webhookUrl: "",
-  botName: null,
-  verified: false,
-};
 
 const WEBHOOK_PATH = "/api/webhook";
 
@@ -106,8 +97,8 @@ function getWebhookUrl(): string {
   return `${origin}${WEBHOOK_PATH}`;
 }
 
-function getConnectionStatus(config: LineConfig): ConnectionStatus {
-  if (!config.channelAccessToken && !config.channelSecret) {
+function getConnectionStatus(config: LineConfigState): ConnectionStatus {
+  if (!config.configured) {
     return "unconfigured";
   }
   if (!config.verified) {
@@ -118,7 +109,7 @@ function getConnectionStatus(config: LineConfig): ConnectionStatus {
 
 // ===== ステータスバッジ =====
 
-function StatusBadge({ config }: { config: LineConfig }) {
+function StatusBadge({ config }: { config: LineConfigState }) {
   const status = getConnectionStatus(config);
 
   switch (status) {
@@ -229,21 +220,27 @@ interface SecretInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  maskedValue?: string | null;
 }
 
-function SecretInput({ label, helpText, value, onChange, placeholder }: SecretInputProps) {
+function SecretInput({ label, helpText, value, onChange, placeholder, maskedValue }: SecretInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <p className="text-xs text-gray-500 mb-2">{helpText}</p>
+      {maskedValue && !value && (
+        <p className="text-xs text-green-600 mb-1">
+          設定済み: {maskedValue}
+        </p>
+      )}
       <div className="relative">
         <input
           type={visible ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={maskedValue && !value ? `設定済み（変更する場合は新しい値を入力）` : placeholder}
           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm text-gray-800 font-mono placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
         />
         <button
@@ -261,14 +258,23 @@ function SecretInput({ label, helpText, value, onChange, placeholder }: SecretIn
 
 // ===== メインコンポーネント =====
 
+/** 保存APIレスポンスの型 */
+interface SaveResponse {
+  success: boolean;
+  error?: string;
+  maskedAccessToken?: string;
+  maskedSecret?: string;
+}
+
 export default function LineSettings() {
-  const {
-    value: config,
-    setValue: setConfig,
-    save: saveConfig,
-    loading: configLoading,
-    error: dbError,
-  } = useAppSetting<LineConfig>("line_config", DEFAULT_CONFIG, STORAGE_KEYS.LINE_CONFIG);
+  const [configState, setConfigState] = useState<LineConfigState>({
+    configured: false,
+    maskedAccessToken: null,
+    maskedSecret: null,
+    webhookUrl: null,
+    botName: null,
+    verified: false,
+  });
 
   const [step1Done, setStep1Done] = useState(false);
   const [step2Done, setStep2Done] = useState(false);
@@ -280,53 +286,101 @@ export default function LineSettings() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
-  const { addToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // configロード完了時にinputを同期
+  // 初期ロード: GET /api/settings/line からマスク値を取得
   useEffect(() => {
-    if (!configLoading) {
-      setTokenInput(config.channelAccessToken);
-      setSecretInput(config.channelSecret);
-      setWebhookUrl(getWebhookUrl());
-    }
-  }, [configLoading, config.channelAccessToken, config.channelSecret]);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-  // 保存処理
+    async function loadConfig() {
+      try {
+        const res = await fetch("/api/settings/line", {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const data = (await res.json()) as LineConfigState;
+        setConfigState(data);
+        setLoadError(null);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setLoadError("設定の読み込みがタイムアウトしました");
+        } else {
+          setLoadError(err instanceof Error ? err.message : "設定の読み込みに失敗しました");
+        }
+      } finally {
+        setLoading(false);
+        setWebhookUrl(getWebhookUrl());
+      }
+    }
+
+    loadConfig();
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, []);
+
+  // 保存処理: POST /api/settings/line で暗号化保存
   const handleSave = useCallback(async () => {
     if (!tokenInput.trim() || !secretInput.trim()) return;
 
     setSaving(true);
     try {
-      const updatedConfig: LineConfig = {
-        ...config,
-        channelAccessToken: tokenInput.trim(),
-        channelSecret: secretInput.trim(),
-        webhookUrl: getWebhookUrl(),
-        verified: false,
-        botName: null,
-      };
-      setConfig(updatedConfig);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-      const result = await saveConfig(updatedConfig);
+      const res = await fetch("/api/settings/line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelAccessToken: tokenInput.trim(),
+          channelSecret: secretInput.trim(),
+          webhookUrl: getWebhookUrl(),
+        }),
+        signal: controller.signal,
+      });
 
-      if (result.success) {
+      clearTimeout(timeoutId);
+
+      const data = (await res.json()) as SaveResponse;
+
+      if (data.success) {
+        setConfigState((prev) => ({
+          ...prev,
+          configured: true,
+          maskedAccessToken: data.maskedAccessToken ?? prev.maskedAccessToken,
+          maskedSecret: data.maskedSecret ?? prev.maskedSecret,
+          verified: false,
+          botName: null,
+        }));
+        // 入力をクリア（マスク表示に切り替え）
+        setTokenInput("");
+        setSecretInput("");
         setSaved(true);
         setTestResult(null);
-        addToast("success", "認証情報を保存しました");
         setTimeout(() => setSaved(false), 3000);
       } else {
-        addToast("error", result.error ?? "認証情報の保存に失敗しました");
+        setLoadError(data.error ?? "認証情報の保存に失敗しました");
       }
     } catch {
-      addToast("error", "認証情報の保存に失敗しました");
+      setLoadError("認証情報の保存に失敗しました");
     } finally {
       setSaving(false);
     }
-  }, [tokenInput, secretInput, config, addToast, setConfig, saveConfig]);
+  }, [tokenInput, secretInput]);
 
-  // 接続テスト
+  // 接続テスト: POST /api/settings/line/test
   const handleTest = useCallback(async () => {
-    if (!config.channelAccessToken) return;
+    if (!configState.configured && !tokenInput.trim()) return;
 
     setTesting(true);
     setTestResult(null);
@@ -335,10 +389,16 @@ export default function LineSettings() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
+      // 未保存のトークンがあればそれを送信、なければサーバーがDB設定を使用
+      const bodyPayload: Record<string, string> = {};
+      if (tokenInput.trim()) {
+        bodyPayload.channelAccessToken = tokenInput.trim();
+      }
+
       const res = await fetch("/api/settings/line/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelAccessToken: config.channelAccessToken }),
+        body: JSON.stringify(bodyPayload),
         signal: controller.signal,
       });
 
@@ -348,27 +408,21 @@ export default function LineSettings() {
       setTestResult(data);
 
       if (data.success && data.botName) {
-        const updatedConfig: LineConfig = {
-          ...config,
+        setConfigState((prev) => ({
+          ...prev,
           verified: true,
-          botName: data.botName,
-        };
-        setConfig(updatedConfig);
-        saveConfig(updatedConfig);
-        addToast("success", `接続成功 - Bot名: ${data.botName}`);
-      } else {
-        addToast("error", data.error ?? "接続テストに失敗しました");
+          botName: data.botName ?? null,
+        }));
       }
     } catch {
       setTestResult({
         success: false,
         error: "接続テストに失敗しました。ネットワーク接続を確認してください。",
       });
-      addToast("error", "接続テストに失敗しました。ネットワーク接続を確認してください。");
     } finally {
       setTesting(false);
     }
-  }, [config, addToast, setConfig, saveConfig]);
+  }, [configState.configured, tokenInput]);
 
   // クリップボードコピー
   const handleCopy = useCallback(async () => {
@@ -391,9 +445,9 @@ export default function LineSettings() {
   }, [webhookUrl]);
 
   const canSave = tokenInput.trim().length > 0 && secretInput.trim().length > 0;
-  const canTest = config.channelAccessToken.length > 0;
+  const canTest = configState.configured || tokenInput.trim().length > 0;
 
-  if (configLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
         読み込み中...
@@ -403,17 +457,17 @@ export default function LineSettings() {
 
   return (
     <div className="space-y-4">
-      {/* DBエラー表示 */}
-      {dbError && (
+      {/* エラー表示 */}
+      {loadError && (
         <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
-          {dbError}（ローカルデータを表示しています）
+          {loadError}
         </div>
       )}
 
       {/* 接続ステータス */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-800">LINE Messaging API 連携</h2>
-        <StatusBadge config={config} />
+        <StatusBadge config={configState} />
       </div>
 
       {/* Step 1: LINE Developers登録 */}
@@ -480,7 +534,7 @@ export default function LineSettings() {
       <StepCard
         stepNumber={3}
         title="Step 3: 認証情報を入力"
-        completed={config.channelAccessToken.length > 0 && config.channelSecret.length > 0}
+        completed={configState.configured}
         collapsible={false}
         defaultOpen
       >
@@ -491,6 +545,7 @@ export default function LineSettings() {
             value={tokenInput}
             onChange={setTokenInput}
             placeholder="トークンを貼り付け"
+            maskedValue={configState.maskedAccessToken}
           />
 
           <SecretInput
@@ -499,7 +554,16 @@ export default function LineSettings() {
             value={secretInput}
             onChange={setSecretInput}
             placeholder="シークレットを貼り付け"
+            maskedValue={configState.maskedSecret}
           />
+
+          {configState.configured && !tokenInput && !secretInput && (
+            <div className="bg-green-50 rounded-xl p-3">
+              <p className="text-xs text-green-700">
+                認証情報は暗号化されてDBに保存済みです。変更する場合は新しい値を入力してください。
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <button
@@ -514,7 +578,7 @@ export default function LineSettings() {
             {saved && (
               <span className="flex items-center gap-1.5 text-sm text-green-600">
                 <CheckCircleIcon />
-                保存しました
+                暗号化して保存しました
               </span>
             )}
           </div>
@@ -527,7 +591,7 @@ export default function LineSettings() {
         title="Step 4: Webhook URLを設定"
         completed={false}
         collapsible
-        defaultOpen={config.channelAccessToken.length > 0}
+        defaultOpen={configState.configured}
       >
         <div className="space-y-4">
           <div>
@@ -590,7 +654,7 @@ export default function LineSettings() {
       <StepCard
         stepNumber={5}
         title="Step 5: 接続テスト"
-        completed={config.verified}
+        completed={configState.verified}
         collapsible={false}
         defaultOpen
       >

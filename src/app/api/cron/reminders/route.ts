@@ -1,6 +1,7 @@
 // ===== リマインダー Cron API Route =====
 // GET or POST /api/cron/reminders
-// Vercel Cron Jobs または外部cronから毎日朝10時(JST)に実行される
+// 外部Cronサービス（cron-job.org等）から毎日朝10時(JST)に実行される
+// Authorization: Bearer <CRON_SECRET> ヘッダーが必要
 
 import { NextRequest, NextResponse } from 'next/server';
 import { pushMessage } from '@/lib/line-client';

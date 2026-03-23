@@ -195,6 +195,13 @@ CREATE INDEX idx_chat_messages_sent_at ON chat_messages (sent_at DESC);
 CREATE INDEX idx_chat_messages_line_user_id ON chat_messages (line_user_id);
 CREATE INDEX idx_chat_messages_direction ON chat_messages (direction);
 
+-- ===== app_settings =====
+CREATE TABLE app_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ===== RLS (Row Level Security) =====
 -- service_role キーで全アクセス。anon キーでは一切拒否（2重防御）。
 
@@ -206,6 +213,7 @@ ALTER TABLE user_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommend_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 
 -- users: anon キーでの全操作を拒否
 CREATE POLICY "deny_anon_select_users" ON users FOR SELECT USING (false);
@@ -254,3 +262,9 @@ CREATE POLICY "deny_anon_select_conversation_states" ON conversation_states FOR 
 CREATE POLICY "deny_anon_insert_conversation_states" ON conversation_states FOR INSERT WITH CHECK (false);
 CREATE POLICY "deny_anon_update_conversation_states" ON conversation_states FOR UPDATE USING (false);
 CREATE POLICY "deny_anon_delete_conversation_states" ON conversation_states FOR DELETE USING (false);
+
+-- app_settings: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_app_settings" ON app_settings FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_app_settings" ON app_settings FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_app_settings" ON app_settings FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_app_settings" ON app_settings FOR DELETE USING (false);

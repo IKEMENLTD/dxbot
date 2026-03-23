@@ -31,6 +31,133 @@ import type {
 import { toClientMessage } from './chat-types';
 
 // ---------------------------------------------------------------------------
+// App Settings
+// ---------------------------------------------------------------------------
+
+/** 単一の設定値を取得 */
+export async function getAppSetting<T>(key: string): Promise<T | null> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', key)
+      .single();
+
+    if (error) {
+      // PGRST116 = 行が見つからない（正常系）
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      console.error('[getAppSetting] Supabase error:', error.message);
+      return null;
+    }
+
+    return (data?.value ?? null) as T | null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '設定値取得中にエラーが発生しました';
+    console.error('[getAppSetting] エラー:', msg);
+    return null;
+  }
+}
+
+/** 設定値をupsert（なければINSERT、あればUPDATE） */
+export async function setAppSetting(
+  key: string,
+  value: Record<string, unknown> | unknown[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: false, error: 'データベース未接続です' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert(
+        {
+          key,
+          value: value as Record<string, unknown>,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'key' }
+      );
+
+    if (error) {
+      console.error('[setAppSetting] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '設定値保存中にエラーが発生しました';
+    console.error('[setAppSetting] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** 全設定値を取得 */
+export async function getAllAppSettings(): Promise<Record<string, unknown>> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return {};
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('key, value');
+
+    if (error) {
+      console.error('[getAllAppSettings] Supabase error:', error.message);
+      return {};
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const row of data ?? []) {
+      result[row.key] = row.value;
+    }
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '全設定値取得中にエラーが発生しました';
+    console.error('[getAllAppSettings] エラー:', msg);
+    return {};
+  }
+}
+
+/** 設定値を削除 */
+export async function deleteAppSetting(
+  key: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: false, error: 'データベース未接続です' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('app_settings')
+      .delete()
+      .eq('key', key);
+
+    if (error) {
+      console.error('[deleteAppSetting] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '設定値削除中にエラーが発生しました';
+    console.error('[deleteAppSetting] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
 

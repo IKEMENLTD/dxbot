@@ -81,9 +81,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ messages });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
+    console.error('[API /chat GET]', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: `メッセージ取得中にエラーが発生しました: ${errorMessage}` },
+      { error: 'メッセージ取得中にエラーが発生しました' },
       { status: 500 }
     );
   }
@@ -184,9 +184,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       lineMock,
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : '不明なエラーが発生しました';
+    console.error('[API /chat POST]', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: `メッセージ送信中にエラーが発生しました: ${errorMessage}` },
+      { error: 'メッセージ送信中にエラーが発生しました' },
       { status: 500 }
     );
   }

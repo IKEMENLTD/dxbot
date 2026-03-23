@@ -43,28 +43,13 @@ const RATE_LIMIT_DELAY_MS = 60;
 const BATCH_TIMEOUT_MS = 300000;
 
 /**
- * 認証チェック: CRON_SECRET または ADMIN_PASSWORD
+ * 認証チェック: CRON_SECRET の Bearer トークンのみ許可
  */
 function isAuthorized(request: NextRequest): boolean {
-  // Authorization ヘッダーから Bearer トークンを取得
   const authHeader = request.headers.get('authorization') ?? '';
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-
-  // クエリパラメータからもキーを取得（Vercel Cron用）
-  const url = new URL(request.url);
-  const queryKey = url.searchParams.get('key') ?? '';
-
   const cronSecret = process.env.CRON_SECRET ?? '';
-  const adminPassword = process.env.ADMIN_PASSWORD ?? '';
-
-  // いずれかが一致すれば認証OK
-  if (cronSecret && (bearerToken === cronSecret || queryKey === cronSecret)) {
-    return true;
-  }
-  if (adminPassword && (bearerToken === adminPassword || queryKey === adminPassword)) {
-    return true;
-  }
-
+  if (cronSecret && bearerToken === cronSecret) return true;
   return false;
 }
 
@@ -255,6 +240,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.log(
       `[Reminder] バッチ完了: 処理=${result.processed}, 送信=${result.sent}, スキップ=${result.skipped}, 失敗=${result.failed}`
     );
+    // 詳細はサーバーログにのみ出力（レスポンスにユーザー情報を含めない）
+    console.log('[Reminder] 詳細結果:', JSON.stringify(result.results));
 
     return NextResponse.json({
       status: 'ok',
@@ -264,13 +251,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         skipped: result.skipped,
         failed: result.failed,
       },
-      results: result.results,
     });
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : '不明なエラー';
-    console.error('[Reminder] バッチ処理エラー:', errorMsg);
+    console.error('[Reminder] バッチ処理エラー:', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      { error: `リマインダー処理中にエラーが発生しました: ${errorMsg}` },
+      { error: 'リマインダー処理中にエラーが発生しました' },
       { status: 500 }
     );
   } finally {

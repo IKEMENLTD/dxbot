@@ -47,10 +47,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : '不明なエラーが発生しました';
+    console.error('[API /chat/mark-read POST]', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: `既読更新中にエラーが発生しました: ${errorMessage}` },
+      { error: '既読更新中にエラーが発生しました' },
       { status: 500 }
     );
   }

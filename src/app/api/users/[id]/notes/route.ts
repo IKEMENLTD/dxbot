@@ -61,10 +61,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'メモの追加に失敗しました';
-    console.error('[API /users/[id]/notes POST]', message);
+    console.error('[API /users/[id]/notes POST]', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      { error: message },
+      { error: 'メモの追加に失敗しました' },
       { status: 500 }
     );
   }

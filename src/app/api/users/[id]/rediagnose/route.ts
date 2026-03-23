@@ -82,10 +82,9 @@ export async function POST(
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : '再診断送信に失敗しました';
-    console.error('[API /users/[id]/rediagnose POST]', message);
+    console.error('[API /users/[id]/rediagnose POST]', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      { error: message },
+      { error: '再診断送信に失敗しました' },
       { status: 500 }
     );
   }

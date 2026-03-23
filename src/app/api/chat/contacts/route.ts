@@ -36,10 +36,9 @@ export async function GET(): Promise<NextResponse> {
 
     return NextResponse.json({ contacts });
   } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : '不明なエラーが発生しました';
+    console.error('[API /chat/contacts GET]', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: `コンタクト一覧取得中にエラーが発生しました: ${errorMessage}` },
+      { error: 'コンタクト一覧取得中にエラーが発生しました' },
       { status: 500 }
     );
   }

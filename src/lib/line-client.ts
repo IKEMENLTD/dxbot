@@ -1,6 +1,6 @@
 // ===== LINE Messaging API クライアント =====
 
-import * as crypto from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import type { LineMessage, LineProfile } from './line-types';
 
 const LINE_API_BASE = 'https://api.line.me/v2';
@@ -27,12 +27,14 @@ export function verifySignature(body: string, signature: string): boolean {
     return true;
   }
 
-  const hash = crypto
-    .createHmac('SHA256', secret)
+  const hash = createHmac('SHA256', secret)
     .update(body)
     .digest('base64');
 
-  return hash === signature;
+  const hashBuf = Buffer.from(hash, 'base64');
+  const sigBuf = Buffer.from(signature, 'base64');
+  if (hashBuf.length !== sigBuf.length) return false;
+  return timingSafeEqual(hashBuf, sigBuf);
 }
 
 /**
@@ -70,6 +72,13 @@ export async function replyMessage(
       const errorBody = await res.text();
       console.error('[LINE] replyMessage エラー:', res.status, errorBody);
     }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('[LINE] replyMessage タイムアウト（30秒）');
+    } else {
+      console.error('[LINE] replyMessage 例外:', err instanceof Error ? err.message : err);
+    }
+    // fire-and-forget: エラーは吸収する
   } finally {
     clearTimeout(timeoutId);
   }
@@ -90,10 +99,18 @@ export interface PushMessageResult {
  * LINE Push Message API
  * 成功/失敗を判定できるよう PushMessageResult を返す
  */
+/** LINE User ID の形式チェック: U + 32桁の16進数 */
+const LINE_USER_ID_PATTERN = /^U[0-9a-f]{32}$/;
+
 export async function pushMessage(
   lineUserId: string,
   messages: LineMessage[]
 ): Promise<PushMessageResult> {
+  if (!LINE_USER_ID_PATTERN.test(lineUserId)) {
+    console.error(`[LINE] 不正な LINE User ID 形式: ${lineUserId}`);
+    return { success: false, mock: false, error: 'LINE User IDの形式が不正です' };
+  }
+
   const token = getChannelAccessToken();
   if (!token) {
     if (process.env.NODE_ENV === 'production') {
@@ -185,6 +202,13 @@ export async function getProfile(userId: string): Promise<LineProfile | null> {
 
     const data: unknown = await res.json();
     return data as LineProfile;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('[LINE] getProfile タイムアウト（15秒）');
+    } else {
+      console.error('[LINE] getProfile 例外:', err instanceof Error ? err.message : err);
+    }
+    return null;
   } finally {
     clearTimeout(timeoutId);
   }

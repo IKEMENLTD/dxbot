@@ -1150,6 +1150,215 @@ export async function getRecentCompletedStepCount(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tracking Links（流入元管理）
+// ---------------------------------------------------------------------------
+
+import type { TrackingLink } from './types';
+
+/** モックトラッキングリンク */
+const mockTrackingLinks: TrackingLink[] = [
+  {
+    id: 'tl-001',
+    code: 'abc12345',
+    label: 'LINE広告（3月）',
+    lead_source: 'x',
+    destination_url: 'https://lin.ee/example',
+    click_count: 42,
+    is_active: true,
+    created_at: '2026-03-01T00:00:00Z',
+    updated_at: '2026-03-20T00:00:00Z',
+  },
+  {
+    id: 'tl-002',
+    code: 'def67890',
+    label: 'Threads投稿リンク',
+    lead_source: 'threads',
+    destination_url: 'https://lin.ee/example',
+    click_count: 18,
+    is_active: true,
+    created_at: '2026-03-05T00:00:00Z',
+    updated_at: '2026-03-18T00:00:00Z',
+  },
+];
+
+/** ランダムコード生成（8文字の英小文字+数字） */
+function generateTrackingCode(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+/** 全トラッキングリンク取得 */
+export async function getTrackingLinks(): Promise<TrackingLink[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return [...mockTrackingLinks];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tracking_links')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[getTrackingLinks] Supabase error:', error.message);
+      return [...mockTrackingLinks];
+    }
+
+    return (data ?? []) as unknown as TrackingLink[];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'トラッキングリンク取得中にエラーが発生しました';
+    console.error('[getTrackingLinks] エラー:', msg);
+    return [...mockTrackingLinks];
+  }
+}
+
+/** トラッキングリンク作成 */
+export async function createTrackingLink(
+  label: string,
+  leadSource: string,
+  destinationUrl: string
+): Promise<TrackingLink | null> {
+  const code = generateTrackingCode();
+
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const newLink: TrackingLink = {
+      id: `tl-mock-${Date.now()}`,
+      code,
+      label,
+      lead_source: leadSource,
+      destination_url: destinationUrl,
+      click_count: 0,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockTrackingLinks.unshift(newLink);
+    return newLink;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tracking_links')
+      .insert({
+        code,
+        label,
+        lead_source: leadSource,
+        destination_url: destinationUrl,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('[createTrackingLink] Supabase error:', error.message);
+      return null;
+    }
+
+    return (data ?? null) as unknown as TrackingLink | null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'トラッキングリンク作成中にエラーが発生しました';
+    console.error('[createTrackingLink] エラー:', msg);
+    return null;
+  }
+}
+
+/** トラッキングリンク更新 */
+export async function updateTrackingLink(
+  id: string,
+  updates: { label?: string; is_active?: boolean }
+): Promise<boolean> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const link = mockTrackingLinks.find((l) => l.id === id);
+    if (!link) return false;
+    if (updates.label !== undefined) link.label = updates.label;
+    if (updates.is_active !== undefined) link.is_active = updates.is_active;
+    link.updated_at = new Date().toISOString();
+    return true;
+  }
+
+  try {
+    const updateData: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (updates.label !== undefined) updateData.label = updates.label;
+    if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+
+    const { error } = await supabase
+      .from('tracking_links')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      console.error('[updateTrackingLink] Supabase error:', error.message);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'トラッキングリンク更新中にエラーが発生しました';
+    console.error('[updateTrackingLink] エラー:', msg);
+    return false;
+  }
+}
+
+/** トラッキングリンク無効化（論理削除） */
+export async function deactivateTrackingLink(id: string): Promise<boolean> {
+  return updateTrackingLink(id, { is_active: false });
+}
+
+/** クリックカウント+1 → destination_url を返す */
+export async function incrementClickCount(code: string): Promise<string | null> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const link = mockTrackingLinks.find((l) => l.code === code && l.is_active);
+    if (!link) return null;
+    link.click_count += 1;
+    return link.destination_url;
+  }
+
+  try {
+    // まずリンクを取得
+    const { data: linkData, error: selectError } = await supabase
+      .from('tracking_links')
+      .select('id, destination_url, click_count')
+      .eq('code', code)
+      .eq('is_active', true)
+      .single();
+
+    if (selectError || !linkData) {
+      return null;
+    }
+
+    const typedLink = linkData as unknown as { id: string; destination_url: string; click_count: number };
+
+    // click_count を +1
+    const { error: updateError } = await supabase
+      .from('tracking_links')
+      .update({
+        click_count: typedLink.click_count + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', typedLink.id);
+
+    if (updateError) {
+      console.error('[incrementClickCount] update error:', updateError.message);
+    }
+
+    return typedLink.destination_url;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'クリックカウント更新中にエラーが発生しました';
+    console.error('[incrementClickCount] エラー:', msg);
+    return null;
+  }
+}
+
 /** 指定期間内の最初と最後の完了ステップ間の日数を取得 */
 export async function getRecentCompletedDays(
   userId: string,

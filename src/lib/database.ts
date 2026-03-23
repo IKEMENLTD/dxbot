@@ -386,6 +386,42 @@ export interface Database {
           },
         ];
       };
+      tracking_links: {
+        Row: {
+          id: string;
+          code: string;
+          label: string;
+          lead_source: string;
+          destination_url: string;
+          click_count: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          label: string;
+          lead_source: string;
+          destination_url: string;
+          click_count?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          label?: string;
+          lead_source?: string;
+          destination_url?: string;
+          click_count?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       hot_users_view: {

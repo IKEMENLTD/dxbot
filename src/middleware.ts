@@ -14,7 +14,8 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   if (
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/webhook" ||
-    pathname.startsWith("/api/cron/")
+    pathname.startsWith("/api/cron/") ||
+    pathname.startsWith("/track/")
   ) {
     return undefined;
   }

@@ -39,6 +39,18 @@ const navItems = [
     ),
   },
   {
+    href: "/admindashboard/sources",
+    label: "流入元管理",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M7.5 7.5L4.5 10.5L7.5 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12.5 6.5L15.5 9.5L12.5 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M4.5 10.5H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M9 9.5H15.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     href: "/admindashboard/settings",
     label: "設定",
     icon: (

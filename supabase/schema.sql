@@ -202,6 +202,22 @@ CREATE TABLE app_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ===== tracking_links =====
+CREATE TABLE tracking_links (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  code TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  lead_source TEXT NOT NULL,
+  destination_url TEXT NOT NULL,
+  click_count INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_tracking_links_code ON tracking_links(code);
+CREATE INDEX idx_tracking_links_active ON tracking_links(is_active);
+
 -- ===== RLS (Row Level Security) =====
 -- service_role キーで全アクセス。anon キーでは一切拒否（2重防御）。
 
@@ -214,6 +230,7 @@ ALTER TABLE recommend_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tracking_links ENABLE ROW LEVEL SECURITY;
 
 -- users: anon キーでの全操作を拒否
 CREATE POLICY "deny_anon_select_users" ON users FOR SELECT USING (false);
@@ -268,3 +285,9 @@ CREATE POLICY "deny_anon_select_app_settings" ON app_settings FOR SELECT USING (
 CREATE POLICY "deny_anon_insert_app_settings" ON app_settings FOR INSERT WITH CHECK (false);
 CREATE POLICY "deny_anon_update_app_settings" ON app_settings FOR UPDATE USING (false);
 CREATE POLICY "deny_anon_delete_app_settings" ON app_settings FOR DELETE USING (false);
+
+-- tracking_links: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_tracking_links" ON tracking_links FOR SELECT TO anon USING (false);
+CREATE POLICY "deny_anon_insert_tracking_links" ON tracking_links FOR INSERT TO anon WITH CHECK (false);
+CREATE POLICY "deny_anon_update_tracking_links" ON tracking_links FOR UPDATE TO anon USING (false);
+CREATE POLICY "deny_anon_delete_tracking_links" ON tracking_links FOR DELETE TO anon USING (false);

@@ -91,6 +91,18 @@ export interface StumbleRecord {
   created_at: string;
 }
 
+export interface TrackingLink {
+  id: string;
+  code: string;
+  label: string;
+  lead_source: string;
+  destination_url: string;
+  click_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FunnelKpi {
   week: string;
   inflow: number;

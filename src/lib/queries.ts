@@ -302,6 +302,70 @@ export async function updateUserStatus(
   return { success: true };
 }
 
+/** TECHSTARS修了登録（customer_status + techstars_completed_at 同時更新） */
+export async function completeTechstars(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  const now = new Date().toISOString();
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const user = mockUsers.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, error: 'ユーザーが見つかりません' };
+    }
+    user.customer_status = 'techstars_grad';
+    user.techstars_completed_at = now;
+    return { success: true };
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update({
+      customer_status: 'techstars_grad',
+      techstars_completed_at: now,
+    })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('[completeTechstars] Supabase error:', error.message);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/** 再診断のためconversation_statesのフェーズをリセット */
+export async function resetConversationForRediagnosis(
+  lineUserId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: 何もしない（conversation_stateはインメモリ管理）
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('conversation_states')
+      .update({
+        state: { phase: 'consent_pending' },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('line_user_id', lineUserId);
+
+    if (error) {
+      console.error('[resetConversationForRediagnosis] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '会話状態リセット中に不明なエラーが発生しました';
+    console.error('[resetConversationForRediagnosis] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 /** メモ追加（タイムラインにnote_addedイベントを追加） */
 export async function addUserNote(
   userId: string,

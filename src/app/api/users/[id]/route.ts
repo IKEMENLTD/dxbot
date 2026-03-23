@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
-import { getUserById, updateUserStatus, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
+import { getUserById, updateUserStatus, completeTechstars, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
 import type { CustomerStatus } from '@/lib/types';
 
 const VALID_STATUSES: CustomerStatus[] = [
@@ -68,19 +68,40 @@ export async function PATCH(
     const { id } = await context.params;
     const body: unknown = await request.json();
 
-    if (
-      !body ||
-      typeof body !== 'object' ||
-      !('status' in body) ||
-      typeof (body as Record<string, unknown>).status !== 'string'
-    ) {
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'リクエストボディが不正です' },
+        { status: 400 }
+      );
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+
+    // TECHSTARS修了登録: { action: "techstars_complete" }
+    if (bodyRecord.action === 'techstars_complete') {
+      const result = await completeTechstars(id);
+
+      if (!result.success) {
+        return NextResponse.json(
+          { error: result.error ?? 'TECHSTARS修了登録に失敗しました' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        data: { userId: id, status: 'techstars_grad', techstars_completed_at: new Date().toISOString() },
+      });
+    }
+
+    // ステータス更新: { status: "..." }
+    if (!('status' in bodyRecord) || typeof bodyRecord.status !== 'string') {
       return NextResponse.json(
         { error: 'status フィールドが必要です' },
         { status: 400 }
       );
     }
 
-    const status = (body as Record<string, string>).status as CustomerStatus;
+    const status = bodyRecord.status as CustomerStatus;
 
     if (!VALID_STATUSES.includes(status)) {
       return NextResponse.json(

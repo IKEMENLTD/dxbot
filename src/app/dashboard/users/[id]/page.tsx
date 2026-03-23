@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import UserHeader from "@/components/user-card/UserHeader";
 import RadarChartComponent from "@/components/user-card/RadarChart";
@@ -115,6 +115,26 @@ export default function UserCardPage({ params }: PageProps) {
     return () => controller.abort();
   }, [id]);
 
+  // データ再取得（NotesActionsの更新後に呼ばれる）
+  const handleUserUpdated = useCallback(() => {
+    const controller = new AbortController();
+
+    fetch(`/api/users/${id}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((json: { data?: UserDetailData } | null) => {
+        if (json?.data) {
+          setData(json.data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[UserCard] データ再取得エラー:", err);
+      });
+  }, [id]);
+
   if (loading) {
     return <SkeletonPage />;
   }
@@ -166,7 +186,7 @@ export default function UserCardPage({ params }: PageProps) {
             </div>
             <div className="lg:col-span-2 space-y-6">
               <LtvHistory deals={userDeals} />
-              <NotesActions user={user} />
+              <NotesActions user={user} onUserUpdated={handleUserUpdated} />
             </div>
           </div>
         </main>

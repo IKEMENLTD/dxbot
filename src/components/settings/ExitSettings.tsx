@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ExitType } from "@/lib/types";
 import { EXIT_CONFIG } from "@/lib/types";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 
 interface ExitItem {
   id: ExitType;
@@ -36,9 +37,15 @@ const COLOR_MAP: Record<"green" | "orange", { colorClass: string; bgClass: strin
 };
 
 export default function ExitSettings() {
-  const [exits, setExits] = useState<ExitItem[]>(() =>
-    loadFromStorage<ExitItem[]>(STORAGE_KEYS.EXITS, buildInitialExits())
-  );
+  const {
+    value: exits,
+    setValue: setExits,
+    save: saveExits,
+    loading,
+    saving: dbSaving,
+    error: dbError,
+  } = useAppSetting<ExitItem[]>("exits", buildInitialExits(), STORAGE_KEYS.EXITS);
+
   const [editingId, setEditingId] = useState<ExitType | null>(null);
   const [editLabel, setEditLabel] = useState("");
 
@@ -52,12 +59,10 @@ export default function ExitSettings() {
   }, [editingId]);
 
   const updateExits = useCallback((updater: (prev: ExitItem[]) => ExitItem[]) => {
-    setExits((prev) => {
-      const next = updater(prev);
-      saveToStorage(STORAGE_KEYS.EXITS, next);
-      return next;
-    });
-  }, []);
+    const next = updater(exits);
+    setExits(next);
+    saveExits(next);
+  }, [exits, setExits, saveExits]);
 
   const handleEditStart = (item: ExitItem) => {
     setEditingId(item.id);
@@ -99,8 +104,23 @@ export default function ExitSettings() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="overflow-hidden rounded-xl border border-gray-200">
         <table className="w-full text-sm">

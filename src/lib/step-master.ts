@@ -1,6 +1,7 @@
 // ===== ステップマスターデータ（30件） =====
 
 import type { AxisScores } from './types';
+import { getSetting, APP_SETTING_KEYS } from './app-settings';
 
 export interface StepDefinition {
   id: string;
@@ -72,9 +73,9 @@ const AXIS_D_STEPS: StepDefinition[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 全ステップ
+// 全ステップ（デフォルト値）
 // ---------------------------------------------------------------------------
-const ALL_STEPS: StepDefinition[] = [
+const DEFAULT_STEPS: StepDefinition[] = [
   ...AXIS_A1_STEPS,
   ...AXIS_A2_STEPS,
   ...AXIS_B_STEPS,
@@ -82,6 +83,7 @@ const ALL_STEPS: StepDefinition[] = [
   ...AXIS_D_STEPS,
 ];
 
+/** デフォルトの軸別ステップ一覧（同期版で使用） */
 const STEPS_BY_AXIS: Record<keyof AxisScores, StepDefinition[]> = {
   a1: AXIS_A1_STEPS,
   a2: AXIS_A2_STEPS,
@@ -130,7 +132,82 @@ export function getNextStep(
   return null;
 }
 
-/** 全ステップ一覧を取得 */
+/** 全ステップ一覧を取得（同期版: デフォルト値を返す） */
 export function getAllSteps(): StepDefinition[] {
-  return ALL_STEPS;
+  return DEFAULT_STEPS;
+}
+
+// ---------------------------------------------------------------------------
+// DB優先の非同期版（Phase B: webhook等のサーバーサイドで使用）
+// ---------------------------------------------------------------------------
+
+/** DBからステップ定義を読み込む。未設定時はnullを返す */
+async function loadStepsFromDb(): Promise<StepDefinition[] | null> {
+  try {
+    const dbSteps = await getSetting<StepDefinition[]>(APP_SETTING_KEYS.STEPS, DEFAULT_STEPS);
+    // getSettingはデフォルト値を返すので、DBに値がある場合のみdbStepsは異なる
+    // ただし getSetting は常にT型を返すため null にはならない
+    return dbSteps;
+  } catch (err) {
+    console.error('[step-master] DB読み込みエラー:', err);
+    return null;
+  }
+}
+
+/** 軸別にグループ化するヘルパー */
+function buildStepsByAxis(steps: StepDefinition[]): Record<keyof AxisScores, StepDefinition[]> {
+  const result: Record<keyof AxisScores, StepDefinition[]> = {
+    a1: [], a2: [], b: [], c: [], d: [],
+  };
+  for (const step of steps) {
+    if (result[step.axis]) {
+      result[step.axis].push(step);
+    }
+  }
+  return result;
+}
+
+/** 全ステップ一覧を取得（非同期版: DB優先、フォールバックはDEFAULT_STEPS） */
+export async function getAllStepsAsync(): Promise<StepDefinition[]> {
+  const dbSteps = await loadStepsFromDb();
+  return dbSteps ?? DEFAULT_STEPS;
+}
+
+/** 弱点軸優先で次の未完了ステップを選択（非同期版: DB優先） */
+export async function getNextStepAsync(
+  completedStepIds: string[],
+  weakAxis: keyof AxisScores
+): Promise<StepDefinition | null> {
+  const allSteps = await getAllStepsAsync();
+  const stepsByAxis = buildStepsByAxis(allSteps);
+  const completed = new Set(completedStepIds);
+
+  // 1. 弱点軸から未完了ステップを探す（難易度順）
+  const weakSteps = stepsByAxis[weakAxis] ?? [];
+  for (const step of weakSteps) {
+    if (!completed.has(step.id)) {
+      return step;
+    }
+  }
+
+  // 2. 弱点軸が全完了なら、他の軸からスコア昇順で探す
+  const otherAxes = (Object.keys(stepsByAxis) as (keyof AxisScores)[])
+    .filter((a) => a !== weakAxis);
+
+  for (const axis of otherAxes) {
+    for (const step of stepsByAxis[axis] ?? []) {
+      if (!completed.has(step.id)) {
+        return step;
+      }
+    }
+  }
+
+  // 3. 全ステップ完了
+  return null;
+}
+
+/** stepIdからStepDefinitionを検索（非同期版: DB優先） */
+export async function findStepByIdAsync(stepId: string): Promise<StepDefinition | null> {
+  const allSteps = await getAllStepsAsync();
+  return allSteps.find((s) => s.id === stepId) ?? null;
 }

@@ -7,8 +7,12 @@ import LeadSourceSettings from "@/components/settings/LeadSourceSettings";
 import TemplateSettings from "@/components/settings/TemplateSettings";
 import ExitSettings from "@/components/settings/ExitSettings";
 import StatusSettings from "@/components/settings/StatusSettings";
+import StepSettings from "@/components/settings/StepSettings";
+import CtaSettings from "@/components/settings/CtaSettings";
+import ReminderSettings from "@/components/settings/ReminderSettings";
+import DiagnosisSettings from "@/components/settings/DiagnosisSettings";
 
-type TabKey = "line" | "tags" | "leadSource" | "templates" | "exit" | "status";
+type TabKey = "line" | "tags" | "leadSource" | "templates" | "exit" | "status" | "steps" | "cta" | "reminder" | "diagnosis";
 
 interface TabDef {
   key: TabKey;
@@ -22,6 +26,10 @@ const TABS: TabDef[] = [
   { key: "templates", label: "定型文" },
   { key: "exit", label: "出口" },
   { key: "status", label: "ステータス" },
+  { key: "steps", label: "ステップ管理" },
+  { key: "cta", label: "CTA設定" },
+  { key: "reminder", label: "リマインダー" },
+  { key: "diagnosis", label: "診断設定" },
 ];
 
 function TabContent({ tab }: { tab: TabKey }) {
@@ -38,6 +46,14 @@ function TabContent({ tab }: { tab: TabKey }) {
       return <ExitSettings />;
     case "status":
       return <StatusSettings />;
+    case "steps":
+      return <StepSettings />;
+    case "cta":
+      return <CtaSettings />;
+    case "reminder":
+      return <ReminderSettings />;
+    case "diagnosis":
+      return <DiagnosisSettings />;
   }
 }
 

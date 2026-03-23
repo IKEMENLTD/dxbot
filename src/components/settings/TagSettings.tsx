@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback } from "react";
 import { mockTags, mockUsers } from "@/lib/mock-data";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 import type { UserTag, TagColor } from "@/lib/types";
 
 const COLOR_OPTIONS: { value: TagColor; label: string; pillClass: string }[] = [
@@ -37,9 +38,15 @@ interface TagAssignResult {
 }
 
 export default function TagSettings() {
-  const [tags, setTags] = useState<UserTag[]>(() =>
-    loadFromStorage<UserTag[]>(STORAGE_KEYS.TAGS, [...mockTags])
-  );
+  const {
+    value: tags,
+    setValue: setTags,
+    save: saveTags,
+    loading,
+    saving: dbSaving,
+    error: dbError,
+  } = useAppSetting<UserTag[]>("tags", [...mockTags], STORAGE_KEYS.TAGS);
+
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState<TagColor>("green");
 
@@ -62,12 +69,11 @@ export default function TagSettings() {
   });
 
   const updateTags = useCallback((updater: (prev: UserTag[]) => UserTag[]) => {
-    setTags((prev) => {
-      const next = updater(prev);
-      saveToStorage(STORAGE_KEYS.TAGS, next);
-      return next;
-    });
-  }, []);
+    const next = updater(tags);
+    setTags(next);
+    // DB保存は楽観的更新（overrideValueで最新値を直接渡す）
+    saveTags(next);
+  }, [tags, setTags, saveTags]);
 
   const handleAdd = () => {
     const trimmed = newLabel.trim();
@@ -235,8 +241,23 @@ export default function TagSettings() {
     URL.revokeObjectURL(url);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="overflow-hidden rounded-xl border border-gray-200">
         <table className="w-full text-sm">

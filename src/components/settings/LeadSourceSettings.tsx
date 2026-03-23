@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 
 interface LeadSourceItem {
   id: string;
@@ -20,9 +21,15 @@ const INITIAL_SOURCES: LeadSourceItem[] = [
 const ID_PATTERN = /^[a-z0-9_-]+$/;
 
 export default function LeadSourceSettings() {
-  const [sources, setSources] = useState<LeadSourceItem[]>(() =>
-    loadFromStorage<LeadSourceItem[]>(STORAGE_KEYS.LEAD_SOURCES, [...INITIAL_SOURCES])
-  );
+  const {
+    value: sources,
+    setValue: setSources,
+    save: saveSources,
+    loading,
+    saving: dbSaving,
+    error: dbError,
+  } = useAppSetting<LeadSourceItem[]>("lead_sources", [...INITIAL_SOURCES], STORAGE_KEYS.LEAD_SOURCES);
+
   const [newId, setNewId] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [idError, setIdError] = useState("");
@@ -31,12 +38,10 @@ export default function LeadSourceSettings() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const updateSources = useCallback((updater: (prev: LeadSourceItem[]) => LeadSourceItem[]) => {
-    setSources((prev) => {
-      const next = updater(prev);
-      saveToStorage(STORAGE_KEYS.LEAD_SOURCES, next);
-      return next;
-    });
-  }, []);
+    const next = updater(sources);
+    setSources(next);
+    saveSources(next);
+  }, [sources, setSources, saveSources]);
 
   const handleIdChange = (value: string) => {
     setNewId(value);
@@ -64,8 +69,23 @@ export default function LeadSourceSettings() {
     setDeletingId(null);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="overflow-hidden rounded-xl border border-gray-200">
         <table className="w-full text-sm">

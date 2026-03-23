@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { CustomerStatus } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/types";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 
 interface StatusItem {
   id: CustomerStatus;
@@ -20,9 +21,15 @@ function buildInitialStatuses(): StatusItem[] {
 }
 
 export default function StatusSettings() {
-  const [statuses, setStatuses] = useState<StatusItem[]>(() =>
-    loadFromStorage<StatusItem[]>(STORAGE_KEYS.STATUSES, buildInitialStatuses())
-  );
+  const {
+    value: statuses,
+    setValue: setStatuses,
+    save: saveStatuses,
+    loading,
+    saving: dbSaving,
+    error: dbError,
+  } = useAppSetting<StatusItem[]>("statuses", buildInitialStatuses(), STORAGE_KEYS.STATUSES);
+
   const [editingId, setEditingId] = useState<CustomerStatus | null>(null);
   const [editLabel, setEditLabel] = useState("");
 
@@ -36,12 +43,10 @@ export default function StatusSettings() {
   }, [editingId]);
 
   const updateStatuses = useCallback((updater: (prev: StatusItem[]) => StatusItem[]) => {
-    setStatuses((prev) => {
-      const next = updater(prev);
-      saveToStorage(STORAGE_KEYS.STATUSES, next);
-      return next;
-    });
-  }, []);
+    const next = updater(statuses);
+    setStatuses(next);
+    saveStatuses(next);
+  }, [statuses, setStatuses, saveStatuses]);
 
   const handleEditStart = (item: StatusItem) => {
     setEditingId(item.id);
@@ -72,8 +77,23 @@ export default function StatusSettings() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="overflow-hidden rounded-xl border border-gray-200">
         <table className="w-full text-sm">

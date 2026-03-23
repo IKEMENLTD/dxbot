@@ -129,6 +129,81 @@ export const BADGE_CONFIG: Record<BadgeType, { label: string; colorClass: string
   techstars_grad: { label: 'TECHSTARS修了', colorClass: 'text-purple-600', bgClass: 'bg-purple-50' },
 };
 
+// ===== CTA設定型定義（Phase C） =====
+
+export interface CtaConfigTrigger {
+  enabled: boolean;
+}
+
+export interface CtaConfigActionBoost extends CtaConfigTrigger {
+  normalDays: number;
+  normalSteps: number;
+  techstarsGradDays: number;
+  techstarsGradSteps: number;
+}
+
+export interface CtaConfigApoEarly extends CtaConfigTrigger {
+  days: number;
+  steps: number;
+}
+
+export interface CtaConfigSubsidyTiming extends CtaConfigTrigger {
+  levelThreshold: number;
+  subsidyMonths: number[];
+}
+
+export interface CtaConfigLv40Reached extends CtaConfigTrigger {
+  levelThreshold: number;
+}
+
+export interface CtaConfigInvoiceStumble extends CtaConfigTrigger {
+  axisA1Threshold: number;
+}
+
+export interface CtaConfigItLiteracy extends CtaConfigTrigger {
+  stumbleHowCountThreshold: number;
+  axisDThreshold: number;
+  totalScoreThreshold: number;
+}
+
+export interface CtaConfig {
+  action_boost: CtaConfigActionBoost;
+  apo_early: CtaConfigApoEarly;
+  subsidy_timing: CtaConfigSubsidyTiming;
+  lv40_reached: CtaConfigLv40Reached;
+  invoice_stumble: CtaConfigInvoiceStumble;
+  it_literacy: CtaConfigItLiteracy;
+}
+
+// ===== リマインダー設定型定義（Phase D） =====
+
+export interface ReminderConfig {
+  lightDays: number;      // デフォルト: 3
+  mediumDays: number;     // デフォルト: 7
+  finalDays: number;      // デフォルト: 14
+  stopDays: number;       // デフォルト: 21
+  lightMessage: string;   // カスタムメッセージ（空ならデフォルト使用）
+  mediumMessage: string;
+  finalMessage: string;
+}
+
+// ===== 診断設定型定義（Phase D） =====
+
+export type DiagnosisAxis = 'industry' | 'a1' | 'a2' | 'b' | 'c' | 'd';
+
+export interface DiagnosisQuestionConfig {
+  axis: DiagnosisAxis;
+  question: string;
+}
+
+export interface DiagnosisConfig {
+  bandThresholds: [number, number, number]; // デフォルト: [24, 44, 64]
+  bandLabels: [string, string, string, string]; // デフォルト: ['DX未着手', '部分的にDX', 'DX進行中', 'DX成熟']
+  questions: DiagnosisQuestionConfig[];
+  industries: string[];
+  scoreMultiplier: number; // デフォルト: 3
+}
+
 export const STATUS_CONFIG: Record<CustomerStatus, { label: string; colorClass: string }> = {
   prospect:         { label: '見込み',        colorClass: 'text-gray-500' },
   contacted:        { label: 'コンタクト済',   colorClass: 'text-green-600' },

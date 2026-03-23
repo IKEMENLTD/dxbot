@@ -1,6 +1,7 @@
 // ===== 診断ロジック =====
 
-import type { AxisScores } from './types';
+import type { AxisScores, DiagnosisConfig } from './types';
+import { getSetting } from './app-settings';
 
 /** 業種リスト */
 export const INDUSTRIES = ['建設', '製造', '飲食', '小売', 'サービス', 'その他'] as const;
@@ -175,4 +176,95 @@ export function generateResultMessage(
     `ステップ形式でDX改善をサポートしていきます！`,
     `まずはLv.1からスタートしましょう。`,
   ].join('\n');
+}
+
+// ===== DB優先の非同期版（Phase D） =====
+
+/** デフォルト診断設定 */
+export const DEFAULT_DIAGNOSIS_CONFIG: DiagnosisConfig = {
+  bandThresholds: [24, 44, 64],
+  bandLabels: ['DX未着手', '部分的にDX', 'DX進行中', 'DX成熟'],
+  questions: [
+    { axis: 'industry', question: '御社の業種を教えてください' },
+    { axis: 'a1', question: '売上管理・請求管理はどの程度できていますか？' },
+    { axis: 'a2', question: '顧客との連絡・記録管理はどうですか？' },
+    { axis: 'b', question: '繰り返し作業の自動化はどの程度ですか？' },
+    { axis: 'c', question: 'データに基づく経営判断をしていますか？' },
+    { axis: 'd', question: 'ITツールの活用度はどうですか？' },
+  ],
+  industries: ['建設', '製造', '飲食', '小売', 'サービス', 'その他'],
+  scoreMultiplier: 3,
+};
+
+/**
+ * DB設定を読み込む
+ */
+export async function getDiagnosisConfig(): Promise<DiagnosisConfig> {
+  return getSetting<DiagnosisConfig>('diagnosis_config', DEFAULT_DIAGNOSIS_CONFIG);
+}
+
+/**
+ * DB優先: 合計スコアからバンドを判定（非同期版）
+ */
+export async function determineBandAsync(totalScore: number): Promise<1 | 2 | 3 | 4> {
+  const cfg = await getDiagnosisConfig();
+  const [b1, b2, b3] = cfg.bandThresholds;
+  if (totalScore <= b1) return 1;
+  if (totalScore <= b2) return 2;
+  if (totalScore <= b3) return 3;
+  return 4;
+}
+
+/**
+ * DB優先: 質問を取得（非同期版）
+ * DB設定の質問テキストでオーバーライドし、optionsはコードデフォルトを維持
+ */
+export async function getQuestionAsync(index: number): Promise<DiagnosisQuestion | null> {
+  const cfg = await getDiagnosisConfig();
+  if (index < 0 || index >= cfg.questions.length) return null;
+
+  const qConfig = cfg.questions[index];
+  const axis = qConfig.axis;
+
+  // 業種質問はDB設定の業種リストからoptionsを構築
+  if (axis === 'industry') {
+    return {
+      index,
+      axis,
+      question: qConfig.question,
+      options: cfg.industries.map((ind) => ({ label: ind, value: ind })),
+    };
+  }
+
+  // スコア質問は5段階選択肢を使用
+  return {
+    index,
+    axis,
+    question: qConfig.question,
+    options: FIVE_SCALE_OPTIONS,
+  };
+}
+
+/**
+ * DB優先: 質問の総数（非同期版）
+ */
+export async function getQuestionCountAsync(): Promise<number> {
+  const cfg = await getDiagnosisConfig();
+  return cfg.questions.length;
+}
+
+/**
+ * DB優先: 回答値からスコアを算出（非同期版）
+ * スコア倍率をDB設定から取得
+ */
+export async function calculateScoresAsync(answers: Record<string, number>): Promise<AxisScores> {
+  const cfg = await getDiagnosisConfig();
+  const multiplier = cfg.scoreMultiplier;
+  return {
+    a1: (answers['a1'] ?? 0) * multiplier,
+    a2: (answers['a2'] ?? 0) * multiplier,
+    b: (answers['b'] ?? 0) * multiplier,
+    c: (answers['c'] ?? 0) * multiplier,
+    d: (answers['d'] ?? 0) * multiplier,
+  };
 }

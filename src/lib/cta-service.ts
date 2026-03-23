@@ -4,7 +4,7 @@
 
 import type { CtaTrigger, ExitType, StumbleType, User } from './types';
 import type { RecommendInput } from './recommend-engine';
-import { evaluateCta } from './cta-engine';
+import { evaluateCtaAsync } from './cta-engine';
 import type { CtaInput } from './cta-engine';
 import { calculateRecommendation } from './recommend-engine';
 import { pushMessage } from './line-client';
@@ -90,7 +90,7 @@ export async function checkAndFireCta(
       recommendation,
     };
 
-    const ctaResult = evaluateCta(ctaInput);
+    const ctaResult = await evaluateCtaAsync(ctaInput);
 
     if (!ctaResult.shouldFire || !ctaResult.trigger || !ctaResult.exit) {
       return { fired: false, trigger: null, exit: null, ctaId: null };

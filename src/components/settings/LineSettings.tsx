@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 import { useToast } from "@/contexts/ToastContext";
 
 // ===== 型定義 =====
@@ -261,7 +262,15 @@ function SecretInput({ label, helpText, value, onChange, placeholder }: SecretIn
 // ===== メインコンポーネント =====
 
 export default function LineSettings() {
-  const [config, setConfig] = useState<LineConfig>(DEFAULT_CONFIG);
+  const {
+    value: config,
+    setValue: setConfig,
+    save: saveConfig,
+    loading: configLoading,
+    saving: configDbSaving,
+    error: dbError,
+  } = useAppSetting<LineConfig>("line_config", DEFAULT_CONFIG, STORAGE_KEYS.LINE_CONFIG);
+
   const [step1Done, setStep1Done] = useState(false);
   const [step2Done, setStep2Done] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
@@ -274,17 +283,17 @@ export default function LineSettings() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const { addToast } = useToast();
 
-  // 初回ロード
+  // configロード完了時にinputを同期
   useEffect(() => {
-    const stored = loadFromStorage<LineConfig>(STORAGE_KEYS.LINE_CONFIG, DEFAULT_CONFIG);
-    setConfig(stored);
-    setTokenInput(stored.channelAccessToken);
-    setSecretInput(stored.channelSecret);
-    setWebhookUrl(getWebhookUrl());
-  }, []);
+    if (!configLoading) {
+      setTokenInput(config.channelAccessToken);
+      setSecretInput(config.channelSecret);
+      setWebhookUrl(getWebhookUrl());
+    }
+  }, [configLoading, config.channelAccessToken, config.channelSecret]);
 
   // 保存処理
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!tokenInput.trim() || !secretInput.trim()) return;
 
     setSaving(true);
@@ -298,19 +307,23 @@ export default function LineSettings() {
         botName: null,
       };
       setConfig(updatedConfig);
-      saveToStorage(STORAGE_KEYS.LINE_CONFIG, updatedConfig);
 
-      setSaved(true);
-      setSaving(false);
-      setTestResult(null);
-      addToast("success", "認証情報を保存しました");
+      const result = await saveConfig(updatedConfig);
 
-      setTimeout(() => setSaved(false), 3000);
+      if (result.success) {
+        setSaved(true);
+        setTestResult(null);
+        addToast("success", "認証情報を保存しました");
+        setTimeout(() => setSaved(false), 3000);
+      } else {
+        addToast("error", result.error ?? "認証情報の保存に失敗しました");
+      }
     } catch {
-      setSaving(false);
       addToast("error", "認証情報の保存に失敗しました");
+    } finally {
+      setSaving(false);
     }
-  }, [tokenInput, secretInput, config, addToast]);
+  }, [tokenInput, secretInput, config, addToast, setConfig, saveConfig]);
 
   // 接続テスト
   const handleTest = useCallback(async () => {
@@ -342,7 +355,7 @@ export default function LineSettings() {
           botName: data.botName,
         };
         setConfig(updatedConfig);
-        saveToStorage(STORAGE_KEYS.LINE_CONFIG, updatedConfig);
+        saveConfig(updatedConfig);
         addToast("success", `接続成功 - Bot名: ${data.botName}`);
       } else {
         addToast("error", data.error ?? "接続テストに失敗しました");
@@ -356,7 +369,7 @@ export default function LineSettings() {
     } finally {
       setTesting(false);
     }
-  }, [config, addToast]);
+  }, [config, addToast, setConfig, saveConfig]);
 
   // クリップボードコピー
   const handleCopy = useCallback(async () => {
@@ -381,8 +394,23 @@ export default function LineSettings() {
   const canSave = tokenInput.trim().length > 0 && secretInput.trim().length > 0;
   const canTest = config.channelAccessToken.length > 0;
 
+  if (configLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* 接続ステータス */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-800">LINE Messaging API 連携</h2>

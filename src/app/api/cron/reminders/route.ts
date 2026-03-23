@@ -17,6 +17,19 @@ import {
   reminderFinalMessage,
 } from '@/lib/line-messages';
 import type { LineMessage } from '@/lib/line-types';
+import type { ReminderConfig } from '@/lib/types';
+import { getSetting } from '@/lib/app-settings';
+
+/** デフォルトリマインダー設定 */
+const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
+  lightDays: 3,
+  mediumDays: 7,
+  finalDays: 14,
+  stopDays: 21,
+  lightMessage: '',
+  mediumMessage: '',
+  finalMessage: '',
+};
 
 /** リマインダー処理結果 */
 interface ReminderResult {
@@ -64,27 +77,38 @@ function calculateInactiveDays(lastActionAt: string): number {
 }
 
 /**
- * 放置日数からリマインダーレベルを決定
- * - 3-6日: light
- * - 7-13日: medium
- * - 14-20日: final
- * - 21日以上: null（送信しない）
+ * 放置日数からリマインダーレベルを決定（DB設定対応）
+ * デフォルト: 3-6日: light / 7-13日: medium / 14-20日: final / 21日以上: null
  */
-function determineReminderLevel(inactiveDays: number): ReminderLevel | null {
-  if (inactiveDays >= 21) return null;
-  if (inactiveDays >= 14) return 'final';
-  if (inactiveDays >= 7) return 'medium';
-  if (inactiveDays >= 3) return 'light';
+function determineReminderLevel(inactiveDays: number, cfg: ReminderConfig): ReminderLevel | null {
+  if (inactiveDays >= cfg.stopDays) return null;
+  if (inactiveDays >= cfg.finalDays) return 'final';
+  if (inactiveDays >= cfg.mediumDays) return 'medium';
+  if (inactiveDays >= cfg.lightDays) return 'light';
   return null;
 }
 
 /**
- * リマインダーレベルに応じたメッセージを生成
+ * リマインダーレベルに応じたメッセージを生成（カスタムメッセージ対応）
  */
 function createReminderMessage(
   level: ReminderLevel,
-  stepName: string | null
+  stepName: string | null,
+  cfg: ReminderConfig
 ): LineMessage {
+  // カスタムメッセージが設定されている場合はそちらを使用
+  const customMap: Record<ReminderLevel, string> = {
+    light: cfg.lightMessage,
+    medium: cfg.mediumMessage,
+    final: cfg.finalMessage,
+  };
+
+  const customMsg = customMap[level];
+  if (customMsg && customMsg.trim() !== '') {
+    return { type: 'text', text: customMsg } as LineMessage;
+  }
+
+  // デフォルトメッセージ
   switch (level) {
     case 'light':
       return reminderLightMessage(stepName);
@@ -100,7 +124,8 @@ function createReminderMessage(
  */
 async function sendReminderToUser(
   user: ReminderTargetUser,
-  level: ReminderLevel
+  level: ReminderLevel,
+  cfg: ReminderConfig
 ): Promise<ReminderResult> {
   try {
     // 本日すでに送信済みかチェック
@@ -114,8 +139,8 @@ async function sendReminderToUser(
       };
     }
 
-    // メッセージ生成
-    const message = createReminderMessage(level, user.last_completed_step);
+    // メッセージ生成（カスタムメッセージ対応）
+    const message = createReminderMessage(level, user.last_completed_step, cfg);
 
     // pushMessage送信
     const result = await pushMessage(user.line_user_id, [message]);
@@ -169,8 +194,11 @@ async function processReminders(signal: AbortSignal): Promise<BatchResult> {
     results: [],
   };
 
-  // 3日以上放置のユーザーを取得
-  const users = await getReminderTargetUsers(3);
+  // DB設定を読み込み（フォールバック: デフォルト値）
+  const cfg = await getSetting<ReminderConfig>('reminder_config', DEFAULT_REMINDER_CONFIG);
+
+  // lightDays以上放置のユーザーを取得
+  const users = await getReminderTargetUsers(cfg.lightDays);
 
   for (const user of users) {
     // タイムアウトチェック
@@ -183,7 +211,7 @@ async function processReminders(signal: AbortSignal): Promise<BatchResult> {
 
     // 放置日数とリマインダーレベルを決定
     const inactiveDays = calculateInactiveDays(user.last_action_at);
-    const level = determineReminderLevel(inactiveDays);
+    const level = determineReminderLevel(inactiveDays, cfg);
 
     if (!level) {
       // 21日以上: リマインダー停止
@@ -198,7 +226,7 @@ async function processReminders(signal: AbortSignal): Promise<BatchResult> {
     }
 
     // 送信
-    const sendResult = await sendReminderToUser(user, level);
+    const sendResult = await sendReminderToUser(user, level, cfg);
     result.results.push(sendResult);
 
     if (sendResult.success) {

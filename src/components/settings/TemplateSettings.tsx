@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { loadFromStorage, saveToStorage, STORAGE_KEYS } from "@/lib/storage";
+import { STORAGE_KEYS } from "@/lib/storage";
+import { useAppSetting } from "@/hooks/useAppSetting";
 
 const MAX_TEMPLATE_LENGTH = 200;
 
@@ -19,9 +20,15 @@ const INITIAL_TEMPLATES: TemplateItem[] = [
 ];
 
 export default function TemplateSettings() {
-  const [templates, setTemplates] = useState<TemplateItem[]>(() =>
-    loadFromStorage<TemplateItem[]>(STORAGE_KEYS.TEMPLATES, [...INITIAL_TEMPLATES])
-  );
+  const {
+    value: templates,
+    setValue: setTemplates,
+    save: saveTemplates,
+    loading,
+    saving: dbSaving,
+    error: dbError,
+  } = useAppSetting<TemplateItem[]>("templates", [...INITIAL_TEMPLATES], STORAGE_KEYS.TEMPLATES);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newText, setNewText] = useState("");
@@ -39,12 +46,10 @@ export default function TemplateSettings() {
   }, [editingId]);
 
   const updateTemplates = useCallback((updater: (prev: TemplateItem[]) => TemplateItem[]) => {
-    setTemplates((prev) => {
-      const next = updater(prev);
-      saveToStorage(STORAGE_KEYS.TEMPLATES, next);
-      return next;
-    });
-  }, []);
+    const next = updater(templates);
+    setTemplates(next);
+    saveTemplates(next);
+  }, [templates, setTemplates, saveTemplates]);
 
   const handleAdd = () => {
     const trimmed = newText.trim();
@@ -98,8 +103,23 @@ export default function TemplateSettings() {
   const isNewTextOverLimit = newText.length > MAX_TEMPLATE_LENGTH;
   const isEditValueOverLimit = editValue.length > MAX_TEMPLATE_LENGTH;
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-sm text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* DBエラー表示 */}
+      {dbError && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-700">
+          {dbError}（ローカルデータを表示しています）
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="overflow-hidden rounded-xl border border-gray-200">
         <table className="w-full text-sm">

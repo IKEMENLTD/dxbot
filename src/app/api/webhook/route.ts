@@ -12,8 +12,12 @@ import {
   calculateScores,
   determineBand,
   determineWeakAxis,
+  getQuestionAsync,
+  getQuestionCountAsync,
+  calculateScoresAsync,
+  determineBandAsync,
 } from '@/lib/diagnosis';
-import { getNextStep, getAllSteps } from '@/lib/step-master';
+import { getNextStepAsync, findStepByIdAsync } from '@/lib/step-master';
 import type { StepDefinition } from '@/lib/step-master';
 import {
   recordStepStarted,
@@ -298,7 +302,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
         }
 
         // ステップ中の案内メッセージを返す
-        const currentStep = findStepById(state.currentStepId);
+        const currentStep = await findStepById(state.currentStepId);
         const stepName = currentStep ? currentStep.name : '現在のステップ';
         await replyAndSave(userId, event.replyToken, [stepActiveGuideMessage(stepName)]);
         break;
@@ -438,7 +442,7 @@ async function handleIndustrySelect(
 
   // 確認フィードバック + Q2を送信
   const confirmMsg = industryConfirmMessage(industry);
-  const q2 = getQuestion(1);
+  const q2 = await getQuestionAsync(1);
   if (!q2) return;
 
   const questionMsg = diagnosisQuestionMessage(q2);
@@ -471,8 +475,9 @@ async function handleDiagnosisAnswer(
   const nextIndex = state.questionIndex + 1;
 
   // 次の質問があるか
-  if (nextIndex < getQuestionCount()) {
-    const nextQ = getQuestion(nextIndex);
+  const questionCount = await getQuestionCountAsync();
+  if (nextIndex < questionCount) {
+    const nextQ = await getQuestionAsync(nextIndex);
     if (!nextQ) return;
 
     await setState(userId, {
@@ -507,13 +512,13 @@ async function completeDiagnosis(
     }
   }
 
-  const scores = calculateScores(answers);
+  const scores = await calculateScoresAsync(answers);
   const total = scores.a1 + scores.a2 + scores.b + scores.c + scores.d;
-  const band = determineBand(total);
+  const band = await determineBandAsync(total);
   const weakAxis = determineWeakAxis(scores);
 
   // 弱軸の最初のステップ名を取得
-  const firstStep = getNextStep([], weakAxis);
+  const firstStep = await getNextStepAsync([], weakAxis);
   const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
 
   // 結果メッセージ送信
@@ -580,7 +585,7 @@ async function deliverNextStep(
   stumbleCount: number,
   stumbleHowCount: number
 ): Promise<void> {
-  const nextStep = getNextStep(completedStepIds, weakAxis);
+  const nextStep = await getNextStepAsync(completedStepIds, weakAxis);
 
   if (!nextStep) {
     // 全ステップ完了
@@ -641,7 +646,7 @@ async function handleStepComplete(
     return;
   }
 
-  const completedStep = findStepById(stepId);
+  const completedStep = await findStepById(stepId);
   if (!completedStep) {
     console.error('[Webhook] step_complete: ステップ定義なし:', stepId);
     return;
@@ -655,10 +660,11 @@ async function handleStepComplete(
   const levelUp = newLevel > previousLevel;
 
   // completedStepIds全体からスコアを累積計算
-  const totalScore = newCompletedIds.reduce((sum, id) => {
-    const s = findStepById(id);
-    return sum + (s ? calculateScoreForStep(s.difficulty) : 0);
-  }, 0);
+  let totalScore = 0;
+  for (const id of newCompletedIds) {
+    const s = await findStepById(id);
+    totalScore += s ? calculateScoreForStep(s.difficulty) : 0;
+  }
 
   // DB: ステップ完了記録
   await recordStepCompleted(userId, stepId, completedStep.name);
@@ -680,7 +686,7 @@ async function handleStepComplete(
   });
 
   // 次のステップがあるか確認
-  const nextStep = getNextStep(newCompletedIds, state.weakAxis);
+  const nextStep = await getNextStepAsync(newCompletedIds, state.weakAxis);
 
   if (!nextStep) {
     // 全ステップ完了
@@ -745,7 +751,7 @@ async function handleStepStumble(
     return;
   }
 
-  const step = findStepById(stepId);
+  const step = await findStepById(stepId);
   if (!step) {
     console.error('[Webhook] step_stumble: ステップ定義なし:', stepId);
     return;
@@ -830,7 +836,7 @@ async function handleStepSkip(
   }
 
   const stepId = params.get('stepId') ?? '';
-  const step = findStepById(stepId);
+  const step = await findStepById(stepId);
 
   if (step) {
     // DB: スキップ記録
@@ -890,7 +896,7 @@ async function resendCurrentStep(
   stepId: string,
   completedStepIds: string[]
 ): Promise<void> {
-  const step = findStepById(stepId);
+  const step = await findStepById(stepId);
   if (!step) {
     await replyAndSave(userId, replyToken, [fallbackMessage()]);
     return;
@@ -901,11 +907,10 @@ async function resendCurrentStep(
 }
 
 /**
- * stepIdからStepDefinitionを検索
+ * stepIdからStepDefinitionを検索（DB優先の非同期版）
  */
-function findStepById(stepId: string): StepDefinition | null {
-  const allSteps = getAllSteps();
-  return allSteps.find((s) => s.id === stepId) ?? null;
+async function findStepById(stepId: string): Promise<StepDefinition | null> {
+  return findStepByIdAsync(stepId);
 }
 
 // ===== CTA応答ハンドラ =====
@@ -960,10 +965,10 @@ async function handleReminderResume(
     if (conversation) {
       const { state } = conversation;
       if (state.phase === 'step_active') {
-        const step = findStepById(state.currentStepId);
+        const step = await findStepById(state.currentStepId);
         stepName = step?.name ?? null;
       } else if (state.phase === 'step_ready') {
-        const nextStep = getNextStep(state.completedStepIds, state.weakAxis);
+        const nextStep = await getNextStepAsync(state.completedStepIds, state.weakAxis);
         stepName = nextStep?.name ?? null;
       }
     }

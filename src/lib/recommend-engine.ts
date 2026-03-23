@@ -51,33 +51,41 @@ function calculateBaseScores(input: RecommendInput): ExitScores {
   const scores: ExitScores = { techstars: 0, taskmate: 0, veteran_ai: 0, custom_dev: 0 };
   const { weakAxis, axisScores } = input;
 
-  // 軸A1 (売上・請求) → ベテランAI第1候補
+  // 軸A1 (売上・請求) → ベテランAI第1候補 +30pt / 受託開発 第2候補 +10pt
   if (weakAxis === 'a1') {
     scores.veteran_ai += 30;
+    scores.custom_dev += 10;
   }
 
-  // 軸A2 (連絡・記録) → ベテランAI第1候補
+  // 軸A2 (連絡・記録) → ベテランAI第1候補 +30pt / TaskMate 第2候補 +10pt
   if (weakAxis === 'a2') {
     scores.veteran_ai += 30;
+    scores.taskmate += 10;
   }
 
-  // 軸B (繰り返し作業) → TaskMate→受託
+  // 軸B (繰り返し作業) → TaskMate +20pt, 受託 +15pt / ベテランAI 第2候補 +5pt
   if (weakAxis === 'b') {
-    scores.taskmate += 25;
+    scores.taskmate += 20;
     scores.custom_dev += 15;
+    scores.veteran_ai += 5;
   }
 
-  // 軸C (データなし経営) → ベテランAI
+  // 軸C (データなし経営) → ベテランAI +25pt / 受託(BI) 第2候補 +10pt
   if (weakAxis === 'c') {
     scores.veteran_ai += 25;
+    scores.custom_dev += 10;
   }
 
   // 軸D: スコアで分岐
   if (weakAxis === 'd') {
     if (axisScores.d > 5) {
-      scores.taskmate += 25;
+      // 軸D(5pt超) → TaskMate +20pt / ベテランAI 第2候補 +5pt
+      scores.taskmate += 20;
+      scores.veteran_ai += 5;
     } else {
-      scores.techstars += 25;
+      // 軸D(0-5pt) → TECHSTARS +30pt / TaskMate 第2候補 +10pt
+      scores.techstars += 30;
+      scores.taskmate += 10;
     }
   }
 
@@ -148,11 +156,11 @@ function applyBehaviorCorrections(
     reasons.push('社員のITリテラシー不足: TECHSTARS研修を推奨');
   }
 
-  // ルール9: 軸D=0pt+全体24点以下 → TECHSTARS最優先
+  // ルール9: 軸D<=5pt+全体24点以下 → TECHSTARS最優先
   const totalScore = axisScores.a1 + axisScores.a2 + axisScores.b + axisScores.c + axisScores.d;
-  if (axisScores.d === 0 && totalScore <= 24) {
+  if (axisScores.d <= 5 && totalScore <= 24) {
     scores.techstars += 50;
-    reasons.push('ツール習熟0点 & 総合24点以下: TECHSTARS最優先');
+    reasons.push('ツール習熟5点以下 & 総合24点以下: TECHSTARS最優先');
   }
 
   // ルール10: customer_status=techstars_grad → TECHSTARS除外→ベテランAI/受託で再判定

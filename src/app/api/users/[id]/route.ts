@@ -3,8 +3,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
-import { getUserById, updateUserStatus, completeTechstars, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
+import { getUserById, updateUserStatus, completeTechstars, updatePausedUntil, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
 import type { CustomerStatus } from '@/lib/types';
+
+/** TECHSTARS研修期間（3ヶ月） */
+const TECHSTARS_DURATION_DAYS = 90;
 
 const VALID_STATUSES: CustomerStatus[] = [
   'prospect', 'contacted', 'meeting', 'customer', 'churned', 'techstars_active', 'techstars_grad',
@@ -116,6 +119,13 @@ export async function PATCH(
         { error: result.error ?? 'ステータス更新に失敗しました' },
         { status: 500 }
       );
+    }
+
+    // TECHSTARS成約時: ステップ配信を研修期間中一時停止
+    if (status === 'techstars_active') {
+      const pauseEnd = new Date();
+      pauseEnd.setDate(pauseEnd.getDate() + TECHSTARS_DURATION_DAYS);
+      await updatePausedUntil(id, pauseEnd.toISOString());
     }
 
     return NextResponse.json({ data: { userId: id, status } });

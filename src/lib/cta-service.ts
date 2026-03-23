@@ -2,16 +2,15 @@
 // CTAエンジンの判定結果に基づき、LINE pushMessageを送信し、
 // cta_historyに発火記録を保存する。
 
-import type { CtaTrigger, ExitType, User } from './types';
+import type { CtaTrigger, ExitType, StumbleType, User } from './types';
 import type { RecommendInput } from './recommend-engine';
-import type { StumbleType } from './types';
 import { evaluateCta } from './cta-engine';
 import type { CtaInput } from './cta-engine';
 import { calculateRecommendation } from './recommend-engine';
 import { pushMessage } from './line-client';
 import { ctaProposalMessage } from './line-messages';
 import { getSupabaseServer } from './supabase';
-import { getUserById, getRecentCompletedStepCount, getRecentCompletedDays } from './queries';
+import { getUserById, getRecentCompletedStepCount, getRecentCompletedDays, getRecentStumbles } from './queries';
 import { recordTimelineEvent } from './step-delivery';
 
 // ---------------------------------------------------------------------------
@@ -60,16 +59,19 @@ export async function checkAndFireCta(
       return { fired: false, trigger: null, exit: null, ctaId: null };
     }
 
-    // 2. レコメンド算出
-    const recommendInput = buildRecommendInput(user);
+    // 2. stumble履歴をDBから取得
+    const recentStumbles = await getRecentStumbles(lineUserId);
+
+    // 3. レコメンド算出
+    const recommendInput = buildRecommendInput(user, recentStumbles);
     const recommendation = calculateRecommendation(recommendInput);
 
-    // 3. 最近14日間の完了ステップ数・日数をDBから正確に取得
+    // 5. 最近14日間の完了ステップ数・日数をDBから正確に取得
     const recentDays = 14;
     const recentCompletedSteps = await getRecentCompletedStepCount(lineUserId, recentDays);
     const recentCompletedDays = await getRecentCompletedDays(lineUserId, recentDays);
 
-    // 4. CTA判定
+    // 6. CTA判定
     const ctaInput: CtaInput = {
       user: {
         level: user.level,
@@ -359,7 +361,10 @@ function daysBetween(from: Date, to: Date): number {
 /**
  * User → RecommendInput 変換
  */
-function buildRecommendInput(user: User): RecommendInput {
+function buildRecommendInput(
+  user: User,
+  recentStumbles: Array<{ stepId: string; type: StumbleType }>
+): RecommendInput {
   // weakAxisをkeyof AxisScoresに変換
   const validAxes = new Set(['a1', 'a2', 'b', 'c', 'd']);
   const weakAxis = validAxes.has(user.weak_axis)
@@ -375,7 +380,7 @@ function buildRecommendInput(user: User): RecommendInput {
     stepsCompleted: user.steps_completed,
     stumbleCount: user.stumble_count,
     stumbleHowCount: user.stumble_how_count,
-    recentStumbles: [], // 詳細なstumble履歴はDB集計が必要、ここでは空配列で近似
+    recentStumbles,
     daysSinceStart: daysBetween(new Date(user.created_at), new Date()),
     recentStepDays: daysBetween(new Date(user.last_action_at), new Date()),
     hasActiveOperation: user.steps_completed > 0,

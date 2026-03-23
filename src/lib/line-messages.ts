@@ -486,40 +486,42 @@ const EXIT_LABELS: Record<ExitType, string> = {
   custom_dev: '受託開発',
 };
 
+/** 出口タイプごとのCTAヘッドライン */
+const EXIT_HEADLINES: Record<ExitType, string> = {
+  techstars: 'まずスタッフのITスキルを底上げ',
+  taskmate: '半年で自走できる伴走プラン',
+  veteran_ai: '請求・経費・ナレッジをAIで一括管理',
+  custom_dev: '御社専用システムを補助金で構築',
+};
+
 /** 出口タイプごとのCTA説明文 */
 const EXIT_DESCRIPTIONS: Record<ExitType, string> = {
   techstars: [
-    'ITの基礎から実務に使えるスキルまで、',
-    '少人数制の研修プログラムです。',
-    '',
-    '- パソコン操作の基本から丁寧にサポート',
-    '- 業務に直結するツールの使い方を習得',
-    '- 研修後も継続フォロー付き',
+    'ツールを入れる前に、使いこなせる人を育てませんか。',
+    '業種向けの研修プランがあります。',
+    '3ヶ月で基礎が身につきます。',
   ].join('\n'),
   taskmate: [
-    'DX業務を丸ごとサポートする',
-    '伴走型ソフトウェアサービスです。',
-    '',
-    '- 日々の業務を自動化・効率化',
-    '- 専任担当者が運用をサポート',
-    '- 月額制で始めやすい',
+    '毎週のステップ、専任サポート付きで。',
+    '月5万×6ヶ月。',
   ].join('\n'),
   veteran_ai: [
-    '経験豊富なコンサルタントが、',
-    '御社のDX課題を一緒に解決します。',
-    '',
-    '- 現状分析から改善提案まで一気通貫',
-    '- 補助金活用のご相談も対応',
-    '- 売上・請求・データ管理の最適化',
+    'ベテランAIで課題を解決。',
+    'インボイス対応もこれ1つ。',
+    'MAX550万補助。',
   ].join('\n'),
   custom_dev: [
-    '御社専用のシステムを開発し、',
-    '業務課題を根本から解決します。',
-    '',
-    '- 要件定義から運用まで一貫サポート',
-    '- 補助金を活用した開発も可能',
-    '- 既存ツールとの連携にも対応',
+    '汎用ツールでは解決しにくい課題を根本解決。',
+    'MAX450万補助。',
   ].join('\n'),
+};
+
+/** 出口タイプごとのCTAボタンラベル */
+const EXIT_CTA_LABELS: Record<ExitType, string> = {
+  techstars: '研修の詳細を見る',
+  taskmate: '詳しく聞く',
+  veteran_ai: '無料デモ',
+  custom_dev: '相談する',
 };
 
 /** トリガー理由のパーソナライズ文 */
@@ -543,7 +545,9 @@ export function ctaProposalMessage(
 ): FlexMessage {
   const triggerReason = TRIGGER_REASONS[trigger];
   const exitLabel = EXIT_LABELS[exit];
+  const exitHeadline = EXIT_HEADLINES[exit];
   const exitDesc = EXIT_DESCRIPTIONS[exit];
+  const ctaLabel = EXIT_CTA_LABELS[exit];
 
   return {
     type: 'flex',
@@ -556,7 +560,7 @@ export function ctaProposalMessage(
         contents: [
           {
             type: 'text',
-            text: 'DX推進のご提案',
+            text: exitHeadline,
             size: 'lg',
             weight: 'bold',
             color: '#1a1a1a',
@@ -610,9 +614,9 @@ export function ctaProposalMessage(
             type: 'button',
             action: {
               type: 'postback',
-              label: '詳しく聞く',
+              label: ctaLabel,
               data: `action=cta_response&ctaId=${ctaId}&value=interested`,
-              displayText: '詳しく聞く',
+              displayText: ctaLabel,
             },
             style: 'primary',
             color: '#1a73e8',

@@ -12,6 +12,7 @@ CREATE TYPE cta_trigger AS ENUM ('action_boost', 'apo_early', 'subsidy_timing', 
 CREATE TYPE cta_result AS ENUM ('pending', 'clicked', 'converted', 'ignored');
 CREATE TYPE timeline_type AS ENUM ('step_completed', 'stumble', 'step_skipped', 'cta_fired', 'status_change', 'techstars_start', 'techstars_complete', 'rediagnosis', 'deal_created', 'note_added', 'reminder_sent');
 CREATE TYPE step_status AS ENUM ('not_started', 'in_progress', 'completed', 'skipped');
+CREATE TYPE chat_sender AS ENUM ('user', 'admin');
 
 -- ===== users =====
 CREATE TABLE users (
@@ -154,6 +155,21 @@ WHERE t.created_at >= NOW() - INTERVAL '8 weeks'
 GROUP BY DATE_TRUNC('week', t.created_at)
 ORDER BY DATE_TRUNC('week', t.created_at);
 
+-- ===== conversation_states =====
+CREATE TABLE conversation_states (
+  line_user_id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  state JSONB NOT NULL DEFAULT '{"phase":"idle"}',
+  preferred_name TEXT,
+  industry TEXT,
+  lead_source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conversation_states_user_id ON conversation_states (user_id);
+CREATE INDEX idx_conversation_states_phase ON conversation_states ((state->>'phase'));
+
 -- ===== chat_messages =====
 CREATE TABLE chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -189,6 +205,7 @@ ALTER TABLE cta_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommend_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
 
 -- users: anon キーでの全操作を拒否
 CREATE POLICY "deny_anon_select_users" ON users FOR SELECT USING (false);
@@ -231,3 +248,9 @@ CREATE POLICY "deny_anon_select_chat_messages" ON chat_messages FOR SELECT USING
 CREATE POLICY "deny_anon_insert_chat_messages" ON chat_messages FOR INSERT WITH CHECK (false);
 CREATE POLICY "deny_anon_update_chat_messages" ON chat_messages FOR UPDATE USING (false);
 CREATE POLICY "deny_anon_delete_chat_messages" ON chat_messages FOR DELETE USING (false);
+
+-- conversation_states: anon キーでの全操作を拒否
+CREATE POLICY "deny_anon_select_conversation_states" ON conversation_states FOR SELECT USING (false);
+CREATE POLICY "deny_anon_insert_conversation_states" ON conversation_states FOR INSERT WITH CHECK (false);
+CREATE POLICY "deny_anon_update_conversation_states" ON conversation_states FOR UPDATE USING (false);
+CREATE POLICY "deny_anon_delete_conversation_states" ON conversation_states FOR DELETE USING (false);

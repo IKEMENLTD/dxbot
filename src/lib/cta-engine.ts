@@ -93,13 +93,21 @@ export function evaluateCta(input: CtaInput): CtaResult {
     }
   }
 
-  // トリガー1: 行動加速 - 14日以内に3ステップ完了 → レコメンド出口
-  if (user.recentCompletedDays <= 14 && user.recentCompletedSteps >= 3) {
+  // トリガー1: 行動加速
+  // 通常: 14日以内に3ステップ完了
+  // techstars_grad: 7日以内に1ステップ完了（信頼関係が既にある）
+  const requiredSteps = user.customerStatus === 'techstars_grad' ? 1 : 3;
+  const requiredDays = user.customerStatus === 'techstars_grad' ? 7 : 14;
+  if (user.recentCompletedDays <= requiredDays && user.recentCompletedSteps >= requiredSteps) {
+    // techstars_gradの場合は専用メッセージ
+    const message = user.customerStatus === 'techstars_grad'
+      ? `研修お疲れ様でした！次はツール導入で一気にDXを進めませんか`
+      : `行動が加速しています。${getExitLabel(recommendation.primaryExit)}をご提案します`;
     return {
       shouldFire: true,
       trigger: 'action_boost',
       exit: recommendation.primaryExit,
-      message: `行動が加速しています。${getExitLabel(recommendation.primaryExit)}をご提案します`,
+      message,
       priority: 'medium',
     };
   }

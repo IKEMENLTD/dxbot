@@ -18,6 +18,7 @@ import type {
   CtaHistory,
   TimelineEvent,
   StumbleRecord,
+  StumbleType,
   FunnelKpi,
   ExitMetrics,
   CustomerStatus,
@@ -940,6 +941,46 @@ export async function getUnreadCount(
     const msg = err instanceof Error ? err.message : '未読数取得中に不明なエラーが発生しました';
     console.error('[getUnreadCount] エラー:', msg);
     return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recent Stumbles (CTA・レコメンド用)
+// ---------------------------------------------------------------------------
+
+/** ユーザーの最近のstumble履歴を取得（stepId + type） */
+export async function getRecentStumbles(
+  userId: string
+): Promise<Array<{ stepId: string; type: StumbleType }>> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // mock: mockStumblesから取得
+    return mockStumbles
+      .filter((s) => s.user_id === userId)
+      .map((s) => ({ stepId: s.step_id, type: s.stumble_type }));
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_steps')
+      .select('step_id, stumble_type')
+      .eq('user_id', userId)
+      .not('stumble_type', 'is', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[getRecentStumbles] Supabase error:', error.message);
+      return [];
+    }
+
+    return (data ?? []).map((row) => ({
+      stepId: (row as { step_id: string; stumble_type: StumbleType }).step_id,
+      type: (row as { step_id: string; stumble_type: StumbleType }).stumble_type,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'stumble履歴取得中にエラーが発生しました';
+    console.error('[getRecentStumbles] エラー:', msg);
+    return [];
   }
 }
 

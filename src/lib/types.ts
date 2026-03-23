@@ -126,7 +126,7 @@ export const BADGE_CONFIG: Record<BadgeType, { label: string; colorClass: string
   action_boost:   { label: '行動加速',      colorClass: 'text-green-600',  bgClass: 'bg-green-50' },
   inactive_30d:   { label: '30日未操作',     colorClass: 'text-gray-500',   bgClass: 'bg-gray-100' },
   new_this_week:  { label: '今週流入',      colorClass: 'text-green-600',  bgClass: 'bg-green-50' },
-  techstars_grad: { label: 'TECHSTARS修了', colorClass: 'text-orange-600', bgClass: 'bg-orange-50' },
+  techstars_grad: { label: 'TECHSTARS修了', colorClass: 'text-purple-600', bgClass: 'bg-purple-50' },
 };
 
 export const STATUS_CONFIG: Record<CustomerStatus, { label: string; colorClass: string }> = {

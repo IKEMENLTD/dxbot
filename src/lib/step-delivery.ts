@@ -1,6 +1,6 @@
 // ===== ステップ配信 DB永続化ロジック =====
 
-import type { StumbleType } from './types';
+import type { StumbleType, TimelineEvent } from './types';
 import { getSupabaseServer } from './supabase';
 
 /**
@@ -117,9 +117,9 @@ export async function recordStepSkipped(
  */
 export async function recordTimelineEvent(
   userId: string,
-  type: 'step_completed' | 'stumble' | 'step_skipped' | 'cta_fired',
+  type: TimelineEvent['type'],
   description: string,
-  metadata: Record<string, string>
+  metadata: Record<string, unknown>
 ): Promise<void> {
   const supabase = getSupabaseServer();
   if (!supabase) return;

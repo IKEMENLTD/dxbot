@@ -18,6 +18,7 @@ export const mockTags: UserTag[] = [
 export const mockUsers: User[] = [
   {
     id: 'u-001',
+    line_user_id: null,
     preferred_name: '田中太郎',
     company_name: '田中建設株式会社',
     industry: '建設業',
@@ -44,6 +45,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-002',
+    line_user_id: null,
     preferred_name: '鈴木花子',
     company_name: '鈴木デザイン事務所',
     industry: 'デザイン',
@@ -70,6 +72,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-003',
+    line_user_id: null,
     preferred_name: '山田一郎',
     company_name: '山田製作所',
     industry: '製造業',
@@ -96,6 +99,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-004',
+    line_user_id: null,
     preferred_name: '佐藤美咲',
     company_name: '佐藤不動産',
     industry: '不動産',
@@ -122,6 +126,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-005',
+    line_user_id: null,
     preferred_name: '高橋健太',
     company_name: '高橋運送',
     industry: '運送業',
@@ -148,6 +153,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-006',
+    line_user_id: null,
     preferred_name: '伊藤裕子',
     company_name: 'イトウ会計事務所',
     industry: '会計',
@@ -174,6 +180,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-007',
+    line_user_id: null,
     preferred_name: '渡辺誠',
     company_name: '渡辺飲食グループ',
     industry: '飲食',
@@ -200,6 +207,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-008',
+    line_user_id: null,
     preferred_name: '中村拓也',
     company_name: '中村電気工事',
     industry: '電気工事',
@@ -226,6 +234,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-009',
+    line_user_id: null,
     preferred_name: '小林真理',
     company_name: '小林美容室チェーン',
     industry: '美容',
@@ -252,6 +261,7 @@ export const mockUsers: User[] = [
   },
   {
     id: 'u-010',
+    line_user_id: null,
     preferred_name: '加藤健一',
     company_name: '加藤物流',
     industry: '物流',

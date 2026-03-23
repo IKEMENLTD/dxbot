@@ -13,12 +13,13 @@ export type ConversationState =
   | { phase: 'industry_select' }
   | { phase: 'diagnosis'; questionIndex: number; scores: Partial<AxisScores> }
   | { phase: 'diagnosis_complete'; scores: AxisScores }
-  | { phase: 'step_ready'; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number }
-  | { phase: 'step_active'; currentStepId: string; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number };
+  | { phase: 'step_ready'; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number; stumbleHowCount: number }
+  | { phase: 'step_active'; currentStepId: string; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number; stumbleHowCount: number };
 
 /** ユーザーごとの会話データ */
 export interface UserConversation {
   lineUserId: string;
+  userId: string | null;
   state: ConversationState;
   preferredName: string | null;
   industry: string | null;
@@ -29,6 +30,7 @@ export interface UserConversation {
 /** Supabase conversation_states テーブルの行型 */
 interface ConversationStateRow {
   line_user_id: string;
+  user_id: string | null;
   state: ConversationState;
   preferred_name: string | null;
   industry: string | null;
@@ -72,6 +74,7 @@ function enforceMaxSize(): void {
 function mapRowToConversation(row: ConversationStateRow): UserConversation {
   return {
     lineUserId: row.line_user_id,
+    userId: row.user_id,
     state: row.state,
     preferredName: row.preferred_name,
     industry: row.industry,
@@ -140,6 +143,7 @@ export async function setState(lineUserId: string, update: Partial<UserConversat
         .from('conversation_states')
         .upsert({
           line_user_id: lineUserId,
+          user_id: updated.userId,
           state: updated.state,
           preferred_name: updated.preferredName,
           industry: updated.industry,
@@ -159,6 +163,7 @@ export async function setState(lineUserId: string, update: Partial<UserConversat
 export async function createUser(lineUserId: string, profile: LineProfile): Promise<UserConversation> {
   const conversation: UserConversation = {
     lineUserId,
+    userId: null,
     state: { phase: 'idle' },
     preferredName: profile.displayName || null,
     industry: null,
@@ -177,6 +182,7 @@ export async function createUser(lineUserId: string, profile: LineProfile): Prom
         .from('conversation_states')
         .upsert({
           line_user_id: lineUserId,
+          user_id: conversation.userId,
           state: conversation.state,
           preferred_name: conversation.preferredName,
           industry: conversation.industry,

@@ -10,7 +10,7 @@ CREATE TYPE stumble_type AS ENUM ('how', 'motivation', 'time');
 CREATE TYPE deal_status AS ENUM ('active', 'completed', 'cancelled');
 CREATE TYPE cta_trigger AS ENUM ('action_boost', 'apo_early', 'subsidy_timing', 'lv40_reached', 'invoice_stumble', 'it_literacy');
 CREATE TYPE cta_result AS ENUM ('pending', 'clicked', 'converted', 'ignored');
-CREATE TYPE timeline_type AS ENUM ('step_completed', 'stumble', 'step_skipped', 'cta_fired', 'status_change', 'techstars_start', 'techstars_complete', 'rediagnosis', 'deal_created', 'note_added');
+CREATE TYPE timeline_type AS ENUM ('step_completed', 'stumble', 'step_skipped', 'cta_fired', 'status_change', 'techstars_start', 'techstars_complete', 'rediagnosis', 'deal_created', 'note_added', 'reminder_sent');
 CREATE TYPE step_status AS ENUM ('not_started', 'in_progress', 'completed', 'skipped');
 
 -- ===== users =====
@@ -37,7 +37,8 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   techstars_started_at TIMESTAMPTZ,
   techstars_completed_at TIMESTAMPTZ,
-  paused_until TIMESTAMPTZ
+  paused_until TIMESTAMPTZ,
+  line_user_id TEXT
 );
 
 CREATE INDEX idx_users_score ON users (score DESC);
@@ -45,6 +46,7 @@ CREATE INDEX idx_users_customer_status ON users (customer_status);
 CREATE INDEX idx_users_recommended_exit ON users (recommended_exit);
 CREATE INDEX idx_users_last_action_at ON users (last_action_at DESC);
 CREATE INDEX idx_users_created_at ON users (created_at DESC);
+CREATE INDEX idx_users_line_user_id ON users (line_user_id);
 
 -- ===== deals =====
 CREATE TABLE deals (

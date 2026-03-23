@@ -305,6 +305,7 @@ export interface Database {
       conversation_states: {
         Row: {
           line_user_id: string;
+          user_id: string | null;
           state: Record<string, unknown>;
           preferred_name: string | null;
           industry: string | null;
@@ -314,6 +315,7 @@ export interface Database {
         };
         Insert: {
           line_user_id: string;
+          user_id?: string | null;
           state: Record<string, unknown>;
           preferred_name?: string | null;
           industry?: string | null;
@@ -323,6 +325,7 @@ export interface Database {
         };
         Update: {
           line_user_id?: string;
+          user_id?: string | null;
           state?: Record<string, unknown>;
           preferred_name?: string | null;
           industry?: string | null;

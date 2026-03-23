@@ -25,6 +25,7 @@ export interface AxisScores {
 
 export interface User {
   id: string;
+  line_user_id: string | null;
   preferred_name: string;
   company_name: string;
   industry: string;

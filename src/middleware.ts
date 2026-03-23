@@ -52,7 +52,8 @@ export function middleware(request: NextRequest): NextResponse | undefined {
           { status: 503 }
         );
       }
-      const loginUrl = new URL("/admindashboard/login", request.url);
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/admindashboard/login";
       return NextResponse.redirect(loginUrl);
     }
     // 開発時のみスキップ
@@ -70,7 +71,8 @@ export function middleware(request: NextRequest): NextResponse | undefined {
       );
     }
     // 管理ダッシュボードの場合は管理者ログインページにリダイレクト
-    const loginUrl = new URL("/admindashboard/login", request.url);
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/admindashboard/login";
     return NextResponse.redirect(loginUrl);
   }
 

@@ -7,36 +7,18 @@ const COOKIE_NAME = "dxbot_session";
  */
 function isPublicPath(pathname: string): boolean {
   return (
-    pathname === "/" ||
-    pathname === "/login" ||
-    pathname === "/register" ||
     pathname === "/admindashboard/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/webhook" ||
-    pathname.startsWith("/api/cron/") ||
-    pathname.startsWith("/_next/") ||
-    pathname === "/favicon.ico"
+    pathname.startsWith("/api/cron/")
   );
-}
-
-/**
- * 保護対象パスの判定
- * /admindashboard 以下（loginを除く） + /api 以下（公開パス除く）
- */
-function isProtectedPath(pathname: string): boolean {
-  return pathname.startsWith("/admindashboard") || pathname.startsWith("/api/");
 }
 
 export function middleware(request: NextRequest): NextResponse | undefined {
   const { pathname } = request.nextUrl;
 
-  // 公開パスはスキップ
+  // 公開パスはスキップ（matcherで既に/admindashboard/*と/api/*に限定済み）
   if (isPublicPath(pathname)) {
-    return undefined;
-  }
-
-  // 保護対象外もスキップ
-  if (!isProtectedPath(pathname)) {
     return undefined;
   }
 
@@ -83,10 +65,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
 
 export const config = {
   matcher: [
-    /*
-     * /admindashboard以下 + /api以下すべてにマッチ
-     * _next, favicon.ico は除外
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/admindashboard/:path*",
+    "/api/:path*",
   ],
 };

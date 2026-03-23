@@ -6,12 +6,17 @@ import type { User, UserTag } from "@/lib/types";
 import { EXIT_CONFIG, STATUS_CONFIG } from "@/lib/types";
 import { mockTags } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
+import { useToast } from "@/contexts/ToastContext";
 
 interface UserInfoPanelProps {
   user: User;
   userTagIds: string[];
   onAddTag: (userId: string, tagId: string) => void;
   onRemoveTag: (userId: string, tagId: string) => void;
+  /** モバイルボトムシートとして表示 */
+  isMobileSheet?: boolean;
+  /** 閉じるコールバック（モバイル/タブレット用） */
+  onClose?: () => void;
 }
 
 const MIN_PANEL_WIDTH = 200;
@@ -49,6 +54,8 @@ export default function UserInfoPanel({
   userTagIds,
   onAddTag,
   onRemoveTag,
+  isMobileSheet = false,
+  onClose,
 }: UserInfoPanelProps) {
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
@@ -62,6 +69,7 @@ export default function UserInfoPanel({
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
+  const { addToast } = useToast();
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
@@ -113,16 +121,19 @@ export default function UserInfoPanel({
           body: JSON.stringify({ status: newStatus }),
         });
         if (!res.ok) {
-          // 失敗時は元に戻す
           setSelectedStatus(user.customer_status);
+          addToast("error", "ステータスの更新に失敗しました");
+        } else {
+          addToast("success", "ステータスを更新しました");
         }
       } catch {
         setSelectedStatus(user.customer_status);
+        addToast("error", "ステータスの更新に失敗しました");
       } finally {
         setIsStatusUpdating(false);
       }
     },
-    [user.id, user.customer_status]
+    [user.id, user.customer_status, addToast]
   );
 
   const handleSaveNote = useCallback(async () => {
@@ -136,14 +147,17 @@ export default function UserInfoPanel({
       });
       if (res.ok) {
         setNoteSaved(true);
+        addToast("success", "メモを保存しました");
         setTimeout(() => setNoteSaved(false), 2000);
+      } else {
+        addToast("error", "メモの保存に失敗しました");
       }
     } catch {
-      // エラー時は何もしない（UIはそのまま）
+      addToast("error", "メモの保存に失敗しました");
     } finally {
       setIsSavingNote(false);
     }
-  }, [user.id, memo]);
+  }, [user.id, memo, addToast]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -171,18 +185,44 @@ export default function UserInfoPanel({
   const exitConfig = EXIT_CONFIG[user.recommended_exit];
   const statusConfig = STATUS_CONFIG[user.customer_status];
 
+  const isOverlay = isMobileSheet || !!onClose;
+
   return (
-    <div className="flex-shrink-0 bg-white border-l border-gray-200 flex flex-col h-full overflow-y-auto relative" style={{ width: `${panelWidth}px` }}>
-      {/* Drag handle - left edge */}
-      <div
-        onMouseDown={handleDragStart}
-        className="absolute -left-2 top-0 w-4 h-full cursor-col-resize z-10 flex items-center justify-center group"
-      >
-        <div className="w-0.5 h-8 bg-gray-200 rounded-full group-hover:bg-green-400 group-active:bg-green-500 transition-colors" />
-      </div>
+    <div
+      className={`bg-white flex flex-col overflow-y-auto relative ${
+        isOverlay ? "h-full w-full" : "flex-shrink-0 border-l border-[#E5E8EB] h-full"
+      }`}
+      style={isOverlay ? undefined : { width: `${panelWidth}px` }}
+    >
+      {/* Drag handle - デスクトップのみ */}
+      {!isOverlay && (
+        <div
+          onMouseDown={handleDragStart}
+          className="absolute -left-2 top-0 w-4 h-full cursor-col-resize z-10 flex items-center justify-center group"
+        >
+          <div className="w-0.5 h-8 bg-gray-200 group-hover:bg-green-400 group-active:bg-green-500 transition-colors" style={{ borderRadius: "2px" }} />
+        </div>
+      )}
+
+      {/* 閉じるボタン - オーバーレイ時のみ */}
+      {isOverlay && onClose && (
+        <div className="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
+          <h3 className="text-sm font-semibold text-gray-700">ユーザー情報</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center"
+            aria-label="閉じる"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M4 4L14 14M14 4L4 14" stroke="#111111" strokeWidth="1.5" strokeLinecap="square" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="px-5 pt-5 pb-4 flex flex-col items-center border-b border-gray-200">
-        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+      <div className="px-5 pt-5 pb-4 flex flex-col items-center border-b border-[#E5E8EB]">
+        <div className="w-16 h-16 bg-gray-100 flex items-center justify-center mb-3" style={{ borderRadius: "50%" }}>
           <span className="text-xl font-semibold text-gray-600">
             {user.preferred_name.slice(0, 1)}
           </span>
@@ -195,6 +235,7 @@ export default function UserInfoPanel({
         </p>
         <Link
           href={`/dashboard/users/${user.id}`}
+          aria-label={`${user.preferred_name}のカルテを見る`}
           className="mt-3 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
         >
           カルテを見る
@@ -250,7 +291,10 @@ export default function UserInfoPanel({
               <TagPill tag={tag} />
               {isEditingTags && (
                 <button
-                  onClick={() => onRemoveTag(user.id, tag.id)}
+                  onClick={() => {
+                    onRemoveTag(user.id, tag.id);
+                    addToast("success", `タグ「${tag.label}」を削除しました`);
+                  }}
                   className="w-4 h-4 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 text-gray-500 text-[10px] leading-none transition-colors"
                   aria-label={`${tag.label}を削除`}
                 >
@@ -284,6 +328,7 @@ export default function UserInfoPanel({
                       key={tag.id}
                       onClick={() => {
                         onAddTag(user.id, tag.id);
+                        addToast("success", `タグ「${tag.label}」を追加しました`);
                         setShowTagDropdown(false);
                       }}
                       className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition-colors flex items-center gap-2"

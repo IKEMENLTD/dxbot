@@ -118,3 +118,78 @@ select {
 input, textarea {
   border-radius: 10px;
 }
+
+/* ===== アクセシビリティ: focus-visible ===== */
+/* 全インタラクティブ要素にキーボード操作時のフォーカスリングを追加 */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="tab"]:focus-visible,
+[role="option"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* マウス操作時はoutlineを非表示 */
+a:focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+select:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ===== モバイルチャット用 ===== */
+
+/* スライド遷移 */
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slideOutToRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.chat-slide-in {
+  animation: slideInFromRight 0.25s ease-out forwards;
+}
+.chat-slide-out {
+  animation: slideOutToRight 0.25s ease-in forwards;
+}
+
+/* ボトムシート */
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes slideDownSheet {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.sheet-slide-up {
+  animation: slideUpSheet 0.3s ease-out forwards;
+}
+.sheet-slide-down {
+  animation: slideDownSheet 0.25s ease-in forwards;
+}
+
+/* オーバーレイ */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.overlay-fade-in {
+  animation: overlayFadeIn 0.2s ease-out forwards;
+}
+.overlay-fade-out {
+  animation: overlayFadeOut 0.2s ease-in forwards;
+}

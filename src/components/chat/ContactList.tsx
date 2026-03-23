@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import type { User, UserTag } from "@/lib/types";
 import type { ChatMessage, ContactPreview } from "@/lib/chat-types";
 import { mockTags } from "@/lib/mock-data";
@@ -12,6 +12,8 @@ interface ContactListProps {
   selectedUserId: string | null;
   userTags: Record<string, string[]>;
   onSelect: (userId: string) => void;
+  /** モバイル全幅表示 */
+  isMobile?: boolean;
 }
 
 const TAG_COLOR_CLASSES: Record<UserTag["color"], { bg: string; text: string }> = {
@@ -58,6 +60,7 @@ export default function ContactList({
   selectedUserId,
   userTags,
   onSelect,
+  isMobile = false,
 }: ContactListProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -72,7 +75,6 @@ export default function ContactList({
 
   const contactData = useMemo((): ContactDataItem[] => {
     return users.map((user) => {
-      // DB由来のコンタクトプレビューがあればそちらを優先
       const preview = previewMap.get(user.id);
 
       let lastMessage: string;
@@ -84,7 +86,6 @@ export default function ContactList({
         lastMessageTime = preview.lastMessageTime;
         unreadCount = preview.unreadCount;
       } else {
-        // fallback: messagesから算出
         const userMessages = messages.filter((m) => m.userId === user.id);
         const lastMsg =
           userMessages.length > 0
@@ -97,8 +98,6 @@ export default function ContactList({
         ).length;
       }
 
-      // ローカルmessagesからも未読数・最新メッセージを更新
-      // (楽観的更新されたメッセージを反映)
       const localUserMsgs = messages.filter((m) => m.userId === user.id);
       if (localUserMsgs.length > 0) {
         const localLast = localUserMsgs[localUserMsgs.length - 1];
@@ -136,9 +135,7 @@ export default function ContactList({
       );
     });
 
-    // 未読ありを上に、その後は最新メッセージ時刻で降順
     return [...filtered].sort((a, b) => {
-      // 未読ありを優先
       if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
       if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
 
@@ -149,10 +146,40 @@ export default function ContactList({
     });
   }, [contactData, searchQuery]);
 
+  // キーボードナビゲーション: 上下キーでユーザー選択
+  const handleListKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+
+      const currentIndex = sortedContacts.findIndex(
+        (c) => c.user.id === selectedUserId
+      );
+
+      let nextIndex: number;
+      if (e.key === "ArrowDown") {
+        nextIndex = currentIndex < sortedContacts.length - 1 ? currentIndex + 1 : 0;
+      } else {
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : sortedContacts.length - 1;
+      }
+
+      const nextUser = sortedContacts[nextIndex];
+      if (nextUser) {
+        onSelect(nextUser.user.id);
+      }
+    },
+    [sortedContacts, selectedUserId, onSelect]
+  );
+
+  // モバイルでは全幅、デスクトップでは260px固定
+  const containerClass = isMobile
+    ? "w-full flex-1 bg-white flex flex-col h-full"
+    : "w-[260px] flex-shrink-0 bg-white border-r border-[#E5E8EB] flex flex-col h-full";
+
   return (
-    <div className="w-[260px] flex-shrink-0 bg-white border-r border-gray-200 flex flex-col h-full">
+    <div className={containerClass}>
       {/* Header + Search */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-4 pt-4 pb-3 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-900">1:1チャット</h2>
           <span className="text-[11px] text-gray-400">{users.length}件</span>
@@ -185,13 +212,14 @@ export default function ContactList({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="名前・会社名で検索"
-            className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
+            aria-label="ユーザーを検索"
+            className="w-full bg-gray-50 border border-gray-200 pl-9 pr-3 py-2 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400"
           />
         </div>
       </div>
 
       {/* User List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" role="listbox" aria-label="ユーザー一覧" onKeyDown={handleListKeyDown} tabIndex={0}>
         {sortedContacts.map((contact) => {
           const isSelected = contact.user.id === selectedUserId;
           const visibleTags = contact.tags.slice(0, 2);
@@ -201,18 +229,26 @@ export default function ContactList({
             <button
               key={contact.user.id}
               onClick={() => onSelect(contact.user.id)}
-              className={`w-full text-left px-4 py-3 flex items-start gap-3 transition-colors ${
-                isSelected ? "bg-green-50" : "hover:bg-gray-50"
+              role="option"
+              aria-label={`${contact.user.preferred_name}のチャットを開く`}
+              aria-selected={isSelected}
+              className={`w-full text-left px-4 flex items-start gap-3 transition-colors ${
+                isMobile ? "py-3.5 min-h-[56px]" : "py-3"
+              } ${
+                isSelected ? "bg-green-50" : "hover:bg-gray-50 active:bg-gray-100"
               }`}
             >
               {/* Initials */}
-              <div className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <div className="relative w-10 h-10 bg-gray-100 flex items-center justify-center flex-shrink-0"
+                style={{ borderRadius: "50%" }}
+              >
                 <span className="text-sm font-medium text-gray-600">
                   {getInitials(contact.user.preferred_name)}
                 </span>
-                {/* 未読ドットインジケーター */}
                 {contact.unreadCount > 0 && !isSelected && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white"
+                    style={{ borderRadius: "50%" }}
+                  />
                 )}
               </div>
 
@@ -241,14 +277,15 @@ export default function ContactList({
                       return (
                         <span
                           key={tag.id}
-                          className={`rounded-full px-1.5 py-px text-[9px] font-medium ${colors.bg} ${colors.text}`}
+                          className={`px-1.5 py-px text-[10px] font-medium ${colors.bg} ${colors.text}`}
+                          style={{ borderRadius: "9999px" }}
                         >
                           {tag.label}
                         </span>
                       );
                     })}
                     {remainingCount > 0 && (
-                      <span className="text-[9px] text-gray-400">
+                      <span className="text-[10px] text-gray-400">
                         +{remainingCount}
                       </span>
                     )}
@@ -264,7 +301,9 @@ export default function ContactList({
                     {contact.lastMessage || "メッセージなし"}
                   </p>
                   {contact.unreadCount > 0 && (
-                    <span className="bg-green-600 text-white rounded-full min-w-[20px] h-5 text-[10px] flex items-center justify-center flex-shrink-0 ml-2 px-1">
+                    <span className="bg-green-600 text-white min-w-[20px] h-5 text-[10px] flex items-center justify-center flex-shrink-0 ml-2 px-1"
+                      style={{ borderRadius: "9999px" }}
+                    >
                       {contact.unreadCount > 99 ? "99+" : contact.unreadCount}
                     </span>
                   )}

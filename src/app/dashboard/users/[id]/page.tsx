@@ -10,6 +10,7 @@ import LtvHistory from "@/components/user-card/LtvHistory";
 import NotesActions from "@/components/user-card/NotesActions";
 import { mockUsers, mockTimeline, mockStumbles, mockDeals } from "@/lib/mock-data";
 import type { User, Deal, TimelineEvent, StumbleRecord } from "@/lib/types";
+import { useToast } from "@/contexts/ToastContext";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -26,6 +27,7 @@ function BackButton() {
   return (
     <Link
       href="/dashboard"
+      aria-label="熱い人リストに戻る"
       className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -62,6 +64,7 @@ export default function UserCardPage({ params }: PageProps) {
   const [data, setData] = useState<UserDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +73,7 @@ export default function UserCardPage({ params }: PageProps) {
       .then((res) => {
         if (res.status === 404) {
           setNotFound(true);
+          addToast("error", "ユーザーが見つかりません");
           return null;
         }
         if (!res.ok) throw new Error(`API error: ${res.status}`);
@@ -84,6 +88,7 @@ export default function UserCardPage({ params }: PageProps) {
           const mockUser = mockUsers.find((u) => u.id === id);
           if (!mockUser) {
             setNotFound(true);
+            addToast("error", "ユーザーが見つかりません");
             return;
           }
           setData({
@@ -92,6 +97,7 @@ export default function UserCardPage({ params }: PageProps) {
             timeline: mockTimeline.filter((e) => e.user_id === id),
             stumbles: mockStumbles.filter((s) => s.user_id === id),
           });
+          addToast("warning", "APIからデータを取得できませんでした。オフラインモードで表示中です。");
         }
       })
       .catch((err: unknown) => {
@@ -101,6 +107,7 @@ export default function UserCardPage({ params }: PageProps) {
         const mockUser = mockUsers.find((u) => u.id === id);
         if (!mockUser) {
           setNotFound(true);
+          addToast("error", "ユーザーが見つかりません");
           return;
         }
         setData({
@@ -109,10 +116,12 @@ export default function UserCardPage({ params }: PageProps) {
           timeline: mockTimeline.filter((e) => e.user_id === id),
           stumbles: mockStumbles.filter((s) => s.user_id === id),
         });
+        addToast("warning", "データの取得に失敗しました。オフラインモードで表示中です。");
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // データ再取得（NotesActionsの更新後に呼ばれる）

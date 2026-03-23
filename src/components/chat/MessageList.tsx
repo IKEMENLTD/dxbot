@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { ChatMessage, MediaAttachment } from "@/lib/chat-types";
 
 interface MessageListProps {
@@ -32,33 +32,48 @@ interface MessageGroup {
 function MediaPreview({ media }: { media: MediaAttachment }) {
   const [expanded, setExpanded] = useState(false);
 
+  // Escapeキーでプレビューを閉じる
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setExpanded(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (expanded) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [expanded, handleKeyDown]);
+
   if (media.type === "image") {
     return (
       <>
         <img
           src={media.url}
           alt={media.name}
-          className="max-w-[280px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
+          className="max-w-[280px] max-h-[200px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
           onClick={() => setExpanded(true)}
         />
-        {/* フルスクリーンプレビュー */}
         {expanded && (
           <div
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-8"
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 lg:p-8"
             onClick={() => setExpanded(false)}
           >
             <div className="relative max-w-[90vw] max-h-[90vh]">
               <img
                 src={media.url}
                 alt={media.name}
-                className="max-w-full max-h-[90vh] object-contain rounded-xl"
+                className="max-w-full max-h-[90vh] object-contain"
               />
               <button
                 onClick={() => setExpanded(false)}
-                className="absolute top-3 right-3 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-colors"
+                className="absolute top-3 right-3 w-8 h-8 bg-black/50 hover:bg-black/70 flex items-center justify-center transition-colors"
+                style={{ borderRadius: "50%" }}
+                aria-label="プレビューを閉じる"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M2 2L12 12M12 2L2 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M2 2L12 12M12 2L2 12" stroke="white" strokeWidth="2" strokeLinecap="square" />
                 </svg>
               </button>
             </div>
@@ -72,7 +87,7 @@ function MediaPreview({ media }: { media: MediaAttachment }) {
     <video
       src={media.url}
       controls
-      className="max-w-[280px] max-h-[200px] rounded-xl"
+      className="max-w-[280px] max-h-[200px]"
       preload="metadata"
     >
       <track kind="captions" />
@@ -90,7 +105,6 @@ function MessageMedia({ media }: { media: MediaAttachment[] }) {
   );
 }
 
-/** メッセージが直近N秒以内に作成されたかどうかを判定（フェードインアニメーション用） */
 const RECENT_MESSAGE_THRESHOLD_MS = 2000;
 
 function isRecentMessage(timestamp: string): boolean {
@@ -125,7 +139,7 @@ export default function MessageList({ messages, isLoading = false }: MessageList
     return (
       <div className="flex-1 flex items-center justify-center bg-[#F7F8FA]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-6 h-6 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-green-500 animate-spin" style={{ borderRadius: "50%" }} />
           <p className="text-sm text-gray-400">メッセージを読み込み中...</p>
         </div>
       </div>
@@ -141,11 +155,10 @@ export default function MessageList({ messages, isLoading = false }: MessageList
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-[#F7F8FA]">
-      {/* ローディングインジケーター（既存メッセージがある場合は上部に表示） */}
+    <div className="flex-1 overflow-y-auto px-3 lg:px-6 py-4 space-y-3 bg-[#F7F8FA]">
       {isLoading && (
         <div className="flex justify-center py-2">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 animate-spin" style={{ borderRadius: "50%" }} />
         </div>
       )}
 
@@ -153,7 +166,9 @@ export default function MessageList({ messages, isLoading = false }: MessageList
         if (item.type === "date") {
           return (
             <div key={`date-${index}`} className="flex justify-center my-3">
-              <span className="bg-gray-100 rounded-full px-3 py-1 text-xs text-gray-500">
+              <span className="bg-gray-100 px-3 py-1 text-xs text-gray-500"
+                style={{ borderRadius: "9999px" }}
+              >
                 {item.dateLabel}
               </span>
             </div>
@@ -182,28 +197,29 @@ export default function MessageList({ messages, isLoading = false }: MessageList
                 : undefined
             }
           >
-            <div className="max-w-[70%]">
-              {/* テキスト吹き出し */}
+            {/* モバイルでは最大幅85%、デスクトップでは70% */}
+            <div className="max-w-[85%] lg:max-w-[70%]">
               {hasText && (
                 <div
                   className={`px-4 py-2.5 text-sm leading-relaxed ${
                     isAdmin
-                      ? "bg-green-50 rounded-2xl rounded-tr-sm text-gray-800"
-                      : "bg-white border border-gray-200 rounded-2xl rounded-tl-sm text-gray-800"
+                      ? "bg-green-50 text-gray-800"
+                      : "bg-white border border-gray-200 text-gray-800"
                   }`}
+                  style={{
+                    borderRadius: isAdmin ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
+                  }}
                 >
                   {msg.content}
                 </div>
               )}
 
-              {/* メディア */}
               {hasMedia && msg.media && (
                 <div className={hasText ? "mt-1.5" : ""}>
                   <MessageMedia media={msg.media} />
                 </div>
               )}
 
-              {/* タイムスタンプ */}
               <div
                 className={`flex items-center gap-1.5 mt-1 ${
                   isAdmin ? "justify-end" : "justify-start"
@@ -222,7 +238,6 @@ export default function MessageList({ messages, isLoading = false }: MessageList
       })}
       <div ref={bottomRef} />
 
-      {/* フェードインアニメーション用CSS */}
       <style jsx>{`
         @keyframes fadeInUp {
           from {

@@ -7,11 +7,14 @@ import FilterBar from "@/components/dashboard/FilterBar";
 import type { FilterState } from "@/components/dashboard/FilterBar";
 import HotUsersTable from "@/components/dashboard/HotUsersTable";
 import StatsCards from "@/components/dashboard/StatsCards";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function DashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const { addToast } = useToast();
   const [filters, setFilters] = useState<FilterState>({
     exit: "all",
     status: "all",
@@ -29,18 +32,28 @@ export default function DashboardPage() {
         return res.json();
       })
       .then((json: { data?: User[] }) => {
-        setUsers(json.data ?? mockUsers);
+        if (json.data && json.data.length > 0) {
+          setUsers(json.data);
+          setIsOffline(false);
+        } else {
+          setUsers(mockUsers);
+          setIsOffline(true);
+          addToast("warning", "APIからデータを取得できませんでした。オフラインモードで表示中です。");
+        }
         setError(null);
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("[Dashboard] データ取得エラー:", err);
         setUsers(mockUsers);
+        setIsOffline(true);
         setError("データの取得に失敗しました。モックデータを表示中です。");
+        addToast("warning", "データの取得に失敗しました。オフラインモードで表示中です。");
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredUsers = useMemo(() => {
@@ -101,6 +114,15 @@ export default function DashboardPage() {
           スコア順 -- 全ユーザー一覧
         </p>
       </div>
+
+      {/* 接続ステータス */}
+      {isOffline && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2">
+          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+          <span className="text-xs font-medium text-amber-700">オフラインモード</span>
+          <span className="text-xs text-amber-600">-- モックデータを表示中です</span>
+        </div>
+      )}
 
       {/* エラー通知 */}
       {error && (

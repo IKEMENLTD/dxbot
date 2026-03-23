@@ -117,7 +117,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-5 px-2 space-y-1 overflow-hidden">
+      <nav className="flex-1 py-5 px-2 space-y-1 overflow-hidden" aria-label="メインナビゲーション">
         {navItems.map((item) => {
           const isActive = item.href === "/dashboard"
             ? pathname === "/dashboard"
@@ -127,6 +127,7 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-label={item.label}
               title={collapsed ? item.label : undefined}
               className={cn(
                 "flex items-center text-sm font-medium rounded-xl transition-colors relative group",
@@ -165,6 +166,7 @@ export default function Sidebar() {
             collapsed ? "justify-center w-full px-0" : "px-3"
           )}
           title={collapsed ? "サイドバーを開く" : "折りたたむ"}
+          aria-label={collapsed ? "サイドバーを開く" : "サイドバーを折りたたむ"}
         >
           <svg
             width="16" height="16" viewBox="0 0 16 16" fill="none"

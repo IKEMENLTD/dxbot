@@ -13,6 +13,7 @@ import {
   mockUsers,
 } from "@/lib/mock-data";
 import type { FunnelKpi, ExitMetrics, Deal, User } from "@/lib/types";
+import { useToast } from "@/contexts/ToastContext";
 
 interface KpiSummaryItem {
   label: string;
@@ -42,6 +43,8 @@ export default function FunnelPage() {
   const [deals, setDeals] = useState<Deal[]>(mockDeals);
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,16 +60,24 @@ export default function FunnelPage() {
         .then((res) => (res.ok ? res.json() as Promise<DealsApiResponse> : null))
         .catch(() => null),
     ]).then(([kpiJson, usersJson, dealsJson]) => {
-      if (kpiJson?.data?.funnel) setFunnelKpi(kpiJson.data.funnel);
-      if (kpiJson?.data?.exitMetrics) setExitMetrics(kpiJson.data.exitMetrics);
-      if (usersJson?.data) setUsers(usersJson.data);
-      if (dealsJson?.data) setDeals(dealsJson.data);
+      let anyDataLoaded = false;
+      if (kpiJson?.data?.funnel) { setFunnelKpi(kpiJson.data.funnel); anyDataLoaded = true; }
+      if (kpiJson?.data?.exitMetrics) { setExitMetrics(kpiJson.data.exitMetrics); anyDataLoaded = true; }
+      if (usersJson?.data) { setUsers(usersJson.data); anyDataLoaded = true; }
+      if (dealsJson?.data) { setDeals(dealsJson.data); anyDataLoaded = true; }
+      if (!anyDataLoaded) {
+        setIsOffline(true);
+        addToast("warning", "APIからデータを取得できませんでした。オフラインモードで表示中です。");
+      }
     }).catch((err: unknown) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("[Funnel] データ取得エラー:", err);
+      setIsOffline(true);
+      addToast("warning", "データの取得に失敗しました。オフラインモードで表示中です。");
     }).finally(() => setLoading(false));
 
     return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
@@ -127,6 +138,15 @@ export default function FunnelPage() {
         <h1 className="text-lg font-bold text-gray-900">ファネルKPI</h1>
         <p className="text-xs text-gray-500 mt-0.5">集客 → 成約の転換分析</p>
       </div>
+
+      {/* 接続ステータス */}
+      {isOffline && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2">
+          <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+          <span className="text-xs font-medium text-amber-700">オフラインモード</span>
+          <span className="text-xs text-amber-600">-- モックデータを表示中です</span>
+        </div>
+      )}
 
       {/* KPIサマリカード 4枚 */}
       <div className="grid grid-cols-4 gap-4">

@@ -82,12 +82,25 @@ export function consentMessage(): TextMessage {
 }
 
 /**
+ * 診断進捗バーを生成
+ * 例: currentStep=2, totalSteps=6 → "■■□□□□ (2/6)"
+ */
+function progressBar(currentStep: number, totalSteps: number): string {
+  const filled = '■'.repeat(currentStep);
+  const empty = '□'.repeat(totalSteps - currentStep);
+  return `${filled}${empty} (${currentStep}/${totalSteps})`;
+}
+
+/** 診断の総ステップ数（業種選択1問 + 診断5問 = 6問） */
+const DIAGNOSIS_TOTAL_STEPS = 6;
+
+/**
  * 業種選択メッセージ（Q1）
  */
 export function industrySelectMessage(): TextMessage {
   return {
     type: 'text',
-    text: 'Q1: 御社の業種を教えてください',
+    text: `[Q1/${DIAGNOSIS_TOTAL_STEPS}] 御社の業種を教えてください\n${progressBar(1, DIAGNOSIS_TOTAL_STEPS)}`,
     quickReply: {
       items: INDUSTRIES.map((ind) => ({
         type: 'action' as const,
@@ -114,12 +127,13 @@ export function industryConfirmMessage(industry: string): TextMessage {
 
 /**
  * 診断質問メッセージ（Q2〜Q6）
+ * 進捗表示付き: [Q2/6] ■■□□□□ (2/6)
  */
 export function diagnosisQuestionMessage(question: DiagnosisQuestion): TextMessage {
-  const qNum = question.index + 1; // 1-indexed表示
+  const qNum = question.index + 1; // 1-indexed表示（業種=Q1, 以降Q2〜Q6）
   return {
     type: 'text',
-    text: `Q${qNum}: ${question.question}`,
+    text: `[Q${qNum}/${DIAGNOSIS_TOTAL_STEPS}] ${question.question}\n${progressBar(qNum, DIAGNOSIS_TOTAL_STEPS)}`,
     quickReply: {
       items: question.options.map((opt) => ({
         type: 'action' as const,
@@ -457,6 +471,350 @@ export function fallbackMessage(): TextMessage {
   return {
     type: 'text',
     text: '申し訳ありません、その入力には対応していません。\n「診断」と送信すると診断を開始できます。',
+  };
+}
+
+// ===== CTA メッセージテンプレート =====
+
+import type { CtaTrigger, ExitType } from './types';
+
+/** 出口タイプの日本語ラベル */
+const EXIT_LABELS: Record<ExitType, string> = {
+  techstars: 'TECHSTARS研修',
+  taskmate: 'TaskMate',
+  veteran_ai: 'ベテランAI',
+  custom_dev: '受託開発',
+};
+
+/** 出口タイプごとのCTA説明文 */
+const EXIT_DESCRIPTIONS: Record<ExitType, string> = {
+  techstars: [
+    'ITの基礎から実務に使えるスキルまで、',
+    '少人数制の研修プログラムです。',
+    '',
+    '- パソコン操作の基本から丁寧にサポート',
+    '- 業務に直結するツールの使い方を習得',
+    '- 研修後も継続フォロー付き',
+  ].join('\n'),
+  taskmate: [
+    'DX業務を丸ごとサポートする',
+    '伴走型ソフトウェアサービスです。',
+    '',
+    '- 日々の業務を自動化・効率化',
+    '- 専任担当者が運用をサポート',
+    '- 月額制で始めやすい',
+  ].join('\n'),
+  veteran_ai: [
+    '経験豊富なコンサルタントが、',
+    '御社のDX課題を一緒に解決します。',
+    '',
+    '- 現状分析から改善提案まで一気通貫',
+    '- 補助金活用のご相談も対応',
+    '- 売上・請求・データ管理の最適化',
+  ].join('\n'),
+  custom_dev: [
+    '御社専用のシステムを開発し、',
+    '業務課題を根本から解決します。',
+    '',
+    '- 要件定義から運用まで一貫サポート',
+    '- 補助金を活用した開発も可能',
+    '- 既存ツールとの連携にも対応',
+  ].join('\n'),
+};
+
+/** トリガー理由のパーソナライズ文 */
+const TRIGGER_REASONS: Record<CtaTrigger, string> = {
+  action_boost: '行動が加速しています！次のステージへ進みませんか？',
+  apo_early: 'アポからのスタートで素晴らしい進捗です。',
+  subsidy_timing: '補助金の申請時期です。このタイミングを活かしませんか？',
+  lv40_reached: 'Lv.40到達、おめでとうございます！さらなるDX推進へ。',
+  invoice_stumble: '請求まわりの課題、まとめて解決できます。',
+  it_literacy: 'ITの基礎から一緒にステップアップしましょう。',
+};
+
+/**
+ * CTA提案メッセージ（Flex Message）
+ * トリガー理由に応じたパーソナライズ + 出口ごとの案内
+ */
+export function ctaProposalMessage(
+  trigger: CtaTrigger,
+  exit: ExitType,
+  ctaId: string
+): FlexMessage {
+  const triggerReason = TRIGGER_REASONS[trigger];
+  const exitLabel = EXIT_LABELS[exit];
+  const exitDesc = EXIT_DESCRIPTIONS[exit];
+
+  return {
+    type: 'flex',
+    altText: `${exitLabel}のご提案`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: 'DX推進のご提案',
+            size: 'lg',
+            weight: 'bold',
+            color: '#1a1a1a',
+          },
+        ],
+        paddingAll: '16px',
+        backgroundColor: '#f0f9ff',
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: triggerReason,
+            size: 'sm',
+            wrap: true,
+            color: '#1a73e8',
+            weight: 'bold',
+          },
+          {
+            type: 'separator',
+            margin: 'md',
+            color: '#e0e0e0',
+          },
+          {
+            type: 'text',
+            text: exitLabel,
+            size: 'md',
+            weight: 'bold',
+            margin: 'md',
+            color: '#1a1a1a',
+          },
+          {
+            type: 'text',
+            text: exitDesc,
+            size: 'sm',
+            wrap: true,
+            margin: 'sm',
+            color: '#555555',
+          },
+        ],
+        spacing: 'sm',
+        paddingAll: '16px',
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: '詳しく聞く',
+              data: `action=cta_response&ctaId=${ctaId}&value=interested`,
+              displayText: '詳しく聞く',
+            },
+            style: 'primary',
+            color: '#1a73e8',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: '今はいい',
+              data: `action=cta_response&ctaId=${ctaId}&value=decline`,
+              displayText: '今はいい',
+            },
+            style: 'secondary',
+            margin: 'sm',
+          },
+        ],
+        paddingAll: '16px',
+      },
+    },
+  };
+}
+
+/**
+ * CTA「詳しく聞く」応答時のユーザー向けメッセージ
+ */
+export function ctaInterestedReplyMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      'ありがとうございます！',
+      '',
+      '担当者から改めてご連絡いたします。',
+      'お気軽にご質問をお待ちしております。',
+    ].join('\n'),
+  };
+}
+
+/**
+ * CTA「今はいい」応答時のユーザー向けメッセージ
+ */
+export function ctaDeclineReplyMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      '承知しました。',
+      '',
+      'またタイミングが合えばご提案させていただきます。',
+      '引き続きステップを進めていきましょう！',
+    ].join('\n'),
+  };
+}
+
+// ===== リマインダーメッセージ群 =====
+
+/** リマインダーレベル */
+export type ReminderLevel = 'light' | 'medium' | 'final';
+
+/**
+ * 3日放置: 軽いリマインダー（進捗確認 + 現在のステップ名）
+ */
+export function reminderLightMessage(stepName: string | null): TextMessage {
+  const stepInfo = stepName ? `\n現在のステップ: ${stepName}` : '';
+  return {
+    type: 'text',
+    text: [
+      `--- お知らせ ---`,
+      ``,
+      `最近の進捗はいかがですか？${stepInfo}`,
+      ``,
+      `お時間のあるときに、`,
+      `少しずつ進めてみてください。`,
+      ``,
+      `「ステップ」と送信すると再開できます。`,
+    ].join('\n'),
+  };
+}
+
+/**
+ * 7日放置: 強めのリマインダー（ステップが待っている + Quick Reply）
+ */
+export function reminderMediumMessage(stepName: string | null): TextMessage {
+  const stepInfo = stepName ? `「${stepName}」が` : 'ステップが';
+  return {
+    type: 'text',
+    text: [
+      `--- リマインダー ---`,
+      ``,
+      `${stepInfo}待っています。`,
+      ``,
+      `DX改善は一歩ずつで大丈夫です。`,
+      `いつでも再開できます。`,
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '再開する',
+            data: 'action=reminder_resume',
+            displayText: '再開する',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '一時停止',
+            data: 'action=reminder_pause',
+            displayText: '一時停止',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * 14日放置: 最終リマインダー（最終案内 + Quick Reply）
+ */
+export function reminderFinalMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      `--- 最終リマインダー ---`,
+      ``,
+      `いつでも再開できます。`,
+      ``,
+      `DXの取り組みを再開したいときは、`,
+      `「ステップ」と送信してください。`,
+      ``,
+      `今後のご連絡が不要な場合は、`,
+      `下のボタンからお知らせください。`,
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '再開する',
+            data: 'action=reminder_resume',
+            displayText: '再開する',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '配信停止',
+            data: 'action=reminder_stop',
+            displayText: '配信停止',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * 一時停止受付メッセージ
+ */
+export function reminderPauseConfirmMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      '一時停止を受け付けました。',
+      '',
+      '7日間、リマインダーをお送りしません。',
+      '再開したいときは「ステップ」と送信してください。',
+    ].join('\n'),
+  };
+}
+
+/**
+ * 配信停止受付メッセージ
+ */
+export function reminderStopConfirmMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      '配信停止を受け付けました。',
+      '',
+      '今後リマインダーをお送りしません。',
+      '再開したいときは「ステップ」と送信してください。',
+    ].join('\n'),
+  };
+}
+
+/**
+ * 再開確認メッセージ
+ */
+export function reminderResumeConfirmMessage(stepName: string | null): TextMessage {
+  const stepInfo = stepName ? `\n次のステップ: ${stepName}` : '';
+  return {
+    type: 'text',
+    text: [
+      '再開を受け付けました！',
+      `${stepInfo}`,
+      '',
+      '「ステップ」と送信して続きを始めましょう。',
+    ].join('\n'),
   };
 }
 

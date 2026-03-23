@@ -9,9 +9,10 @@ import {
   type ClipboardEvent,
 } from "react";
 import type { MediaAttachment } from "@/lib/chat-types";
+import { useToast } from "@/contexts/ToastContext";
 
 interface ChatInputProps {
-  onSend: (message: string, media?: MediaAttachment[]) => void;
+  onSend: (message: string, media?: MediaAttachment[]) => Promise<void> | void;
   disabled: boolean;
 }
 
@@ -49,8 +50,10 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
+  const [sending, setSending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { addToast } = useToast();
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -65,14 +68,21 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
     adjustHeight();
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = value.trim();
-    if ((!trimmed && attachments.length === 0) || disabled) return;
-    onSend(trimmed, attachments.length > 0 ? attachments : undefined);
-    setValue("");
-    setAttachments([]);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+    if ((!trimmed && attachments.length === 0) || disabled || sending) return;
+    setSending(true);
+    try {
+      await onSend(trimmed, attachments.length > 0 ? attachments : undefined);
+      setValue("");
+      setAttachments([]);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    } catch {
+      addToast("error", "メッセージの送信に失敗しました");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -96,6 +106,8 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         const attachment = fileToAttachment(file);
         if (attachment) {
           setAttachments((prev) => [...prev, attachment]);
+        } else {
+          addToast("warning", `ファイルサイズが上限(25MB)を超えています: ${file.name}`);
         }
         return;
       }
@@ -111,11 +123,18 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
     if (!files) return;
 
     const newAttachments: MediaAttachment[] = [];
+    let skippedCount = 0;
     for (let i = 0; i < files.length; i++) {
       const attachment = fileToAttachment(files[i]);
       if (attachment) {
         newAttachments.push(attachment);
+      } else {
+        skippedCount += 1;
       }
+    }
+
+    if (skippedCount > 0) {
+      addToast("warning", `${skippedCount}件のファイルがサイズ上限(25MB)を超えています`);
     }
 
     if (newAttachments.length > 0) {
@@ -142,10 +161,10 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white px-6 py-4 relative">
+    <div className="border-t border-[#E5E8EB] bg-white px-3 lg:px-6 py-3 lg:py-4 relative flex-shrink-0">
       {/* 定型文ドロップダウン */}
       {showTemplates && (
-        <div className="absolute bottom-full left-6 right-6 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10">
+        <div className="absolute bottom-full left-3 right-3 lg:left-6 lg:right-6 mb-2 bg-white border border-gray-200 overflow-hidden z-10">
           <div className="px-3 py-2 border-b border-gray-100">
             <span className="text-xs font-medium text-gray-500">定型文</span>
           </div>
@@ -153,7 +172,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
             <button
               key={template}
               onClick={() => handleTemplateSelect(template)}
-              className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors min-h-[44px] flex items-center"
             >
               {template}
             </button>
@@ -167,7 +186,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
           {attachments.map((att) => (
             <div
               key={att.id}
-              className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-50"
+              className="relative group overflow-hidden border border-gray-200 bg-gray-50"
             >
               {att.type === "image" ? (
                 <img
@@ -180,21 +199,22 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="1.5">
                     <polygon points="5,3 19,12 5,21" />
                   </svg>
-                  <span className="text-[9px] text-gray-400 mt-1 truncate max-w-[72px] px-1">
+                  <span className="text-[10px] text-gray-400 mt-1 truncate max-w-[72px] px-1">
                     {att.name}
                   </span>
                 </div>
               )}
               <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5">
-                <span className="text-[9px] text-white">{formatFileSize(att.size)}</span>
+                <span className="text-[10px] text-white">{formatFileSize(att.size)}</span>
               </div>
-              {/* 削除ボタン */}
               <button
                 onClick={() => removeAttachment(att.id)}
-                className="absolute top-1 right-1 w-5 h-5 bg-gray-900/60 hover:bg-gray-900/80 rounded-full flex items-center justify-center transition-colors"
+                className="absolute top-1 right-1 w-5 h-5 bg-gray-900/60 hover:bg-gray-900/80 flex items-center justify-center transition-colors"
+                style={{ borderRadius: "50%" }}
+                aria-label={`${att.name}を削除`}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M2 2L8 8M8 2L2 8" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M2 2L8 8M8 2L2 8" stroke="white" strokeWidth="1.5" strokeLinecap="square" />
                 </svg>
               </button>
             </div>
@@ -202,12 +222,13 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         </div>
       )}
 
-      <div className="flex items-end gap-3">
+      <div className="flex items-end gap-2 lg:gap-3">
         {/* 定型文ボタン */}
         <button
           onClick={() => setShowTemplates(!showTemplates)}
-          className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex-shrink-0"
+          className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors flex-shrink-0"
           title="定型文"
+          aria-label="定型文を表示"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <rect x="3" y="3" width="12" height="12" rx="2" stroke="#6B7280" strokeWidth="1.2" />
@@ -226,8 +247,9 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         />
         <button
           onClick={handleFileSelect}
-          className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex-shrink-0"
+          className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 active:bg-gray-300 transition-colors flex-shrink-0"
           title="画像・動画を添付"
+          aria-label="画像・動画を添付"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <rect x="2" y="3" width="14" height="12" rx="2" stroke="#6B7280" strokeWidth="1.2" />
@@ -243,31 +265,33 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="メッセージを入力... (Ctrl+Vでスクショ貼付)"
+          placeholder="メッセージを入力..."
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 disabled:opacity-50 transition-colors"
+          className="flex-1 resize-none bg-gray-50 border border-gray-200 px-3 lg:px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-400 disabled:opacity-50 transition-colors"
           style={{ minHeight: "44px" }}
         />
 
         {/* 送信ボタン */}
         <button
           onClick={handleSend}
-          disabled={disabled || (!value.trim() && attachments.length === 0)}
-          className="w-10 h-10 flex items-center justify-center bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:cursor-not-allowed rounded-xl transition-colors flex-shrink-0"
+          disabled={disabled || sending || (!value.trim() && attachments.length === 0)}
+          className="w-10 h-10 flex items-center justify-center bg-green-600 hover:bg-green-700 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          aria-label="メッセージを送信"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <path
               d="M15.75 2.25L8.25 9.75M15.75 2.25L10.5 15.75L8.25 9.75M15.75 2.25L2.25 7.5L8.25 9.75"
               stroke="white"
               strokeWidth="1.5"
-              strokeLinecap="round"
+              strokeLinecap="square"
               strokeLinejoin="round"
             />
           </svg>
         </button>
       </div>
-      <p className="text-[10px] text-gray-400 mt-1.5 ml-[108px]">
+      {/* ヒントはデスクトップのみ表示 */}
+      <p className="hidden lg:block text-[10px] text-gray-400 mt-1.5 ml-[108px]">
         Enter で送信 / Shift+Enter で改行 / Ctrl+V でスクショ貼付
       </p>
     </div>

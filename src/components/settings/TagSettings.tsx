@@ -43,7 +43,6 @@ export default function TagSettings() {
     setValue: setTags,
     save: saveTags,
     loading,
-    saving: dbSaving,
     error: dbError,
   } = useAppSetting<UserTag[]>("tags", [...mockTags], STORAGE_KEYS.TAGS);
 

@@ -82,7 +82,7 @@ export default function FunnelPage() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-[1400px]">
         <div>
           <div className="h-5 w-32 bg-gray-100 animate-pulse rounded-2xl" />
           <div className="h-3 w-48 bg-gray-100 animate-pulse rounded-2xl mt-2" />
@@ -132,7 +132,7 @@ export default function FunnelPage() {
     : [];
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in">
+    <div className="p-6 space-y-6 animate-fade-in max-w-[1400px]">
       {/* Page Title */}
       <div>
         <h1 className="text-lg font-bold text-gray-900">ファネルKPI</h1>

@@ -85,10 +85,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-8 space-y-6 max-w-[1400px]">
+      <div className="p-6 space-y-6 animate-fade-in max-w-[1400px]">
         <div>
-          <div className="h-6 w-40 bg-gray-100 animate-pulse rounded-2xl" />
-          <div className="h-4 w-60 bg-gray-100 animate-pulse rounded-2xl mt-2" />
+          <div className="h-5 w-40 bg-gray-100 animate-pulse rounded-2xl" />
+          <div className="h-3 w-60 bg-gray-100 animate-pulse rounded-2xl mt-2" />
         </div>
         <div className="grid grid-cols-4 gap-5">
           {[1, 2, 3, 4].map((i) => (
@@ -106,11 +106,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-[1400px]">
+    <div className="p-6 space-y-6 animate-fade-in max-w-[1400px]">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900">リード管理</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-lg font-bold text-gray-900">リード管理</h1>
+        <p className="text-xs text-gray-500 mt-0.5">
           スコア順 -- 全ユーザー一覧
         </p>
       </div>

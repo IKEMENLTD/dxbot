@@ -61,9 +61,12 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("line");
 
   return (
-    <div>
+    <div className="p-6 space-y-6 animate-fade-in max-w-[1400px]">
       {/* ページタイトル */}
-      <h1 className="text-xl font-bold text-gray-900 mb-6">設定</h1>
+      <div>
+        <h1 className="text-lg font-bold text-gray-900">設定</h1>
+        <p className="text-xs text-gray-500 mt-0.5">管理画面の各種設定</p>
+      </div>
 
       {/* メインカード */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">

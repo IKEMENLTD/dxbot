@@ -101,6 +101,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const signature = request.headers.get('x-line-signature') ?? '';
 
+  // LINE Developer Console の Webhook URL 検証（署名なし + 空events）に200を返す
+  if (!signature) {
+    try {
+      const testBody = JSON.parse(bodyText) as WebhookBody;
+      if (!testBody.events || testBody.events.length === 0) {
+        return NextResponse.json({ status: 'ok' });
+      }
+    } catch {
+      // パース失敗は通常のリクエストとして処理続行
+    }
+  }
+
   // 署名検証
   if (!verifySignature(bodyText, signature)) {
     console.error('[Webhook] 署名検証失敗');

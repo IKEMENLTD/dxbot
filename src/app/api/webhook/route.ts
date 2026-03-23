@@ -1,12 +1,11 @@
 // ===== LINE Webhook API Route =====
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, PostbackEvent } from '@/lib/line-types';
+import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, PostbackEvent, LineMessage } from '@/lib/line-types';
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignature, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
 import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus } from '@/lib/queries';
-import type { MessageType } from '@/lib/chat-types';
 import {
   getQuestion,
   getQuestionCount,
@@ -53,6 +52,31 @@ import {
   reminderStopConfirmMessage,
   reminderResumeConfirmMessage,
 } from '@/lib/line-messages';
+
+/**
+ * replyMessage送信 + outbound保存のラッパー（fire-and-forget で保存）
+ */
+async function replyAndSave(
+  userId: string,
+  replyToken: string,
+  messages: LineMessage[]
+): Promise<void> {
+  await replyMessage(replyToken, messages);
+  for (const msg of messages) {
+    try {
+      const content = msg.type === 'text' ? msg.text : JSON.stringify(msg);
+      await saveMessage({
+        userId,
+        lineUserId: userId,
+        direction: 'outbound',
+        content,
+        messageType: 'text',
+      });
+    } catch (err) {
+      console.error('[Webhook] outboundメッセージ保存エラー（処理は続行）:', err);
+    }
+  }
+}
 
 /** つまずきタイプの検証 */
 const VALID_STUMBLE_TYPES = new Set<string>(['how', 'motivation', 'time']);
@@ -145,18 +169,14 @@ async function saveInboundMessage(event: TextMessageEvent): Promise<void> {
     const lineUserId = event.source.userId;
     if (!lineUserId) return;
 
-    // conversation_stateからuser_idを逆引き（line_user_id = users.id の場合）
-    // このプロジェクトではLINE user IDがそのままusers.idとして使われている
     const userId = lineUserId;
-
-    const msgType: MessageType = event.message.type === 'text' ? 'text' : 'text';
 
     await saveMessage({
       userId,
       lineUserId,
       direction: 'inbound',
       content: event.message.text,
-      messageType: msgType,
+      messageType: 'text',
       lineMessageId: event.message.id,
     });
   } catch (err) {
@@ -209,7 +229,7 @@ async function handleFollow(event: FollowEvent): Promise<void> {
 
     // Welcome + 同意確認
     const msg = welcomeMessage(conversation.preferredName);
-    await replyMessage(event.replyToken, [msg]);
+    await replyAndSave(userId, event.replyToken, [msg]);
 
     // 状態更新: consent_pending
     await setState(userId, { state: { phase: 'consent_pending' } });
@@ -236,18 +256,18 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
 
       // 「診断」キーワードなら同意確認
       if (text === '診断') {
-        await replyMessage(event.replyToken, [consentMessage()]);
+        await replyAndSave(userId, event.replyToken, [consentMessage()]);
         await setState(userId, { state: { phase: 'consent_pending' } });
         return;
       }
 
-      await replyMessage(event.replyToken, [fallbackMessage()]);
+      await replyAndSave(userId, event.replyToken, [fallbackMessage()]);
       return;
     }
 
     // 「診断」キーワードで再診断開始（どのフェーズからでも）
     if (text === '診断') {
-      await replyMessage(event.replyToken, [consentMessage()]);
+      await replyAndSave(userId, event.replyToken, [consentMessage()]);
       await setState(userId, { state: { phase: 'consent_pending' } });
       return;
     }
@@ -261,7 +281,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
         if (text === 'はい' || text === 'はい、始めます') {
           await startIndustrySelect(userId, event.replyToken);
         } else {
-          await replyMessage(event.replyToken, [laterMessage()]);
+          await replyAndSave(userId, event.replyToken, [laterMessage()]);
           await setState(userId, { state: { phase: 'idle' } });
         }
         break;
@@ -280,7 +300,7 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
         // ステップ中の案内メッセージを返す
         const currentStep = findStepById(state.currentStepId);
         const stepName = currentStep ? currentStep.name : '現在のステップ';
-        await replyMessage(event.replyToken, [stepActiveGuideMessage(stepName)]);
+        await replyAndSave(userId, event.replyToken, [stepActiveGuideMessage(stepName)]);
         break;
       }
 
@@ -290,16 +310,16 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
           // 次のステップを配信
           const state = conversation.state;
           if (state.phase !== 'step_ready') break;
-          await deliverNextStep(userId, event.replyToken, state.weakAxis, state.completedStepIds, state.stumbleCount);
+          await deliverNextStep(userId, event.replyToken, state.weakAxis, state.completedStepIds, state.stumbleCount, state.stumbleHowCount);
           return;
         }
 
-        await replyMessage(event.replyToken, [fallbackMessage()]);
+        await replyAndSave(userId, event.replyToken, [fallbackMessage()]);
         break;
       }
 
       default:
-        await replyMessage(event.replyToken, [fallbackMessage()]);
+        await replyAndSave(userId, event.replyToken, [fallbackMessage()]);
         break;
     }
   } catch (error) {
@@ -387,7 +407,7 @@ async function handleConsent(
   if (value === 'yes') {
     await startIndustrySelect(userId, replyToken);
   } else {
-    await replyMessage(replyToken, [laterMessage()]);
+    await replyAndSave(userId, replyToken, [laterMessage()]);
     await setState(userId, { state: { phase: 'idle' } });
   }
 }
@@ -396,7 +416,7 @@ async function handleConsent(
  * 業種選択フェーズへ遷移
  */
 async function startIndustrySelect(userId: string, replyToken: string): Promise<void> {
-  await replyMessage(replyToken, [industrySelectMessage()]);
+  await replyAndSave(userId, replyToken, [industrySelectMessage()]);
   await setState(userId, { state: { phase: 'industry_select' } });
 }
 
@@ -422,7 +442,7 @@ async function handleIndustrySelect(
   if (!q2) return;
 
   const questionMsg = diagnosisQuestionMessage(q2);
-  await replyMessage(replyToken, [confirmMsg, questionMsg]);
+  await replyAndSave(userId, replyToken, [confirmMsg, questionMsg]);
 }
 
 /**
@@ -463,7 +483,7 @@ async function handleDiagnosisAnswer(
       },
     });
 
-    await replyMessage(replyToken, [diagnosisQuestionMessage(nextQ)]);
+    await replyAndSave(userId, replyToken, [diagnosisQuestionMessage(nextQ)]);
   } else {
     // 全問完了 → 結果算出
     await completeDiagnosis(userId, replyToken, updatedScores, conversation.industry);
@@ -500,7 +520,7 @@ async function completeDiagnosis(
   const resultMsg = diagnosisResultMessage(scores, band, weakAxis, industry);
   const stepMsg = stepStartMessage(firstStepName);
 
-  await replyMessage(replyToken, [resultMsg, stepMsg]);
+  await replyAndSave(userId, replyToken, [resultMsg, stepMsg]);
 
   // step_readyフェーズへ（スタートボタン待ち）
   await setState(userId, {
@@ -509,6 +529,7 @@ async function completeDiagnosis(
       weakAxis,
       completedStepIds: [],
       stumbleCount: 0,
+      stumbleHowCount: 0,
     },
   });
 
@@ -543,8 +564,9 @@ async function handleStepStart(
   const weakAxis = state.weakAxis;
   const completedStepIds = state.completedStepIds;
   const stumbleCount = state.stumbleCount;
+  const stumbleHowCount = state.stumbleHowCount;
 
-  await deliverNextStep(userId, replyToken, weakAxis, completedStepIds, stumbleCount);
+  await deliverNextStep(userId, replyToken, weakAxis, completedStepIds, stumbleCount, stumbleHowCount);
 }
 
 /**
@@ -555,20 +577,22 @@ async function deliverNextStep(
   replyToken: string,
   weakAxis: keyof AxisScores,
   completedStepIds: string[],
-  stumbleCount: number
+  stumbleCount: number,
+  stumbleHowCount: number
 ): Promise<void> {
   const nextStep = getNextStep(completedStepIds, weakAxis);
 
   if (!nextStep) {
     // 全ステップ完了
     const level = calculateLevel(completedStepIds.length);
-    await replyMessage(replyToken, [allStepsCompleteMessage(completedStepIds.length, level)]);
+    await replyAndSave(userId, replyToken, [allStepsCompleteMessage(completedStepIds.length, level)]);
     await setState(userId, {
       state: {
         phase: 'step_ready',
         weakAxis,
         completedStepIds,
         stumbleCount,
+        stumbleHowCount,
       },
     });
     return;
@@ -576,7 +600,7 @@ async function deliverNextStep(
 
   // ステップ内容を配信
   const contentMsg = stepContentMessage(nextStep, completedStepIds.length);
-  await replyMessage(replyToken, [contentMsg]);
+  await replyAndSave(userId, replyToken, [contentMsg]);
 
   // DB: ステップ開始記録
   await recordStepStarted(userId, nextStep.id, nextStep.name);
@@ -589,6 +613,7 @@ async function deliverNextStep(
       weakAxis,
       completedStepIds,
       stumbleCount,
+      stumbleHowCount,
     },
   });
 }
@@ -628,7 +653,12 @@ async function handleStepComplete(
   const previousLevel = calculateLevel(state.completedStepIds.length);
   const newLevel = calculateLevel(newCompletedCount);
   const levelUp = newLevel > previousLevel;
-  const scoreGain = calculateScoreForStep(completedStep.difficulty);
+
+  // completedStepIds全体からスコアを累積計算
+  const totalScore = newCompletedIds.reduce((sum, id) => {
+    const s = findStepById(id);
+    return sum + (s ? calculateScoreForStep(s.difficulty) : 0);
+  }, 0);
 
   // DB: ステップ完了記録
   await recordStepCompleted(userId, stepId, completedStep.name);
@@ -646,7 +676,7 @@ async function handleStepComplete(
     stepsCompleted: newCompletedCount,
     lastCompletedStep: stepId,
     level: newLevel,
-    score: scoreGain, // 差分ではなく累積を別途計算する場合はロジック調整
+    score: totalScore,
   });
 
   // 次のステップがあるか確認
@@ -654,13 +684,14 @@ async function handleStepComplete(
 
   if (!nextStep) {
     // 全ステップ完了
-    await replyMessage(replyToken, [allStepsCompleteMessage(newCompletedCount, newLevel)]);
+    await replyAndSave(userId, replyToken, [allStepsCompleteMessage(newCompletedCount, newLevel)]);
     await setState(userId, {
       state: {
         phase: 'step_ready',
         weakAxis: state.weakAxis,
         completedStepIds: newCompletedIds,
         stumbleCount: state.stumbleCount,
+        stumbleHowCount: state.stumbleHowCount,
       },
     });
     return;
@@ -668,7 +699,7 @@ async function handleStepComplete(
 
   // 完了祝福メッセージ
   const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel);
-  await replyMessage(replyToken, [completeMsg]);
+  await replyAndSave(userId, replyToken, [completeMsg]);
 
   // 状態をstep_readyに更新（次ステップ待ち）
   await setState(userId, {
@@ -677,6 +708,7 @@ async function handleStepComplete(
       weakAxis: state.weakAxis,
       completedStepIds: newCompletedIds,
       stumbleCount: state.stumbleCount,
+      stumbleHowCount: state.stumbleHowCount,
     },
   });
 
@@ -720,6 +752,9 @@ async function handleStepStumble(
   }
 
   const newStumbleCount = state.stumbleCount + 1;
+  const newStumbleHowCount = stumbleTypeRaw === 'how'
+    ? state.stumbleHowCount + 1
+    : state.stumbleHowCount;
 
   // DB: つまずき記録
   await recordStepStumble(userId, stepId, step.name, stumbleTypeRaw);
@@ -738,19 +773,20 @@ async function handleStepStumble(
     stumbleHowCount?: number;
   } = { stumbleCount: newStumbleCount };
   if (stumbleTypeRaw === 'how') {
-    counterUpdate.stumbleHowCount = newStumbleCount; // 正確には howCount のみ加算すべきだがここでは近似
+    counterUpdate.stumbleHowCount = newStumbleHowCount;
   }
   await updateUserStepCounters(userId, counterUpdate);
 
   // ヒントメッセージ送信
   const hintMsg = stepStumbleMessage(step, stumbleTypeRaw);
-  await replyMessage(replyToken, [hintMsg]);
+  await replyAndSave(userId, replyToken, [hintMsg]);
 
   // 状態は step_active のまま（同じステップに再挑戦可能）
   await setState(userId, {
     state: {
       ...state,
       stumbleCount: newStumbleCount,
+      stumbleHowCount: newStumbleHowCount,
     },
   });
 }
@@ -811,7 +847,7 @@ async function handleStepSkip(
   const newCompletedIds = [...state.completedStepIds, stepId];
 
   // 次のステップを配信
-  await deliverNextStep(userId, replyToken, state.weakAxis, newCompletedIds, state.stumbleCount);
+  await deliverNextStep(userId, replyToken, state.weakAxis, newCompletedIds, state.stumbleCount, state.stumbleHowCount);
 }
 
 /**
@@ -829,7 +865,7 @@ async function handleStepPause(
     return;
   }
 
-  await replyMessage(replyToken, [stepPauseMessage()]);
+  await replyAndSave(userId, replyToken, [stepPauseMessage()]);
 
   // step_readyに戻す（再開時にstep_startで続きから）
   await setState(userId, {
@@ -838,6 +874,7 @@ async function handleStepPause(
       weakAxis: state.weakAxis,
       completedStepIds: state.completedStepIds,
       stumbleCount: state.stumbleCount,
+      stumbleHowCount: state.stumbleHowCount,
     },
   });
 }
@@ -855,12 +892,12 @@ async function resendCurrentStep(
 ): Promise<void> {
   const step = findStepById(stepId);
   if (!step) {
-    await replyMessage(replyToken, [fallbackMessage()]);
+    await replyAndSave(userId, replyToken, [fallbackMessage()]);
     return;
   }
 
   const contentMsg = stepContentMessage(step, completedStepIds.length);
-  await replyMessage(replyToken, [contentMsg]);
+  await replyAndSave(userId, replyToken, [contentMsg]);
 }
 
 /**
@@ -892,11 +929,11 @@ async function handleCtaResponse(
   if (value === 'interested') {
     // 「詳しく聞く」
     await handleCtaInterested(userId, ctaId);
-    await replyMessage(replyToken, [ctaInterestedReplyMessage()]);
+    await replyAndSave(userId, replyToken, [ctaInterestedReplyMessage()]);
   } else if (value === 'decline') {
     // 「今はいい」
     await handleCtaDeclined(userId, ctaId);
-    await replyMessage(replyToken, [ctaDeclineReplyMessage()]);
+    await replyAndSave(userId, replyToken, [ctaDeclineReplyMessage()]);
   } else {
     console.warn('[Webhook] cta_response: 不明なvalue:', value);
   }
@@ -931,7 +968,7 @@ async function handleReminderResume(
       }
     }
 
-    await replyMessage(replyToken, [reminderResumeConfirmMessage(stepName)]);
+    await replyAndSave(userId, replyToken, [reminderResumeConfirmMessage(stepName)]);
   } catch (error) {
     console.error('[Webhook] handleReminderResume エラー:', error);
   }
@@ -950,7 +987,7 @@ async function handleReminderPause(
     pauseUntil.setDate(pauseUntil.getDate() + 7);
 
     await updatePausedUntil(userId, pauseUntil.toISOString());
-    await replyMessage(replyToken, [reminderPauseConfirmMessage()]);
+    await replyAndSave(userId, replyToken, [reminderPauseConfirmMessage()]);
   } catch (error) {
     console.error('[Webhook] handleReminderPause エラー:', error);
   }
@@ -966,7 +1003,7 @@ async function handleReminderStop(
 ): Promise<void> {
   try {
     await updateUserStatus(userId, 'churned');
-    await replyMessage(replyToken, [reminderStopConfirmMessage()]);
+    await replyAndSave(userId, replyToken, [reminderStopConfirmMessage()]);
   } catch (error) {
     console.error('[Webhook] handleReminderStop エラー:', error);
   }

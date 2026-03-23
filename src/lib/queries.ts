@@ -942,3 +942,85 @@ export async function getUnreadCount(
     return 0;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Recent Completed Steps (CTA用)
+// ---------------------------------------------------------------------------
+
+/** 指定期間内に完了したステップ数を取得 */
+export async function getRecentCompletedStepCount(
+  userId: string,
+  days: number
+): Promise<number> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return 0;
+  }
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffIso = cutoffDate.toISOString();
+
+    const { count, error } = await supabase
+      .from('user_steps')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .gte('completed_at', cutoffIso);
+
+    if (error) {
+      console.error('[getRecentCompletedStepCount] Supabase error:', error.message);
+      return 0;
+    }
+
+    return count ?? 0;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '最近の完了ステップ数取得中にエラーが発生しました';
+    console.error('[getRecentCompletedStepCount] エラー:', msg);
+    return 0;
+  }
+}
+
+/** 指定期間内の最初と最後の完了ステップ間の日数を取得 */
+export async function getRecentCompletedDays(
+  userId: string,
+  days: number
+): Promise<number> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return 0;
+  }
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffIso = cutoffDate.toISOString();
+
+    const { data, error } = await supabase
+      .from('user_steps')
+      .select('completed_at')
+      .eq('user_id', userId)
+      .eq('status', 'completed')
+      .gte('completed_at', cutoffIso)
+      .order('completed_at', { ascending: true });
+
+    if (error) {
+      console.error('[getRecentCompletedDays] Supabase error:', error.message);
+      return 0;
+    }
+
+    if (!data || data.length < 2) {
+      return 0;
+    }
+
+    const first = new Date((data[0] as { completed_at: string }).completed_at);
+    const last = new Date((data[data.length - 1] as { completed_at: string }).completed_at);
+    const diffMs = last.getTime() - first.getTime();
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '最近の完了日数取得中にエラーが発生しました';
+    console.error('[getRecentCompletedDays] エラー:', msg);
+    return 0;
+  }
+}

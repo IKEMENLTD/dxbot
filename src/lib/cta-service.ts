@@ -11,7 +11,7 @@ import { calculateRecommendation } from './recommend-engine';
 import { pushMessage } from './line-client';
 import { ctaProposalMessage } from './line-messages';
 import { getSupabaseServer } from './supabase';
-import { getUserById } from './queries';
+import { getUserById, getRecentCompletedStepCount, getRecentCompletedDays } from './queries';
 import { recordTimelineEvent } from './step-delivery';
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,12 @@ export async function checkAndFireCta(
     const recommendInput = buildRecommendInput(user);
     const recommendation = calculateRecommendation(recommendInput);
 
-    // 3. CTA判定
+    // 3. 最近14日間の完了ステップ数・日数をDBから正確に取得
+    const recentDays = 14;
+    const recentCompletedSteps = await getRecentCompletedStepCount(lineUserId, recentDays);
+    const recentCompletedDays = await getRecentCompletedDays(lineUserId, recentDays);
+
+    // 4. CTA判定
     const ctaInput: CtaInput = {
       user: {
         level: user.level,
@@ -77,8 +82,8 @@ export async function checkAndFireCta(
         stumbleHowCount: user.stumble_how_count,
         daysSinceStart: daysBetween(new Date(user.created_at), new Date()),
         lastActionDaysAgo: daysBetween(new Date(user.last_action_at), new Date()),
-        recentCompletedSteps: user.steps_completed, // 近似値（正確にはDB集計が必要）
-        recentCompletedDays: daysBetween(new Date(user.last_action_at), new Date()),
+        recentCompletedSteps,
+        recentCompletedDays,
       },
       recommendation,
     };
@@ -89,14 +94,14 @@ export async function checkAndFireCta(
       return { fired: false, trigger: null, exit: null, ctaId: null };
     }
 
-    // 4. 重複チェック（24時間ガード）
+    // 5. 重複チェック（24時間ガード）
     const isDuplicate = await hasRecentCtaFire(lineUserId, ctaResult.trigger);
     if (isDuplicate) {
       console.log(`[CTA] 24h以内に同一トリガー発火済み: user=${lineUserId}, trigger=${ctaResult.trigger}`);
       return { fired: false, trigger: ctaResult.trigger, exit: ctaResult.exit, ctaId: null };
     }
 
-    // 5. CTA ID生成 & pushMessage送信
+    // 6. CTA ID生成 & pushMessage送信
     const ctaId = `cta_${lineUserId}_${ctaResult.trigger}_${Date.now()}`;
     const message = ctaProposalMessage(ctaResult.trigger, ctaResult.exit, ctaId);
     const pushResult = await pushMessage(lineUserId, [message]);
@@ -112,10 +117,10 @@ export async function checkAndFireCta(
       };
     }
 
-    // 6. cta_historyに記録
+    // 7. cta_historyに記録
     await recordCtaFire(ctaId, lineUserId, ctaResult.trigger, ctaResult.exit);
 
-    // 7. タイムラインに記録
+    // 8. タイムラインに記録
     await recordTimelineEvent(
       lineUserId,
       'cta_fired',
@@ -127,7 +132,7 @@ export async function checkAndFireCta(
       }
     );
 
-    // 8. badgesにcta_fired追加
+    // 9. badgesにcta_fired追加
     await addCtaFiredBadge(lineUserId, user);
 
     console.log(`[CTA] 発火成功: user=${lineUserId}, trigger=${ctaResult.trigger}, exit=${ctaResult.exit}`);

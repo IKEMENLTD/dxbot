@@ -190,15 +190,25 @@ export default function CtaSettings() {
   }, []);
 
   // 数値フィールド更新
+  // スコア系フィールド（0を許容）
+  const SCORE_FIELDS = new Set([
+    "axisA1Threshold",
+    "axisDThreshold",
+    "totalScoreThreshold",
+    "stumbleHowCountThreshold",
+  ]);
+
   const handleNumberChange = useCallback(
     (triggerKey: CtaTrigger, field: string, value: string) => {
       const num = parseInt(value, 10);
-      if (isNaN(num) || num < 0) return;
+      if (isNaN(num)) return;
+      const minValue = SCORE_FIELDS.has(field) ? 0 : 1;
+      const clamped = Math.max(num, minValue);
       setConfig((prev) => ({
         ...prev,
         [triggerKey]: {
           ...prev[triggerKey],
-          [field]: num,
+          [field]: clamped,
         },
       }));
     },

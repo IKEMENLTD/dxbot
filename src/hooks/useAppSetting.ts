@@ -52,6 +52,7 @@ export function useAppSetting<T>(
   const abortRef = useRef<AbortController | null>(null);
   const migratedRef = useRef(false);
   const valueRef = useRef<T>(defaultValue);
+  const defaultValueRef = useRef<T>(defaultValue);
 
   // valueRefを常に最新に保つ
   valueRef.current = value;
@@ -88,10 +89,10 @@ export function useAppSetting<T>(
               setValue(localData);
               migratedRef.current = false; // 初回save時にDBに移行する
             } else {
-              setValue(defaultValue);
+              setValue(defaultValueRef.current);
             }
           } else {
-            setValue(defaultValue);
+            setValue(defaultValueRef.current);
           }
         }
 
@@ -112,10 +113,10 @@ export function useAppSetting<T>(
           if (localData !== null) {
             setValue(localData);
           } else {
-            setValue(defaultValue);
+            setValue(defaultValueRef.current);
           }
         } else {
-          setValue(defaultValue);
+          setValue(defaultValueRef.current);
         }
       } finally {
         setLoading(false);
@@ -128,7 +129,7 @@ export function useAppSetting<T>(
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [key, defaultValue, localStorageKey]);
+  }, [key, localStorageKey]);
 
   // 保存
   const save = useCallback(async (overrideValue?: T): Promise<{ success: boolean; error?: string }> => {

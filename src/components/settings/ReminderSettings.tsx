@@ -68,6 +68,19 @@ export default function ReminderSettings() {
 
   // 保存
   const handleSave = async () => {
+    // バリデーション: 日数は昇順
+    if (
+      config.lightDays >= config.mediumDays ||
+      config.mediumDays >= config.finalDays ||
+      config.finalDays >= config.stopDays
+    ) {
+      showToast(
+        "日数は昇順で設定してください（軽め < 強め < 最終 < 配信停止）",
+        "error"
+      );
+      return;
+    }
+
     setSaving(true);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);

@@ -131,6 +131,15 @@ export default function StepSettings() {
   // ----- 一括保存 -----
   const handleSave = useCallback(async () => {
     if (saving) return;
+
+    // バリデーション: 空名チェック
+    const emptyNameSteps = steps.filter((s) => s.name.trim() === "");
+    if (emptyNameSteps.length > 0) {
+      const ids = emptyNameSteps.map((s) => s.id).join(", ");
+      addToast("error", `ステップ名が空です: ${ids}`);
+      return;
+    }
+
     setSaving(true);
 
     const controller = new AbortController();

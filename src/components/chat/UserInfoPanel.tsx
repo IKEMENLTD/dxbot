@@ -234,7 +234,7 @@ export default function UserInfoPanel({
           {user.company_name}
         </p>
         <Link
-          href={`/dashboard/users/${user.id}`}
+          href={`/admindashboard/users/${user.id}`}
           aria-label={`${user.preferred_name}のカルテを見る`}
           className="mt-3 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
         >

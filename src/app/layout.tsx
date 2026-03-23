@@ -4,8 +4,8 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import ToastContainer from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
-  title: "DXBOT - 管理ダッシュボード",
-  description: "DX転換池管理システム",
+  title: "dxbot - 中小企業のDXコーチング",
+  description: "ITが苦手でも大丈夫。御社のペースで、DXを始めませんか。dxbotは中小企業に寄り添うDXコーチングサービスです。",
 };
 
 export default function RootLayout({

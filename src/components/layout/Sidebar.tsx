@@ -8,7 +8,7 @@ import { useSidebar } from "./SidebarContext";
 
 const navItems = [
   {
-    href: "/dashboard/chat",
+    href: "/admindashboard/chat",
     label: "チャット",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -19,7 +19,7 @@ const navItems = [
     ),
   },
   {
-    href: "/dashboard",
+    href: "/admindashboard",
     label: "熱い人リスト",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,7 +29,7 @@ const navItems = [
     ),
   },
   {
-    href: "/dashboard/funnel",
+    href: "/admindashboard/funnel",
     label: "ファネルKPI",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -38,7 +38,7 @@ const navItems = [
     ),
   },
   {
-    href: "/dashboard/settings",
+    href: "/admindashboard/settings",
     label: "設定",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -124,8 +124,8 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 py-5 px-2 space-y-1 overflow-hidden" aria-label="メインナビゲーション">
         {navItems.map((item) => {
-          const isActive = item.href === "/dashboard"
-            ? pathname === "/dashboard"
+          const isActive = item.href === "/admindashboard"
+            ? pathname === "/admindashboard"
             : pathname.startsWith(item.href);
 
           return (

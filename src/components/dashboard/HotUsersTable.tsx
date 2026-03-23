@@ -173,7 +173,7 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                 >
                   {/* Name + company + status dot */}
                   <td className="px-5 py-3.5">
-                    <Link href={`/dashboard/users/${user.id}`} className="block">
+                    <Link href={`/admindashboard/users/${user.id}`} className="block">
                       <div className="min-w-0">
                         <div className="text-gray-900 font-medium text-sm truncate hover:text-gray-600 transition-colors">
                           {user.preferred_name}
@@ -228,7 +228,7 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                   <td className="px-4 py-3.5">
                     {isHovered && (
                       <Link
-                        href={`/dashboard/users/${user.id}`}
+                        href={`/admindashboard/users/${user.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
                       >
                         <svg

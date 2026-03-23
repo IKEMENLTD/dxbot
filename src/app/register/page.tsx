@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 
-export default function UserLoginPage() {
+export default function RegisterPage() {
+  const [companyName, setCompanyName] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -32,13 +34,42 @@ export default function UserLoginPage() {
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
           <h1 className="text-2xl font-bold text-gray-900 text-center">
-            ログイン
+            無料で始める
           </h1>
           <p className="mt-2 text-sm text-gray-500 text-center">
-            アカウントにログインしてください
+            アカウントを作成してDXの第一歩を踏み出しましょう
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
+                会社名
+              </label>
+              <input
+                id="companyName"
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="株式会社サンプル"
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] transition-all"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                お名前
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="山田 太郎"
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] transition-all"
+              />
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 メールアドレス
@@ -50,7 +81,6 @@ export default function UserLoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="info@example.com"
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] transition-all"
-                autoFocus
               />
             </div>
 
@@ -63,7 +93,7 @@ export default function UserLoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="パスワードを入力"
+                placeholder="8文字以上"
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#06C755]/30 focus:border-[#06C755] transition-all"
               />
             </div>
@@ -72,20 +102,14 @@ export default function UserLoginPage() {
               type="submit"
               className="w-full bg-[#06C755] text-white rounded-lg px-4 py-3 text-sm font-semibold hover:bg-[#05B04C] transition-colors"
             >
-              ログイン
+              無料で始める
             </button>
           </form>
 
           <p className="mt-6 text-sm text-gray-500 text-center">
-            アカウントをお持ちでない方は
-            <Link href="/register" className="text-[#06C755] hover:text-[#05B04C] font-medium ml-1">
+            アカウントをお持ちの方は
+            <Link href="/login" className="text-[#06C755] hover:text-[#05B04C] font-medium ml-1">
               こちら
-            </Link>
-          </p>
-
-          <p className="mt-8 text-xs text-gray-400 text-center">
-            <Link href="/admindashboard/login" className="hover:text-gray-500 transition-colors">
-              管理者の方はこちら
             </Link>
           </p>
         </div>

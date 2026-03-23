@@ -26,7 +26,7 @@ interface UserDetailData {
 function BackButton() {
   return (
     <Link
-      href="/dashboard"
+      href="/admindashboard"
       aria-label="熱い人リストに戻る"
       className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
     >

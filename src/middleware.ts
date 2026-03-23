@@ -7,7 +7,10 @@ const COOKIE_NAME = "dxbot_session";
  */
 function isPublicPath(pathname: string): boolean {
   return (
+    pathname === "/" ||
     pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/admindashboard/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/webhook" ||
     pathname.startsWith("/api/cron/") ||
@@ -18,10 +21,10 @@ function isPublicPath(pathname: string): boolean {
 
 /**
  * 保護対象パスの判定
- * /dashboard 以下 + /api 以下（公開パス除く）
+ * /admindashboard 以下（loginを除く） + /api 以下（公開パス除く）
  */
 function isProtectedPath(pathname: string): boolean {
-  return pathname.startsWith("/dashboard") || pathname.startsWith("/api/");
+  return pathname.startsWith("/admindashboard") || pathname.startsWith("/api/");
 }
 
 export function middleware(request: NextRequest): NextResponse | undefined {
@@ -49,7 +52,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
           { status: 503 }
         );
       }
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = new URL("/admindashboard/login", request.url);
       return NextResponse.redirect(loginUrl);
     }
     // 開発時のみスキップ
@@ -66,8 +69,8 @@ export function middleware(request: NextRequest): NextResponse | undefined {
         { status: 401 }
       );
     }
-    // ダッシュボードの場合はログインページにリダイレクト
-    const loginUrl = new URL("/login", request.url);
+    // 管理ダッシュボードの場合は管理者ログインページにリダイレクト
+    const loginUrl = new URL("/admindashboard/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -79,7 +82,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
 export const config = {
   matcher: [
     /*
-     * /dashboard以下 + /api以下すべてにマッチ
+     * /admindashboard以下 + /api以下すべてにマッチ
      * _next, favicon.ico は除外
      */
     "/((?!_next/static|_next/image|favicon.ico).*)",

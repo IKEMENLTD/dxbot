@@ -13,6 +13,37 @@ function formatTime(timestamp: string): string {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** DB保存済みのpostback生データを人間が読める形に変換（フォールバック） */
+function formatPostbackDisplay(content: string): string {
+  if (!content.startsWith("action=")) return content;
+  try {
+    const params = new URLSearchParams(content);
+    const action = params.get("action");
+    const value = params.get("value");
+    const axis = params.get("axis");
+    const axisLabels: Record<string, string> = { a1: "売上・請求管理", a2: "連絡・記録管理", b: "繰り返し作業", c: "データ経営", d: "ツール活用" };
+    const sourceLabels: Record<string, string> = { apo: "営業の紹介", threads: "Threads", x: "X", instagram: "Instagram", referral: "知人の紹介", other: "その他" };
+    const stumbleLabels: Record<string, string> = { how: "やり方が分からない", motivation: "やる気が出ない", time: "時間がない" };
+    switch (action) {
+      case "consent": return value === "yes" ? "はい、始めます" : "あとで";
+      case "industry": return `業種: ${value ?? ""}`;
+      case "diagnosis": return `回答: ${value ?? ""}（${axis ? axisLabels[axis] ?? axis : ""}）`;
+      case "source_answer": return `流入元: ${value ? sourceLabels[value] ?? value : ""}`;
+      case "step_start": return "ステップを開始";
+      case "step_complete": return "ステップ完了";
+      case "step_stumble": return `つまずき: ${value ? stumbleLabels[value] ?? value : ""}`;
+      case "step_retry": return "もう一度挑戦";
+      case "step_skip": return "スキップして次へ";
+      case "step_pause": return "今日はここまで";
+      case "cta_response": return value === "interested" ? "詳しく聞く" : "今はいい";
+      case "reminder_resume": return "再開する";
+      case "reminder_pause": return "一時停止";
+      case "reminder_stop": return "配信停止";
+      default: return content;
+    }
+  } catch { return content; }
+}
+
 function formatDateLabel(timestamp: string): string {
   const d = new Date(timestamp);
   return `${d.getMonth() + 1}月${d.getDate()}日`;
@@ -210,7 +241,7 @@ export default function MessageList({ messages, isLoading = false }: MessageList
                     borderRadius: isAdmin ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
                   }}
                 >
-                  {msg.content}
+                  {formatPostbackDisplay(msg.content)}
                 </div>
               )}
 

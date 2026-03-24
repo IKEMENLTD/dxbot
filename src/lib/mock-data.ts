@@ -41,6 +41,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-1', 'tag-2', 'tag-6'],
   },
   {
@@ -68,6 +70,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-7'],
   },
   {
@@ -95,6 +99,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-5', 'tag-3'],
   },
   {
@@ -122,6 +128,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-1', 'tag-8', 'tag-2'],
   },
   {
@@ -149,6 +157,8 @@ export const mockUsers: User[] = [
     techstars_started_at: '2026-01-10T09:00:00Z',
     techstars_completed_at: '2026-03-10T09:00:00Z',
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-4', 'tag-9'],
   },
   {
@@ -176,6 +186,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-3'],
   },
   {
@@ -203,6 +215,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-9'],
   },
   {
@@ -230,6 +244,8 @@ export const mockUsers: User[] = [
     techstars_started_at: '2026-03-15T09:00:00Z',
     techstars_completed_at: null,
     paused_until: '2026-06-15T09:00:00Z',
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-5', 'tag-3'],
   },
   {
@@ -257,6 +273,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-1', 'tag-6', 'tag-2', 'tag-7'],
   },
   {
@@ -284,6 +302,8 @@ export const mockUsers: User[] = [
     techstars_started_at: null,
     techstars_completed_at: null,
     paused_until: null,
+    profile_picture_url: null,
+    status_message: null,
     tags: ['tag-4'],
   },
 ];

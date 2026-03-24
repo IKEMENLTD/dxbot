@@ -7,6 +7,7 @@ import { EXIT_CONFIG, STATUS_CONFIG } from "@/lib/types";
 import { mockTags } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
+import UserAvatar from "@/components/ui/UserAvatar";
 
 interface UserInfoPanelProps {
   user: User;
@@ -222,10 +223,12 @@ export default function UserInfoPanel({
 
       {/* Header */}
       <div className="px-5 pt-5 pb-4 flex flex-col items-center border-b border-[#E5E8EB]">
-        <div className="w-16 h-16 bg-gray-100 flex items-center justify-center mb-3" style={{ borderRadius: "50%" }}>
-          <span className="text-xl font-semibold text-gray-600">
-            {user.preferred_name.slice(0, 1)}
-          </span>
+        <div className="mb-3">
+          <UserAvatar
+            name={user.preferred_name}
+            pictureUrl={user.profile_picture_url}
+            size="lg"
+          />
         </div>
         <h3 className="text-lg font-bold text-gray-900">
           {user.preferred_name}

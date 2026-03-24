@@ -48,6 +48,8 @@ export interface User {
   techstars_started_at: string | null;
   techstars_completed_at: string | null;
   paused_until: string | null;
+  profile_picture_url: string | null;
+  status_message: string | null;
   tags?: string[]; // UserTag IDs
 }
 

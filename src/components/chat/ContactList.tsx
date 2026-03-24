@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import type { User, UserTag } from "@/lib/types";
 import type { ChatMessage, ContactPreview } from "@/lib/chat-types";
 import { mockTags } from "@/lib/mock-data";
+import UserAvatar from "@/components/ui/UserAvatar";
 
 interface ContactListProps {
   users: User[];
@@ -21,10 +22,6 @@ const TAG_COLOR_CLASSES: Record<UserTag["color"], { bg: string; text: string }> 
   orange: { bg: "bg-orange-50", text: "text-orange-700" },
   gray: { bg: "bg-gray-100", text: "text-gray-600" },
 };
-
-function getInitials(name: string): string {
-  return name.slice(0, 1);
-}
 
 function formatContactTime(timestamp: string): string {
   if (!timestamp) return "";
@@ -238,13 +235,13 @@ export default function ContactList({
                 isSelected ? "bg-green-50" : "hover:bg-gray-50 active:bg-gray-100"
               }`}
             >
-              {/* Initials */}
-              <div className="relative w-10 h-10 bg-gray-100 flex items-center justify-center flex-shrink-0"
-                style={{ borderRadius: "50%" }}
-              >
-                <span className="text-sm font-medium text-gray-600">
-                  {getInitials(contact.user.preferred_name)}
-                </span>
+              {/* Avatar */}
+              <div className="relative flex-shrink-0">
+                <UserAvatar
+                  name={contact.user.preferred_name}
+                  pictureUrl={contact.user.profile_picture_url}
+                  size="sm"
+                />
                 {contact.unreadCount > 0 && !isSelected && (
                   <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white"
                     style={{ borderRadius: "50%" }}

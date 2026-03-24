@@ -31,6 +31,8 @@ export interface Database {
           techstars_completed_at: string | null;
           paused_until: string | null;
           tracking_link_id: string | null;
+          profile_picture_url: string | null;
+          status_message: string | null;
         };
         Insert: {
           id?: string;
@@ -57,6 +59,8 @@ export interface Database {
           techstars_completed_at?: string | null;
           paused_until?: string | null;
           tracking_link_id?: string | null;
+          profile_picture_url?: string | null;
+          status_message?: string | null;
         };
         Update: {
           id?: string;
@@ -83,6 +87,8 @@ export interface Database {
           techstars_completed_at?: string | null;
           paused_until?: string | null;
           tracking_link_id?: string | null;
+          profile_picture_url?: string | null;
+          status_message?: string | null;
         };
         Relationships: [
           {
@@ -509,6 +515,8 @@ export interface Database {
           techstars_started_at: string | null;
           techstars_completed_at: string | null;
           paused_until: string | null;
+          profile_picture_url: string | null;
+          status_message: string | null;
         };
         Relationships: [];
       };

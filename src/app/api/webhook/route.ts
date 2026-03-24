@@ -5,7 +5,7 @@ import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, Postback
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
-import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus, updateUserLeadSource } from '@/lib/queries';
+import { saveMessage, updateUserLineUserId, updateUserProfile, updatePausedUntil, updateUserStatus, updateUserLeadSource } from '@/lib/queries';
 import {
   determineWeakAxis,
   getQuestionAsync,
@@ -239,6 +239,13 @@ async function handleFollow(event: FollowEvent): Promise<void> {
       await updateUserLineUserId(userId, userId);
     } catch (linkErr) {
       console.error('[Webhook] handleFollow line_user_id紐付けエラー（処理は続行）:', linkErr);
+    }
+
+    // プロフィール画像・ステータスメッセージを保存（エラーは吸収して処理を続行）
+    try {
+      await updateUserProfile(userId, profile.pictureUrl ?? null, profile.statusMessage ?? null);
+    } catch (profileErr) {
+      console.error('[Webhook] handleFollow プロフィール保存エラー（処理は続行）:', profileErr);
     }
 
     // Welcome + 流入元質問

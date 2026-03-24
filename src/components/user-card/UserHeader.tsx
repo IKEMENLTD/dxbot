@@ -3,6 +3,7 @@
 import type { User } from "@/lib/types";
 import { EXIT_CONFIG, STATUS_CONFIG, BADGE_CONFIG } from "@/lib/types";
 import { timeAgo } from "@/lib/utils";
+import UserAvatar from "@/components/ui/UserAvatar";
 
 interface UserHeaderProps {
   user: User;
@@ -17,10 +18,6 @@ const LEAD_SOURCE_LABEL: Record<string, string> = {
   other: "その他",
 };
 
-function getInitials(name: string): string {
-  return name.slice(0, 1);
-}
-
 export default function UserHeader({ user }: UserHeaderProps) {
   const exitConfig = EXIT_CONFIG[user.recommended_exit];
   const statusConfig = STATUS_CONFIG[user.customer_status];
@@ -31,10 +28,12 @@ export default function UserHeader({ user }: UserHeaderProps) {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         {/* Left: Avatar + Name / Company / Industry */}
         <div className="flex items-start gap-4">
-          {/* Initial avatar */}
-          <div className="flex items-center justify-center w-14 h-14 bg-gray-100 text-gray-600 rounded-full text-xl font-bold shrink-0">
-            {getInitials(user.preferred_name)}
-          </div>
+          {/* Avatar */}
+          <UserAvatar
+            name={user.preferred_name}
+            pictureUrl={user.profile_picture_url}
+            size="lg"
+          />
 
           <div>
             <h2 className="text-xl font-bold text-gray-900">

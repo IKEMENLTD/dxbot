@@ -6,6 +6,7 @@ import type { User, LeadSource } from "@/lib/types";
 import { timeAgo } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import ExitBadge from "@/components/ui/ExitBadge";
+import UserAvatar from "@/components/ui/UserAvatar";
 
 type SortKey = "score" | "level" | "last_action_at" | "preferred_name";
 type SortDir = "asc" | "desc";
@@ -171,9 +172,14 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                   onMouseEnter={() => setHoveredRow(user.id)}
                   onMouseLeave={() => setHoveredRow(null)}
                 >
-                  {/* Name + company + status dot */}
+                  {/* Name + company + avatar */}
                   <td className="px-5 py-3.5">
-                    <Link href={`/admindashboard/users/${user.id}`} className="block">
+                    <Link href={`/admindashboard/users/${user.id}`} className="flex items-center gap-3">
+                      <UserAvatar
+                        name={user.preferred_name}
+                        pictureUrl={user.profile_picture_url}
+                        size="md"
+                      />
                       <div className="min-w-0">
                         <div className="text-gray-900 font-medium text-sm truncate hover:text-gray-600 transition-colors">
                           {user.preferred_name}

@@ -890,6 +890,39 @@ export async function updateUserLineUserId(
   }
 }
 
+/** usersテーブルのプロフィール画像URLとステータスメッセージを更新 */
+export async function updateUserProfile(
+  userId: string,
+  pictureUrl: string | null,
+  statusMessage: string | null
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        profile_picture_url: pictureUrl ?? null,
+        status_message: statusMessage ?? null,
+      })
+      .eq('line_user_id', userId);
+
+    if (error) {
+      console.error('[updateUserProfile] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'プロフィール更新中に不明なエラーが発生しました';
+    console.error('[updateUserProfile] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Reminder (リマインダー)
 // ---------------------------------------------------------------------------

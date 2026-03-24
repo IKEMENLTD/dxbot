@@ -43,7 +43,9 @@ CREATE TABLE IF NOT EXISTS users (
   techstars_started_at TIMESTAMPTZ,
   techstars_completed_at TIMESTAMPTZ,
   paused_until TIMESTAMPTZ,
-  line_user_id TEXT
+  line_user_id TEXT,
+  profile_picture_url TEXT,
+  status_message TEXT
 );
 
 CREATE INDEX idx_users_score ON users (score DESC);

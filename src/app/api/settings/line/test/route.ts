@@ -100,17 +100,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
       const data = (await res.json()) as LineBotInfo;
 
       // テスト成功時、DB上のline_configのverifiedとbotNameを更新
+      // existingがない場合も新規レコードとして保存（トークンは含めず検証情報のみ）
       try {
         const existing = await getAppSetting<EncryptedLineConfig>('line_config');
-        if (existing && typeof existing === 'object') {
-          const updated: Record<string, unknown> = {
-            ...existing,
-            verified: true,
-            botName: data.displayName,
-            botBasicId: data.basicId ?? null,
-          };
-          await setAppSetting('line_config', updated);
-        }
+        const baseConfig: EncryptedLineConfig = (existing && typeof existing === 'object')
+          ? existing
+          : {};
+        const updated: Record<string, unknown> = {
+          ...baseConfig,
+          verified: true,
+          botName: data.displayName,
+          botBasicId: data.basicId ?? null,
+        };
+        await setAppSetting('line_config', updated);
       } catch (updateErr) {
         console.error('[LINE Test] DB更新エラー（テスト結果は返す）:', updateErr);
       }

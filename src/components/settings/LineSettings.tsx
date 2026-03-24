@@ -336,21 +336,26 @@ export default function LineSettings() {
 
   // 保存処理: POST /api/settings/line で暗号化保存
   const handleSave = useCallback(async () => {
-    if (!tokenInput.trim() || !secretInput.trim()) return;
+    // 未設定時は両方必須、設定済み時はどちらか片方でOK
+    const hasToken = tokenInput.trim().length > 0;
+    const hasSecret = secretInput.trim().length > 0;
+    if (!configState.configured && (!hasToken || !hasSecret)) return;
+    if (configState.configured && !hasToken && !hasSecret) return;
 
     setSaving(true);
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000);
 
+      // 入力された値のみ送信（片方だけの変更に対応）
+      const payload: Record<string, string> = { webhookUrl: getWebhookUrl() };
+      if (hasToken) payload.channelAccessToken = tokenInput.trim();
+      if (hasSecret) payload.channelSecret = secretInput.trim();
+
       const res = await fetch("/api/settings/line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channelAccessToken: tokenInput.trim(),
-          channelSecret: secretInput.trim(),
-          webhookUrl: getWebhookUrl(),
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
 
@@ -381,7 +386,7 @@ export default function LineSettings() {
     } finally {
       setSaving(false);
     }
-  }, [tokenInput, secretInput]);
+  }, [tokenInput, secretInput, configState.configured]);
 
   // 接続テスト: POST /api/settings/line/test
   const handleTest = useCallback(async () => {
@@ -524,7 +529,10 @@ export default function LineSettings() {
     }
   }, []);
 
-  const canSave = tokenInput.trim().length > 0 && secretInput.trim().length > 0;
+  // 未設定時: 両方必須 / 設定済み時: どちらか片方でもOK
+  const canSave = configState.configured
+    ? (tokenInput.trim().length > 0 || secretInput.trim().length > 0)
+    : (tokenInput.trim().length > 0 && secretInput.trim().length > 0);
   const canTest = configState.configured || tokenInput.trim().length > 0;
 
   if (loading) {

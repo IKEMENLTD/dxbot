@@ -15,10 +15,10 @@ interface EncryptedLineConfig {
   verified?: boolean;
 }
 
-/** POST リクエストボディの型 */
+/** POST リクエストボディの型（片方だけの更新もサポート） */
 interface SaveLineConfigBody {
-  channelAccessToken: string;
-  channelSecret: string;
+  channelAccessToken?: string;
+  channelSecret?: string;
   webhookUrl?: string;
 }
 
@@ -123,40 +123,55 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: unknown = await request.json();
 
-    // バリデーション
-    if (
-      typeof body !== 'object' ||
-      body === null ||
-      !('channelAccessToken' in body) ||
-      !('channelSecret' in body) ||
-      typeof (body as Record<string, unknown>).channelAccessToken !== 'string' ||
-      typeof (body as Record<string, unknown>).channelSecret !== 'string'
-    ) {
+    // バリデーション: bodyがオブジェクトであること
+    if (typeof body !== 'object' || body === null) {
       return NextResponse.json(
-        { success: false, error: 'チャネルアクセストークンとチャネルシークレットが必要です' },
+        { success: false, error: 'リクエストボディが不正です' },
         { status: 400 }
       );
     }
 
-    const { channelAccessToken, channelSecret } = body as SaveLineConfigBody;
-    const webhookUrl = typeof (body as Record<string, unknown>).webhookUrl === 'string'
-      ? (body as SaveLineConfigBody).webhookUrl
+    const rawBody = body as Record<string, unknown>;
+    const channelAccessToken = typeof rawBody.channelAccessToken === 'string'
+      ? rawBody.channelAccessToken.trim()
+      : undefined;
+    const channelSecret = typeof rawBody.channelSecret === 'string'
+      ? rawBody.channelSecret.trim()
+      : undefined;
+    const webhookUrl = typeof rawBody.webhookUrl === 'string'
+      ? rawBody.webhookUrl
       : undefined;
 
-    if (!channelAccessToken.trim() || !channelSecret.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'トークンとシークレットは空にできません' },
-        { status: 400 }
-      );
-    }
-
-    // 暗号化
-    const encryptedAccessToken = encrypt(channelAccessToken.trim());
-    const encryptedSecret = encrypt(channelSecret.trim());
-
-    // 既存の設定を取得してマージ（botName, verifiedを保持）
+    // 既存設定を取得
     const existing = await getAppSetting<EncryptedLineConfig>('line_config');
     const existingConfig: EncryptedLineConfig = (existing && typeof existing === 'object') ? existing : {};
+    const isNewSetup = !existingConfig.encryptedAccessToken && !existingConfig.encryptedSecret;
+
+    // 新規設定時は両方必須
+    if (isNewSetup) {
+      if (!channelAccessToken || !channelSecret) {
+        return NextResponse.json(
+          { success: false, error: 'チャネルアクセストークンとチャネルシークレットが必要です' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // 設定済み時は少なくとも片方必要
+      if (!channelAccessToken && !channelSecret) {
+        return NextResponse.json(
+          { success: false, error: 'トークンまたはシークレットのいずれかを入力してください' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 暗号化（送信された値のみ更新、送信されなかった方は既存値を維持）
+    const encryptedAccessToken = channelAccessToken
+      ? encrypt(channelAccessToken)
+      : existingConfig.encryptedAccessToken;
+    const encryptedSecret = channelSecret
+      ? encrypt(channelSecret)
+      : existingConfig.encryptedSecret;
 
     const newConfig: Record<string, unknown> = {
       ...existingConfig,
@@ -184,10 +199,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // マスク値を返す（更新された方は新しい値、維持された方は復号してマスク）
+    let maskedAccessTokenResult: string | undefined;
+    let maskedSecretResult: string | undefined;
+
+    if (channelAccessToken) {
+      maskedAccessTokenResult = maskValue(channelAccessToken);
+    } else if (existingConfig.encryptedAccessToken) {
+      try {
+        maskedAccessTokenResult = maskValue(decrypt(existingConfig.encryptedAccessToken));
+      } catch {
+        maskedAccessTokenResult = '****（既存値）';
+      }
+    }
+
+    if (channelSecret) {
+      maskedSecretResult = maskValue(channelSecret);
+    } else if (existingConfig.encryptedSecret) {
+      try {
+        maskedSecretResult = maskValue(decrypt(existingConfig.encryptedSecret));
+      } catch {
+        maskedSecretResult = '****（既存値）';
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      maskedAccessToken: maskValue(channelAccessToken.trim()),
-      maskedSecret: maskValue(channelSecret.trim()),
+      maskedAccessToken: maskedAccessTokenResult,
+      maskedSecret: maskedSecretResult,
     });
   } catch (err) {
     console.error('[API settings/line POST] エラー:', err instanceof Error ? err.message : err);

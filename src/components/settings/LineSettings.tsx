@@ -118,21 +118,21 @@ function StatusBadge({ config }: { config: LineConfigState }) {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
           <span className="w-2 h-2 rounded-full bg-gray-400" />
-          未設定
+          LINE未連携
         </span>
       );
     case "unverified":
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-600">
           <span className="w-2 h-2 rounded-full bg-orange-400" />
-          未検証
+          認証情報保存済み（未検証）
         </span>
       );
     case "connected":
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
           <span className="w-2 h-2 rounded-full bg-green-500" />
-          接続中 {config.botName ? `- ${config.botName}` : ""}
+          LINE連携中{config.botName ? `: ${config.botName}` : ""}
         </span>
       );
   }
@@ -291,6 +291,8 @@ export default function LineSettings() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectSuccess, setDisconnectSuccess] = useState(false);
 
   // 初期ロード: GET /api/settings/line からマスク値を取得
   useEffect(() => {
@@ -472,6 +474,55 @@ export default function LineSettings() {
       setTimeout(() => setFriendUrlCopied(false), 2000);
     }
   }, [configState.friendUrl]);
+
+  // 連携解除: DELETE /api/settings/line
+  const handleDisconnect = useCallback(async () => {
+    const confirmed = window.confirm(
+      "LINE連携を解除しますか？BOTが停止します。"
+    );
+    if (!confirmed) return;
+
+    setDisconnecting(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const res = await fetch("/api/settings/line", {
+        method: "DELETE",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const data = (await res.json()) as { success: boolean; error?: string };
+
+      if (data.success) {
+        // 状態を初期化
+        setConfigState({
+          configured: false,
+          maskedAccessToken: null,
+          maskedSecret: null,
+          webhookUrl: null,
+          botName: null,
+          verified: false,
+          friendUrl: null,
+        });
+        setTokenInput("");
+        setSecretInput("");
+        setTestResult(null);
+        setStep1Done(false);
+        setStep2Done(false);
+        setDisconnectSuccess(true);
+        setTimeout(() => setDisconnectSuccess(false), 3000);
+      } else {
+        setLoadError(data.error ?? "LINE連携の解除に失敗しました");
+      }
+    } catch {
+      setLoadError("LINE連携の解除に失敗しました");
+    } finally {
+      setDisconnecting(false);
+    }
+  }, []);
 
   const canSave = tokenInput.trim().length > 0 && secretInput.trim().length > 0;
   const canTest = configState.configured || tokenInput.trim().length > 0;
@@ -763,6 +814,30 @@ export default function LineSettings() {
           )}
         </div>
       </StepCard>
+
+      {/* 連携解除セクション */}
+      {configState.configured && (
+        <div className="bg-white rounded-xl border border-red-200 p-5">
+          <h3 className="text-sm font-semibold text-red-700 mb-2">LINE連携の解除</h3>
+          <p className="text-xs text-gray-500 mb-4">
+            LINE連携を解除すると、BOTが停止し、ユーザーへの自動応答が行われなくなります。
+            解除後も再度設定することで復旧できます。
+          </p>
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="bg-red-600 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {disconnecting ? "解除中..." : "LINE連携を解除"}
+          </button>
+          {disconnectSuccess && (
+            <span className="ml-3 text-sm text-red-600">
+              LINE連携を解除しました
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

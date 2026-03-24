@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
-import { getAppSetting, setAppSetting } from '@/lib/queries';
+import { getAppSetting, setAppSetting, deleteAppSetting } from '@/lib/queries';
 import { encrypt, decrypt } from '@/lib/crypto';
 
 /** DB上の暗号化済みLINE設定の型 */
@@ -193,6 +193,40 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     console.error('[API settings/line POST] エラー:', err instanceof Error ? err.message : err);
     return NextResponse.json(
       { success: false, error: 'LINE設定の保存に失敗しました' },
+      { status: 500 }
+    );
+  }
+}
+
+/** DELETE レスポンスの型 */
+interface DeleteLineConfigResponse {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * DELETE /api/settings/line
+ * LINE連携を解除する（app_settings の line_config を削除）
+ */
+export async function DELETE(): Promise<NextResponse<DeleteLineConfigResponse>> {
+  const authError = await requireAuth();
+  if (authError) return authError as NextResponse<DeleteLineConfigResponse>;
+
+  try {
+    const result = await deleteAppSetting('line_config');
+
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, error: result.error ?? 'LINE設定の削除に失敗しました' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[API settings/line DELETE] エラー:', err instanceof Error ? err.message : err);
+    return NextResponse.json(
+      { success: false, error: 'LINE連携の解除に失敗しました' },
       { status: 500 }
     );
   }

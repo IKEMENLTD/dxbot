@@ -18,7 +18,7 @@ interface EncryptedLineConfig {
 
 /**
  * DB（app_settings.line_config）から暗号化されたアクセストークンを取得し復号する。
- * 取得できない場合は環境変数にフォールバック。
+ * DB未設定時は null を返す（環境変数は使用しない）。
  */
 export async function getChannelAccessTokenAsync(): Promise<string | null> {
   try {
@@ -27,14 +27,14 @@ export async function getChannelAccessTokenAsync(): Promise<string | null> {
       return decrypt(config.encryptedAccessToken);
     }
   } catch (err) {
-    console.error('[LINE] DB からアクセストークン取得失敗。環境変数にフォールバック:', err instanceof Error ? err.message : err);
+    console.error('[LINE] DB からアクセストークン取得失敗:', err instanceof Error ? err.message : err);
   }
-  return process.env.LINE_CHANNEL_ACCESS_TOKEN || null;
+  return null;
 }
 
 /**
  * DB（app_settings.line_config）から暗号化されたチャネルシークレットを取得し復号する。
- * 取得できない場合は環境変数にフォールバック。
+ * DB未設定時は null を返す（環境変数は使用しない）。
  */
 export async function getChannelSecretAsync(): Promise<string | null> {
   try {
@@ -43,9 +43,9 @@ export async function getChannelSecretAsync(): Promise<string | null> {
       return decrypt(config.encryptedSecret);
     }
   } catch (err) {
-    console.error('[LINE] DB からチャネルシークレット取得失敗。環境変数にフォールバック:', err instanceof Error ? err.message : err);
+    console.error('[LINE] DB からチャネルシークレット取得失敗:', err instanceof Error ? err.message : err);
   }
-  return process.env.LINE_CHANNEL_SECRET || null;
+  return null;
 }
 
 /**

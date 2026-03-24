@@ -29,6 +29,9 @@ export default function Timeline({ events }: TimelineProps) {
         タイムライン
       </h3>
       <div className="space-y-0">
+        {events.length === 0 && (
+          <p className="text-sm text-gray-400 py-4">タイムラインはまだありません</p>
+        )}
         {events.map((event) => (
           <div key={event.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
             <span className="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-2 py-0.5 shrink-0 w-16 text-center">

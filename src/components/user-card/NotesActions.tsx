@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { User, CustomerStatus } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
@@ -29,6 +29,11 @@ export default function NotesActions({ user, onUserUpdated }: NotesActionsProps)
   const [noteText, setNoteText] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<CustomerStatus>(user.customer_status);
   const { addToast } = useToast();
+
+  // 外部からuserが更新された場合にselectを同期
+  useEffect(() => {
+    setSelectedStatus(user.customer_status as CustomerStatus);
+  }, [user.customer_status]);
 
   // 処理中フラグ
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -241,8 +246,12 @@ export default function NotesActions({ user, onUserUpdated }: NotesActionsProps)
           value={noteText}
           onChange={(e) => setNoteText(e.target.value)}
           placeholder="メモを入力..."
+          maxLength={2000}
           className="w-full h-24 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 transition-all"
         />
+        <p className="text-xs text-gray-400 text-right mt-1">
+          {noteText.length} / 2000
+        </p>
       </div>
 
       {/* Save button */}

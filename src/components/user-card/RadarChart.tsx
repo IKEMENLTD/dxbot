@@ -31,7 +31,10 @@ const AXIS_LABELS: Record<string, string> = {
 };
 
 export default function RadarChartComponent({ scores, prevScores }: RadarChartProps) {
-  if (!scores) return <p className="text-center text-gray-400 text-sm py-8">スコアデータがありません</p>;
+  const allZero = scores && Object.values(scores).every((v) => v === 0);
+  if (!scores || allZero) {
+    return <p className="text-center text-gray-400 text-sm py-8">診断結果がまだありません</p>;
+  }
 
   const data: RadarDataPoint[] = (Object.keys(AXIS_LABELS) as Array<keyof AxisScores>).map((key) => {
     const point: RadarDataPoint = {

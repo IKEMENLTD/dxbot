@@ -5,6 +5,7 @@ import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, Postback
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile, showLoadingAnimation } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
+import { getSupabaseServer } from '@/lib/supabase';
 import { saveMessage, updateUserLineUserId, updateUserProfile, updatePausedUntil, updateUserStatus, updateUserLeadSource } from '@/lib/queries';
 import {
   determineWeakAxis,
@@ -571,6 +572,16 @@ async function handleIndustrySelect(
     state: { phase: 'diagnosis', questionIndex: 1, scores: {} },
   });
 
+  // usersテーブルのindustryも更新
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      await supabase.from('users').update({ industry }).eq('id', userId);
+    } catch (err) {
+      console.error('[Webhook] users テーブル industry 更新エラー:', err);
+    }
+  }
+
   // 確認フィードバック + Q2を送信
   const confirmMsg = industryConfirmMessage(industry);
   const q2 = await getQuestionAsync(1);
@@ -657,6 +668,22 @@ async function completeDiagnosis(
   const stepMsg = stepStartMessage(firstStepName);
 
   await replyAndSave(userId, replyToken, [resultMsg, stepMsg]);
+
+  // usersテーブルに診断結果を保存
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      const totalScore = scores.a1 + scores.a2 + scores.b + scores.c + scores.d;
+      await supabase.from('users').update({
+        axis_scores: scores,
+        weak_axis: weakAxis,
+        score: totalScore,
+        industry: industry ?? undefined,
+      }).eq('id', userId);
+    } catch (err) {
+      console.error('[Webhook] users テーブル診断結果保存エラー:', err);
+    }
+  }
 
   // step_readyフェーズへ（スタートボタン待ち）
   await setState(userId, {

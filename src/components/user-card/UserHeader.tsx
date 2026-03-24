@@ -39,9 +39,12 @@ export default function UserHeader({ user }: UserHeaderProps) {
             <h2 className="text-xl font-bold text-gray-900">
               {user.preferred_name}
             </h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {user.company_name} / {user.industry}
-            </p>
+            {(() => {
+              const companyIndustry = [user.company_name, user.industry].filter(Boolean).join(' / ');
+              return companyIndustry ? (
+                <p className="text-sm text-gray-500 mt-0.5">{companyIndustry}</p>
+              ) : null;
+            })()}
             {user.last_completed_step && (
               <p className="text-xs text-gray-400 mt-1.5">
                 最終ステップ: {user.last_completed_step}
@@ -86,7 +89,7 @@ export default function UserHeader({ user }: UserHeaderProps) {
 
           {/* Steps completed */}
           <span className="text-xs text-gray-400">
-            {user.steps_completed} steps
+            {user.steps_completed} ステップ完了
           </span>
         </div>
       </div>

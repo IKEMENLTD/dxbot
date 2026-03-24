@@ -76,11 +76,6 @@ export const DEFAULT_CTA_CONFIG: CtaConfig = {
 // 補助金申請時期判定
 // ---------------------------------------------------------------------------
 
-function isSubsidyPeriod(): boolean {
-  const month = new Date().getMonth() + 1;
-  return (month >= 1 && month <= 3) || (month >= 6 && month <= 8);
-}
-
 function isSubsidyPeriodWithConfig(subsidyMonths: number[]): boolean {
   const month = new Date().getMonth() + 1;
   return subsidyMonths.includes(month);

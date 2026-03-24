@@ -44,7 +44,7 @@ describe('pushMessage', () => {
 
     expect(result.success).toBe(false);
     expect(result.mock).toBe(false);
-    expect(result.error).toContain('LINE_CHANNEL_ACCESS_TOKEN');
+    expect(result.error).toContain('アクセストークン');
     consoleSpy.mockRestore();
   });
 

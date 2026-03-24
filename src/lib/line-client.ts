@@ -131,6 +131,39 @@ export interface PushMessageResult {
 }
 
 /**
+ * LINE Loading Animation API
+ * ユーザーにローディングスピナーを表示する（最大60秒、返信で自動解除）
+ */
+export async function showLoadingAnimation(chatId: string): Promise<void> {
+  const token = await getChannelAccessTokenAsync();
+  if (!token) {
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    await fetch(`${LINE_API_BASE}/bot/chat/loading`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        chatId,
+        loadingSeconds: 20,
+      }),
+      signal: controller.signal,
+    });
+  } catch {
+    // ローディング表示失敗はBOT処理を止めない
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * LINE Push Message API
  * 成功/失敗を判定できるよう PushMessageResult を返す
  */

@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, PostbackEvent, LineMessage } from '@/lib/line-types';
 import type { AxisScores, StumbleType } from '@/lib/types';
-import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile } from '@/lib/line-client';
+import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile, showLoadingAnimation } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
 import { saveMessage, updateUserLineUserId, updateUserProfile, updatePausedUntil, updateUserStatus, updateUserLeadSource } from '@/lib/queries';
 import {
@@ -153,6 +153,12 @@ async function processEvents(events: WebhookEvent[]): Promise<void> {
  * イベントタイプ別処理
  */
 async function handleEvent(event: WebhookEvent): Promise<void> {
+  // ユーザーにローディングアニメーションを表示（BOT処理中の演出）
+  const userId = event.source?.userId;
+  if (userId) {
+    showLoadingAnimation(userId).catch(() => {});
+  }
+
   switch (event.type) {
     case 'follow':
       await handleFollow(event);

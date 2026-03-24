@@ -162,14 +162,17 @@ export async function setState(lineUserId: string, update: Partial<UserConversat
  * 新しいユーザーを作成
  */
 export async function createUser(lineUserId: string, profile: LineProfile): Promise<UserConversation> {
+  const now = new Date().toISOString();
+  const displayName = profile.displayName || 'LINE User';
+
   const conversation: UserConversation = {
     lineUserId,
-    userId: null,
+    userId: lineUserId,
     state: { phase: 'idle' },
-    preferredName: profile.displayName || null,
+    preferredName: displayName,
     industry: null,
     leadSource: null,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
   };
 
   conversationStore.set(lineUserId, conversation);
@@ -179,20 +182,42 @@ export async function createUser(lineUserId: string, profile: LineProfile): Prom
   const supabase = getSupabaseServer();
   if (supabase) {
     try {
+      // usersテーブルにレコードを作成（chat_messagesの外部キー制約を満たすため必須）
+      await supabase
+        .from('users')
+        .upsert(
+          {
+            id: lineUserId,
+            preferred_name: displayName,
+            company_name: '',
+            industry: '',
+            line_user_id: lineUserId,
+            profile_picture_url: profile.pictureUrl ?? null,
+            status_message: profile.statusMessage ?? null,
+            created_at: now,
+            updated_at: now,
+          },
+          { onConflict: 'id' }
+        );
+    } catch (err) {
+      console.error('[ConversationState] Supabase createUser usersテーブル作成エラー:', err);
+    }
+
+    try {
       await supabase
         .from('conversation_states')
         .upsert({
           line_user_id: lineUserId,
-          user_id: conversation.userId,
+          user_id: lineUserId,
           state: conversation.state,
           preferred_name: conversation.preferredName,
           industry: conversation.industry,
           lead_source: conversation.leadSource,
           created_at: conversation.createdAt,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         });
     } catch (err) {
-      console.error('[ConversationState] Supabase createUser エラー:', err);
+      console.error('[ConversationState] Supabase createUser conversation_statesエラー:', err);
     }
   }
 

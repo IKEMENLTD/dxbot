@@ -36,7 +36,6 @@ export interface ChatMessageRow {
   sender: 'user' | 'admin';
   content: string;
   media_attachments: MediaAttachment[];
-  read: boolean;
   direction: MessageDirection;
   line_user_id: string | null;
   line_message_id: string | null;
@@ -64,7 +63,7 @@ export function toClientMessage(row: ChatMessageRow): ChatMessage {
     sender: row.direction === 'inbound' ? 'user' : 'admin',
     content: row.content,
     timestamp: row.sent_at,
-    read: row.read,
+    read: row.read_at !== null,
     media: row.media_attachments.length > 0 ? row.media_attachments : undefined,
   };
 }

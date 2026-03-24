@@ -730,10 +730,10 @@ export async function markAsRead(
     const now = new Date().toISOString();
     const { error } = await supabase
       .from('chat_messages')
-      .update({ read: true, read_at: now })
+      .update({ read_at: now })
       .eq('user_id', userId)
       .eq('sender', 'user')
-      .eq('read', false);
+      .is('read_at', null);
 
     if (error) {
       console.error('[markAsRead] Supabase error:', error.message);
@@ -806,7 +806,7 @@ export async function getUnreadCounts(
       .select('user_id')
       .in('user_id', userIds)
       .eq('sender', 'user')
-      .eq('read', false);
+      .is('read_at', null);
 
     if (error) {
       console.error('[getUnreadCounts] Supabase error:', error.message);
@@ -1091,7 +1091,7 @@ export async function getUnreadCount(
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('sender', 'user')
-      .eq('read', false);
+      .is('read_at', null);
 
     if (error) {
       console.error('[getUnreadCount] Supabase error:', error.message);

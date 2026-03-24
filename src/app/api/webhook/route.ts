@@ -204,8 +204,81 @@ async function saveInboundMessage(event: TextMessageEvent): Promise<void> {
   }
 }
 
+/** postback dataを人間が読めるテキストに変換 */
+function formatPostbackContent(data: string): string {
+  const params = new URLSearchParams(data);
+  const action = params.get('action');
+  const value = params.get('value');
+  const axis = params.get('axis');
+
+  switch (action) {
+    case 'consent':
+      return value === 'yes' ? 'はい、始めます' : 'あとで';
+    case 'industry':
+      return `業種: ${value ?? ''}`;
+    case 'diagnosis':
+      return `回答: ${value ?? ''}（${getAxisLabel(axis)}）`;
+    case 'source_answer':
+      return `流入元: ${getSourceLabel(value)}`;
+    case 'step_start':
+      return 'ステップを開始';
+    case 'step_complete':
+      return 'ステップ完了';
+    case 'step_stumble':
+      return `つまずき: ${getStumbleLabel(value)}`;
+    case 'step_retry':
+      return 'もう一度挑戦';
+    case 'step_skip':
+      return 'スキップして次へ';
+    case 'step_pause':
+      return '今日はここまで';
+    case 'cta_response':
+      return value === 'interested' ? '詳しく聞く' : '今はいい';
+    case 'reminder_resume':
+      return '再開する';
+    case 'reminder_pause':
+      return '一時停止';
+    case 'reminder_stop':
+      return '配信停止';
+    default:
+      return data;
+  }
+}
+
+function getAxisLabel(axis: string | null): string {
+  const labels: Record<string, string> = {
+    a1: '売上・請求管理',
+    a2: '連絡・記録管理',
+    b: '繰り返し作業',
+    c: 'データ経営',
+    d: 'ツール活用',
+  };
+  return axis ? (labels[axis] ?? axis) : '';
+}
+
+function getSourceLabel(value: string | null): string {
+  const labels: Record<string, string> = {
+    apo: '営業の紹介',
+    threads: 'Threads',
+    x: 'X',
+    instagram: 'Instagram',
+    referral: '知人の紹介',
+    other: 'その他',
+  };
+  return value ? (labels[value] ?? value) : '';
+}
+
+function getStumbleLabel(value: string | null): string {
+  const labels: Record<string, string> = {
+    how: 'やり方が分からない',
+    motivation: 'やる気が出ない',
+    time: '時間がない',
+  };
+  return value ? (labels[value] ?? value) : '';
+}
+
 /**
- * 受信postbackをDBに保存
+ * 受信postbackをDBに保存（人間が読める形に変換）
  */
 async function savePostbackMessage(event: PostbackEvent): Promise<void> {
   try {
@@ -213,12 +286,13 @@ async function savePostbackMessage(event: PostbackEvent): Promise<void> {
     if (!lineUserId) return;
 
     const userId = lineUserId;
+    const content = formatPostbackContent(event.postback.data);
 
     await saveMessage({
       userId,
       lineUserId,
       direction: 'inbound',
-      content: event.postback.data,
+      content,
       messageType: 'postback',
     });
   } catch (err) {

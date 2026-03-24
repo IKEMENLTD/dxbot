@@ -3,17 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/contexts/ToastContext";
 import type { AxisScores } from "@/lib/types";
-
-// ===== 型定義（step-master.tsのStepDefinitionと同一構造） =====
-
-interface StepDefinition {
-  id: string;
-  name: string;
-  description: string;
-  axis: keyof AxisScores;
-  difficulty: 1 | 2 | 3;
-  estimatedMinutes: number;
-}
+import type { StepDefinition } from "@/lib/step-master";
+import StepDetailModal from "./StepDetailModal";
 
 // ===== 定数 =====
 
@@ -30,11 +21,11 @@ const AXIS_LABELS: Record<keyof AxisScores, string> = {
 
 const AXIS_ORDER: (keyof AxisScores)[] = ["a1", "a2", "b", "c", "d"];
 
-const DIFFICULTY_OPTIONS: { value: 1 | 2 | 3; label: string }[] = [
-  { value: 1, label: "1 (易)" },
-  { value: 2, label: "2 (中)" },
-  { value: 3, label: "3 (難)" },
-];
+const DIFFICULTY_LABELS: Record<1 | 2 | 3, string> = {
+  1: "1 (易)",
+  2: "2 (中)",
+  3: "3 (難)",
+};
 
 // ===== ヘルパー =====
 
@@ -63,6 +54,7 @@ export default function StepSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [editingStep, setEditingStep] = useState<StepDefinition | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -82,7 +74,6 @@ export default function StepSettings() {
         if (json.data && Array.isArray(json.data) && json.data.length > 0) {
           setSteps(json.data);
         } else {
-          // DBになければstep-masterのデフォルトをdynamic importで読み込み
           const mod = await import("@/lib/step-master");
           setSteps(mod.getAllSteps());
         }
@@ -92,7 +83,6 @@ export default function StepSettings() {
           console.error("[StepSettings] 読み込みエラー:", err);
           addToast("error", "ステップ設定の読み込みに失敗しました");
         }
-        // エラー時もデフォルトをフォールバック
         import("@/lib/step-master").then((mod) => {
           setSteps(mod.getAllSteps());
         }).catch(() => {
@@ -110,23 +100,12 @@ export default function StepSettings() {
     };
   }, [addToast]);
 
-  // ----- フィールド変更 -----
-  const updateStep = useCallback(
-    (stepId: string, field: keyof StepDefinition, value: string | number) => {
-      setSteps((prev) =>
-        prev.map((s) => {
-          if (s.id !== stepId) return s;
-          if (field === "name") return { ...s, name: value as string };
-          if (field === "description") return { ...s, description: value as string };
-          if (field === "difficulty") return { ...s, difficulty: value as 1 | 2 | 3 };
-          if (field === "estimatedMinutes") return { ...s, estimatedMinutes: value as number };
-          return s;
-        })
-      );
-      setHasChanges(true);
-    },
-    []
-  );
+  // ----- モーダルからの保存コールバック -----
+  const handleStepDetailSave = useCallback((updated: StepDefinition) => {
+    setSteps((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setEditingStep(null);
+    setHasChanges(true);
+  }, []);
 
   // ----- 一括保存 -----
   const handleSave = useCallback(async () => {
@@ -140,6 +119,13 @@ export default function StepSettings() {
       return;
     }
 
+    // actionItems/recommendedTools の空文字を自動フィルタ
+    const cleanedSteps = steps.map((s) => ({
+      ...s,
+      actionItems: s.actionItems.filter((item) => item.trim() !== ""),
+      recommendedTools: s.recommendedTools.filter((tool) => tool.trim() !== ""),
+    }));
+
     setSaving(true);
 
     const controller = new AbortController();
@@ -149,7 +135,7 @@ export default function StepSettings() {
       const res = await fetch("/api/settings/app", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: "steps", value: steps }),
+        body: JSON.stringify({ key: "steps", value: cleanedSteps }),
         signal: controller.signal,
       });
 
@@ -158,6 +144,7 @@ export default function StepSettings() {
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
 
+      setSteps(cleanedSteps);
       setHasChanges(false);
       addToast("success", "ステップ設定を保存しました");
     } catch (err) {
@@ -200,161 +187,151 @@ export default function StepSettings() {
   const grouped = groupByAxis(steps);
 
   return (
-    <div>
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-sm font-medium text-gray-700">
-            ステップ管理（全{steps.length}件）
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            各ステップの名前・説明・難易度・所要時間を編集できます
-          </p>
+    <>
+      <div>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-medium text-gray-700">
+              ステップ管理（全{steps.length}件）
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              行をクリックして詳細を編集できます
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              disabled={saving}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            >
+              デフォルトに戻す
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !hasChanges}
+              className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  保存中...
+                </>
+              ) : (
+                "一括保存"
+              )}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleResetToDefault}
-            disabled={saving}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-          >
-            デフォルトに戻す
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                </svg>
-                保存中...
-              </>
-            ) : (
-              "一括保存"
-            )}
-          </button>
-        </div>
-      </div>
 
-      {/* 変更通知 */}
-      {hasChanges && (
-        <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
-          未保存の変更があります
-        </div>
-      )}
+        {/* 変更通知 */}
+        {hasChanges && (
+          <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-700">
+            未保存の変更があります
+          </div>
+        )}
 
-      {/* 軸ごとのグループテーブル */}
-      <div className="space-y-6">
-        {AXIS_ORDER.map((axis) => {
-          const axisSteps = grouped[axis];
-          if (axisSteps.length === 0) return null;
+        {/* 軸ごとのグループテーブル */}
+        <div className="space-y-6">
+          {AXIS_ORDER.map((axis) => {
+            const axisSteps = grouped[axis];
+            if (axisSteps.length === 0) return null;
 
-          return (
-            <div key={axis}>
-              <h3 className="text-xs font-medium text-gray-600 mb-2 px-1">
-                {AXIS_LABELS[axis]}
-              </h3>
-              <div className="overflow-hidden rounded-xl border border-gray-200">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 text-left">
-                      <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-16">ID</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-40">名前</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-gray-500">説明</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-24">難易度</th>
-                      <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-24">所要時間</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {axisSteps.map((step) => (
-                      <StepRow
-                        key={step.id}
-                        step={step}
-                        onUpdate={updateStep}
-                      />
-                    ))}
-                  </tbody>
-                </table>
+            return (
+              <div key={axis}>
+                <h3 className="text-xs font-medium text-gray-600 mb-2 px-1">
+                  {AXIS_LABELS[axis]}
+                </h3>
+                <div className="overflow-hidden rounded-xl border border-gray-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left">
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-16">ID</th>
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-40">名前</th>
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500">説明</th>
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-24">難易度</th>
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-24">所要時間</th>
+                        <th className="px-3 py-2.5 text-xs font-medium text-gray-500 w-16"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {axisSteps.map((step) => (
+                        <StepRow
+                          key={step.id}
+                          step={step}
+                          onEdit={setEditingStep}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      {/* 詳細編集モーダル（コンテナ外） */}
+      {editingStep && (
+        <StepDetailModal
+          step={editingStep}
+          onSave={handleStepDetailSave}
+          onClose={() => setEditingStep(null)}
+        />
+      )}
+    </>
   );
 }
 
-// ===== 行コンポーネント =====
+// ===== 行コンポーネント（表示専用） =====
 
 interface StepRowProps {
   step: StepDefinition;
-  onUpdate: (stepId: string, field: keyof StepDefinition, value: string | number) => void;
+  onEdit: (step: StepDefinition) => void;
 }
 
-function StepRow({ step, onUpdate }: StepRowProps) {
+function StepRow({ step, onEdit }: StepRowProps) {
   return (
-    <tr className="border-b border-gray-100">
-      {/* ID（変更不可） */}
+    <tr
+      className="border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+      onClick={() => onEdit(step)}
+    >
+      {/* ID */}
       <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{step.id}</td>
 
-      {/* 名前（インライン編集） */}
-      <td className="px-3 py-2.5">
-        <input
-          type="text"
-          value={step.name}
-          onChange={(e) => onUpdate(step.id, "name", e.target.value)}
-          className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
-        />
-      </td>
+      {/* 名前 */}
+      <td className="px-3 py-2.5 text-sm text-gray-800">{step.name}</td>
 
-      {/* 説明（インライン編集） */}
-      <td className="px-3 py-2.5">
-        <input
-          type="text"
-          value={step.description}
-          onChange={(e) => onUpdate(step.id, "description", e.target.value)}
-          className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
-        />
-      </td>
+      {/* 説明（省略表示） */}
+      <td className="px-3 py-2.5 text-sm text-gray-600 truncate max-w-xs">{step.description}</td>
 
-      {/* 難易度（セレクト） */}
-      <td className="px-3 py-2.5">
-        <select
-          value={step.difficulty}
-          onChange={(e) => onUpdate(step.id, "difficulty", Number(e.target.value) as 1 | 2 | 3)}
-          className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
+      {/* 難易度 */}
+      <td className="px-3 py-2.5 text-sm text-gray-600">{DIFFICULTY_LABELS[step.difficulty]}</td>
+
+      {/* 所要時間 */}
+      <td className="px-3 py-2.5 text-sm text-gray-600">{step.estimatedMinutes}分</td>
+
+      {/* 編集ボタン */}
+      <td className="px-3 py-2.5 text-center">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(step);
+          }}
+          className="text-gray-400 hover:text-green-600 transition-colors"
+          title="編集"
         >
-          {DIFFICULTY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </td>
-
-      {/* 所要時間（数値入力） */}
-      <td className="px-3 py-2.5">
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            min={1}
-            max={999}
-            value={step.estimatedMinutes}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              if (!isNaN(val) && val >= 1 && val <= 999) {
-                onUpdate(step.id, "estimatedMinutes", val);
-              }
-            }}
-            className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800 text-right focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
-          />
-          <span className="text-xs text-gray-400">分</span>
-        </div>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" />
+            <path d="M9.5 3.5l3 3" />
+          </svg>
+        </button>
       </td>
     </tr>
   );

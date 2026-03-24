@@ -1,9 +1,9 @@
 // PATCH  /api/tracking-links/[id] - 更新
-// DELETE /api/tracking-links/[id] - 論理削除
+// DELETE /api/tracking-links/[id] - 論理削除 or 物理削除(?permanent=true)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
-import { updateTrackingLink, deactivateTrackingLink } from '@/lib/queries';
+import { updateTrackingLink, deactivateTrackingLink, deleteTrackingLinkPermanently } from '@/lib/queries';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -66,7 +66,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   context: RouteContext
 ): Promise<NextResponse> {
   const authError = await requireAuth();
@@ -74,18 +74,29 @@ export async function DELETE(
 
   try {
     const { id } = await context.params;
-    const success = await deactivateTrackingLink(id);
+    const permanent = request.nextUrl.searchParams.get('permanent') === 'true';
 
+    if (permanent) {
+      const success = await deleteTrackingLinkPermanently(id);
+      if (!success) {
+        return NextResponse.json(
+          { error: 'トラッキングリンクの削除に失敗しました' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ data: { id, deleted: true } });
+    }
+
+    const success = await deactivateTrackingLink(id);
     if (!success) {
       return NextResponse.json(
         { error: 'トラッキングリンクの無効化に失敗しました' },
         { status: 500 }
       );
     }
-
     return NextResponse.json({ data: { id, is_active: false } });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'トラッキングリンクの無効化に失敗しました';
+    const message = err instanceof Error ? err.message : 'トラッキングリンクの操作に失敗しました';
     console.error('[API /tracking-links/[id] DELETE]', message);
     return NextResponse.json(
       { error: message },

@@ -1348,6 +1348,29 @@ export async function deactivateTrackingLink(id: string): Promise<boolean> {
   return updateTrackingLink(id, { is_active: false });
 }
 
+/** トラッキングリンク物理削除 */
+export async function deleteTrackingLinkPermanently(id: string): Promise<boolean> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('tracking_links')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[deleteTrackingLinkPermanently] Supabase error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'トラッキングリンク削除中にエラーが発生しました';
+    console.error('[deleteTrackingLinkPermanently] エラー:', msg);
+    return false;
+  }
+}
+
 /** クリックカウント+1 → destination_url を返す */
 export async function incrementClickCount(code: string): Promise<string | null> {
   const supabase = getSupabaseServer();

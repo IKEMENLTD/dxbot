@@ -422,6 +422,31 @@ export default function SourcesPage() {
     }
   };
 
+  // ===== 完全削除 =====
+
+  const handleDeletePermanently = async (link: TrackingLink) => {
+    if (!window.confirm(`「${link.label}」を完全に削除しますか？\nクリックデータも全て削除されます。この操作は取り消せません。`)) {
+      return;
+    }
+    try {
+      const res = await fetchWithTimeout(
+        `/api/tracking-links/${link.id}?permanent=true`,
+        { method: "DELETE" },
+        API_TIMEOUT_MS
+      );
+      if (!res.ok) {
+        const json = (await res.json()) as UpdateApiResponse;
+        addToast("error", json.error ?? "削除に失敗しました");
+        return;
+      }
+      setLinks((prev) => prev.filter((l) => l.id !== link.id));
+      addToast("success", "リンクを削除しました");
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      addToast("error", "削除中にエラーが発生しました");
+    }
+  };
+
   // ===== コピー =====
 
   const handleCopyUrl = async (code: string) => {
@@ -611,6 +636,18 @@ export default function SourcesPage() {
                               <path d="M5.5 8L7 9.5L10.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           )}
+                        </button>
+                        {/* 削除 */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePermanently(link)}
+                          className="p-1.5 rounded-lg text-red-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="完全に削除"
+                          aria-label="完全に削除"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 4.5H13M5.5 4.5V3.5C5.5 2.95 5.95 2.5 6.5 2.5H9.5C10.05 2.5 10.5 2.95 10.5 3.5V4.5M6.5 7V11.5M9.5 7V11.5M4.5 4.5L5 12.5C5 13.05 5.45 13.5 6 13.5H10C10.55 13.5 11 13.05 11 12.5L11.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
                         </button>
                       </div>
                     </td>

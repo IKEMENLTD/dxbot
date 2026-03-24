@@ -8,7 +8,6 @@ import StumbleHistory from "@/components/user-card/StumbleHistory";
 import Timeline from "@/components/user-card/Timeline";
 import LtvHistory from "@/components/user-card/LtvHistory";
 import NotesActions from "@/components/user-card/NotesActions";
-import { mockUsers, mockTimeline, mockStumbles, mockDeals } from "@/lib/mock-data";
 import type { User, Deal, TimelineEvent, StumbleRecord } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -84,39 +83,15 @@ export default function UserCardPage({ params }: PageProps) {
         if (json.data) {
           setData(json.data);
         } else {
-          // APIがデータを返さなかった場合、mockにfallback
-          const mockUser = mockUsers.find((u) => u.id === id);
-          if (!mockUser) {
-            setNotFound(true);
-            addToast("error", "ユーザーが見つかりません");
-            return;
-          }
-          setData({
-            user: mockUser,
-            deals: mockDeals.filter((d) => d.user_id === id),
-            timeline: mockTimeline.filter((e) => e.user_id === id),
-            stumbles: mockStumbles.filter((s) => s.user_id === id),
-          });
-          addToast("warning", "APIからデータを取得できませんでした。オフラインモードで表示中です。");
+          setNotFound(true);
+          addToast("error", "ユーザーデータを取得できませんでした");
         }
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("[UserCard] データ取得エラー:", err);
-        // mockにfallback
-        const mockUser = mockUsers.find((u) => u.id === id);
-        if (!mockUser) {
-          setNotFound(true);
-          addToast("error", "ユーザーが見つかりません");
-          return;
-        }
-        setData({
-          user: mockUser,
-          deals: mockDeals.filter((d) => d.user_id === id),
-          timeline: mockTimeline.filter((e) => e.user_id === id),
-          stumbles: mockStumbles.filter((s) => s.user_id === id),
-        });
-        addToast("warning", "データの取得に失敗しました。オフラインモードで表示中です。");
+        setNotFound(true);
+        addToast("error", "データの取得に失敗しました");
       })
       .finally(() => setLoading(false));
 

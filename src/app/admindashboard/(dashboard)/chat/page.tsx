@@ -5,8 +5,6 @@ import ContactList from "@/components/chat/ContactList";
 import MessageList from "@/components/chat/MessageList";
 import ChatInput from "@/components/chat/ChatInput";
 import UserInfoPanel from "@/components/chat/UserInfoPanel";
-import { mockUsers } from "@/lib/mock-data";
-import { mockMessages } from "@/lib/mock-messages";
 import { EXIT_CONFIG } from "@/lib/types";
 import type { User } from "@/lib/types";
 import type { ChatMessage, ContactPreview, MediaAttachment } from "@/lib/chat-types";
@@ -45,11 +43,7 @@ interface UsersApiResponse {
 }
 
 function buildInitialTags(): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
-  for (const user of mockUsers) {
-    result[user.id] = user.tags ?? [];
-  }
-  return result;
+  return {};
 }
 
 /** 画面サイズを判定するフック */
@@ -77,7 +71,7 @@ function useScreenSize(): ScreenSize {
 }
 
 export default function ChatPage() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [contactPreviews, setContactPreviews] = useState<ContactPreview[]>([]);
@@ -168,11 +162,6 @@ export default function ChatPage() {
           headers: { "Cache-Control": "no-cache" },
         });
         if (!res.ok) {
-          const userMockMsgs = mockMessages.filter((m) => m.userId === userId);
-          setMessages((prev) => {
-            const otherMsgs = prev.filter((m) => m.userId !== userId);
-            return [...otherMsgs, ...userMockMsgs];
-          });
           return;
         }
         const data = (await res.json()) as MessagesApiResponse;
@@ -186,11 +175,7 @@ export default function ChatPage() {
         if (err instanceof Error && err.name !== 'AbortError') {
           console.error('[Chat] メッセージ取得エラー:', err);
         }
-        const userMockMsgs = mockMessages.filter((m) => m.userId === userId);
-        setMessages((prev) => {
-          const otherMsgs = prev.filter((m) => m.userId !== userId);
-          return [...otherMsgs, ...userMockMsgs];
-        });
+        // メッセージ取得失敗時は空のまま
       } finally {
         setIsLoadingMessages(false);
       }

@@ -1,13 +1,26 @@
 // ===== pushMessage テスト =====
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { pushMessage } from '../line-client';
 import type { PushMessageResult } from '../line-client';
 import type { TextMessage } from '../line-types';
+
+// getChannelAccessTokenAsync が依存する queries / crypto をモック
+const mockGetAppSetting = vi.fn();
+vi.mock('../queries', () => ({
+  getAppSetting: (...args: unknown[]) => mockGetAppSetting(...args),
+}));
+
+const mockDecrypt = vi.fn();
+vi.mock('../crypto', () => ({
+  decrypt: (...args: unknown[]) => mockDecrypt(...args),
+}));
 
 // fetchのモック
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
+
+// モック定義後にインポート
+import { pushMessage } from '../line-client';
 
 describe('pushMessage', () => {
   beforeEach(() => {
@@ -22,8 +35,19 @@ describe('pushMessage', () => {
   const testMessages: TextMessage[] = [{ type: 'text', text: 'テストメッセージ' }];
   const testLineUserId = 'U1234567890abcdef1234567890abcdef';
 
+  /** DB にトークンが存在する状態をセットアップ */
+  function setupTokenAvailable(token = 'test-token'): void {
+    mockGetAppSetting.mockResolvedValue({ encryptedAccessToken: 'encrypted-value' });
+    mockDecrypt.mockReturnValue(token);
+  }
+
+  /** DB にトークンが無い状態をセットアップ */
+  function setupTokenUnavailable(): void {
+    mockGetAppSetting.mockResolvedValue(null);
+  }
+
   it('トークン未設定（開発モード）: mockモードで成功を返す', async () => {
-    vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', '');
+    setupTokenUnavailable();
     vi.stubEnv('NODE_ENV', 'development');
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -36,7 +60,7 @@ describe('pushMessage', () => {
   });
 
   it('トークン未設定（本番モード）: エラーを返す', async () => {
-    vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', '');
+    setupTokenUnavailable();
     vi.stubEnv('NODE_ENV', 'production');
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -49,7 +73,7 @@ describe('pushMessage', () => {
   });
 
   it('LINE API 成功 (200): success を返す', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'test-token';
+    setupTokenAvailable('test-token');
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -74,7 +98,7 @@ describe('pushMessage', () => {
   });
 
   it('LINE API レート制限 (429): 適切なエラーを返す', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'test-token';
+    setupTokenAvailable('test-token');
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -92,7 +116,7 @@ describe('pushMessage', () => {
   });
 
   it('LINE API 認証エラー (401): 適切なエラーを返す', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'invalid-token';
+    setupTokenAvailable('invalid-token');
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -110,7 +134,7 @@ describe('pushMessage', () => {
   });
 
   it('LINE API 不正リクエスト (400): 適切なエラーを返す', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'test-token';
+    setupTokenAvailable('test-token');
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -128,7 +152,7 @@ describe('pushMessage', () => {
   });
 
   it('fetch例外（ネットワークエラー）: エラーを返す', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'test-token';
+    setupTokenAvailable('test-token');
 
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
@@ -141,7 +165,7 @@ describe('pushMessage', () => {
   });
 
   it('AbortControllerのsignalがfetchに渡されている', async () => {
-    process.env.LINE_CHANNEL_ACCESS_TOKEN = 'test-token';
+    setupTokenAvailable('test-token');
 
     mockFetch.mockResolvedValueOnce({
       ok: true,

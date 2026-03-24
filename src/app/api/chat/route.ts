@@ -179,7 +179,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       success: true,
       userId,
       messageId: result.id ?? `msg-${Date.now()}`,
-      timestamp: new Date().toISOString(),
+      timestamp: result.sentAt ?? new Date().toISOString(),
       lineSent,
       lineMock,
     });

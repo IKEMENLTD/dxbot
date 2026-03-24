@@ -170,6 +170,14 @@ export default function ChatPage() {
             const otherMsgs = prev.filter((m) => m.userId !== userId);
             return [...otherMsgs, ...data.messages];
           });
+
+          // ポーリング用のタイムスタンプを最新メッセージに合わせる
+          if (data.messages.length > 0) {
+            const latestTs = data.messages[data.messages.length - 1].timestamp;
+            if (latestTs > lastPolledAtRef.current) {
+              lastPolledAtRef.current = latestTs;
+            }
+          }
         }
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') {

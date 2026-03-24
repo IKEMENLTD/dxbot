@@ -543,7 +543,7 @@ const MAX_MESSAGE_LIMIT = 200;
 /** メッセージを保存 */
 export async function saveMessage(
   params: SaveMessageParams
-): Promise<{ success: boolean; id?: string; error?: string }> {
+): Promise<{ success: boolean; id?: string; sentAt?: string; error?: string }> {
   const supabase = getSupabaseServer();
   if (!supabase) {
     // mock: ローカル配列に追加
@@ -572,7 +572,7 @@ export async function saveMessage(
         message_type: params.messageType ?? 'text',
         sent_at: new Date().toISOString(),
       })
-      .select('id')
+      .select('id, sent_at')
       .single();
 
     if (error) {
@@ -580,7 +580,7 @@ export async function saveMessage(
       return { success: false, error: error.message };
     }
 
-    return { success: true, id: data?.id };
+    return { success: true, id: data?.id, sentAt: data?.sent_at };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'メッセージ保存中に不明なエラーが発生しました';
     console.error('[saveMessage] エラー:', msg);

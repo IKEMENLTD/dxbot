@@ -15,6 +15,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
     pathname.startsWith("/api/auth/") ||
     pathname === "/api/webhook" ||
     pathname.startsWith("/api/cron/") ||
+    pathname.startsWith("/api/track/") ||
     pathname.startsWith("/track/")
   ) {
     return undefined;
@@ -46,6 +47,6 @@ export function middleware(request: NextRequest): NextResponse | undefined {
 
 export const config = {
   matcher: [
-    "/api/((?!auth/|webhook|cron/).*)",
+    "/api/((?!auth/|webhook|cron/|track/).*)",
   ],
 };

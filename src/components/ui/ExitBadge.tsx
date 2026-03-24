@@ -4,11 +4,14 @@ import { EXIT_CONFIG } from "@/lib/types";
 import type { ExitType } from "@/lib/types";
 
 interface ExitBadgeProps {
-  type: ExitType;
+  type: ExitType | null | undefined;
 }
 
+const FALLBACK_EXIT = { label: "未設定", colorClass: "text-gray-500", bgClass: "bg-gray-100" } as const;
+
 export default function ExitBadge({ type }: ExitBadgeProps) {
-  const config = EXIT_CONFIG[type];
+  if (!type) return null;
+  const config = EXIT_CONFIG[type as ExitType] ?? FALLBACK_EXIT;
 
   return (
     <span

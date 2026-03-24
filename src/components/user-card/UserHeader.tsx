@@ -19,8 +19,8 @@ const LEAD_SOURCE_LABEL: Record<string, string> = {
 };
 
 export default function UserHeader({ user }: UserHeaderProps) {
-  const exitConfig = EXIT_CONFIG[user.recommended_exit];
-  const statusConfig = STATUS_CONFIG[user.customer_status];
+  const exitConfig = EXIT_CONFIG[user.recommended_exit] ?? { label: user.recommended_exit ?? "未設定", color: "#6b7280", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
+  const statusConfig = STATUS_CONFIG[user.customer_status] ?? { label: user.customer_status ?? "未設定", colorClass: "text-gray-500" };
   const isTechstarsGrad = user.customer_status === "techstars_grad";
 
   return (
@@ -73,7 +73,7 @@ export default function UserHeader({ user }: UserHeaderProps) {
 
           {/* Badges */}
           {user.badges.map((badge) => {
-            const badgeConfig = BADGE_CONFIG[badge];
+            const badgeConfig = BADGE_CONFIG[badge] ?? { label: badge ?? "不明", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
             return (
               <span
                 key={badge}

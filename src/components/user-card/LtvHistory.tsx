@@ -41,7 +41,7 @@ export default function LtvHistory({ deals }: LtvHistoryProps) {
       ) : (
         <div className="space-y-3">
           {deals.map((deal) => {
-            const exitConfig = EXIT_CONFIG[deal.exit_type];
+            const exitConfig = EXIT_CONFIG[deal.exit_type] ?? { label: deal.exit_type ?? "未設定", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
             return (
               <div
                 key={deal.id}

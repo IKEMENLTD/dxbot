@@ -4,11 +4,14 @@ import { BADGE_CONFIG } from "@/lib/types";
 import type { BadgeType } from "@/lib/types";
 
 interface BadgeProps {
-  type: BadgeType;
+  type: BadgeType | null | undefined;
 }
 
+const FALLBACK_BADGE = { label: "不明", colorClass: "text-gray-500", bgClass: "bg-gray-100" } as const;
+
 export default function Badge({ type }: BadgeProps) {
-  const config = BADGE_CONFIG[type];
+  if (!type) return null;
+  const config = BADGE_CONFIG[type as BadgeType] ?? FALLBACK_BADGE;
 
   return (
     <span

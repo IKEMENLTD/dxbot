@@ -183,8 +183,8 @@ export default function UserInfoPanel({
     return mockTags.filter((t) => !userTagIds.includes(t.id));
   }, [userTagIds]);
 
-  const exitConfig = EXIT_CONFIG[user.recommended_exit];
-  const statusConfig = STATUS_CONFIG[user.customer_status];
+  const exitConfig = EXIT_CONFIG[user.recommended_exit] ?? { label: user.recommended_exit ?? "未設定", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
+  const statusConfig = STATUS_CONFIG[user.customer_status] ?? { label: user.customer_status ?? "未設定", colorClass: "text-gray-500" };
 
   const isOverlay = isMobileSheet || !!onClose;
 

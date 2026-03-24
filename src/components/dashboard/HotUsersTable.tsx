@@ -200,7 +200,11 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                   </td>
                   {/* Exit */}
                   <td className="px-4 py-3.5">
-                    <ExitBadge type={user.recommended_exit} />
+                    {user.recommended_exit ? (
+                      <ExitBadge type={user.recommended_exit} />
+                    ) : (
+                      <span className="text-xs text-gray-300">-</span>
+                    )}
                   </td>
                   {/* Score */}
                   <td className="px-4 py-3.5">

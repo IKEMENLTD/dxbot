@@ -26,9 +26,13 @@ const LEAD_SOURCE_LABELS: Record<string, string> = {
   other: "その他",
 };
 
-const DEFAULT_DESTINATION_URL = "https://lin.ee/";
+const FALLBACK_DESTINATION_URL = "https://lin.ee/";
 
 // ===== API型定義 =====
+
+interface LineSettingsResponse {
+  friendUrl: string | null;
+}
 
 interface LinksApiResponse {
   data?: TrackingLink[];
@@ -89,6 +93,10 @@ export default function SourcesPage() {
   const [isOffline, setIsOffline] = useState(false);
   const { addToast } = useToast();
 
+  // LINE友だち追加URL（動的取得）
+  const [friendUrl, setFriendUrl] = useState<string | null>(null);
+  const defaultDestUrl = friendUrl ?? FALLBACK_DESTINATION_URL;
+
   // モーダル状態
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -100,7 +108,7 @@ export default function SourcesPage() {
   const [createLabel, setCreateLabel] = useState("");
   const [createLeadSource, setCreateLeadSource] = useState<string>("apo");
   const [createCustomSource, setCreateCustomSource] = useState("");
-  const [createDestUrl, setCreateDestUrl] = useState(DEFAULT_DESTINATION_URL);
+  const [createDestUrl, setCreateDestUrl] = useState(FALLBACK_DESTINATION_URL);
   const [editLabel, setEditLabel] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
 
@@ -142,9 +150,33 @@ export default function SourcesPage() {
     }
   }, [addToast]);
 
+  // LINE設定からfriendUrlを取得
+  const fetchFriendUrl = useCallback(async () => {
+    try {
+      const res = await fetchWithTimeout(
+        "/api/settings/line",
+        { method: "GET" },
+        API_TIMEOUT_MS
+      );
+      if (res.ok) {
+        const json = (await res.json()) as LineSettingsResponse;
+        if (json.friendUrl) {
+          setFriendUrl(json.friendUrl);
+          // まだデフォルト値のままなら動的URLに更新
+          setCreateDestUrl((prev) =>
+            prev === FALLBACK_DESTINATION_URL ? json.friendUrl as string : prev
+          );
+        }
+      }
+    } catch {
+      // friendUrl取得失敗はフォールバックを使うだけなのでエラー表示不要
+    }
+  }, []);
+
   useEffect(() => {
     abortRef.current = new AbortController();
     fetchLinks();
+    fetchFriendUrl();
     return () => {
       abortRef.current?.abort();
     };
@@ -209,7 +241,7 @@ export default function SourcesPage() {
     setCreateLabel("");
     setCreateLeadSource("apo");
     setCreateCustomSource("");
-    setCreateDestUrl(DEFAULT_DESTINATION_URL);
+    setCreateDestUrl(defaultDestUrl);
   };
 
   // ===== 編集 =====
@@ -583,11 +615,13 @@ export default function SourcesPage() {
                   type="url"
                   value={createDestUrl}
                   onChange={(e) => setCreateDestUrl(e.target.value)}
-                  placeholder="https://lin.ee/..."
+                  placeholder={friendUrl ?? "https://lin.ee/..."}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  デフォルト: LINE友だち追加URL
+                  {friendUrl
+                    ? "LINE接続テストから自動取得した友だち追加URL"
+                    : "デフォルト: LINE友だち追加URL"}
                 </p>
               </div>
             </div>

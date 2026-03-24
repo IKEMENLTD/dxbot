@@ -12,6 +12,7 @@ interface LineConfigState {
   webhookUrl: string | null;
   botName: string | null;
   verified: boolean;
+  friendUrl: string | null;
 }
 
 interface TestResult {
@@ -274,6 +275,7 @@ export default function LineSettings() {
     webhookUrl: null,
     botName: null,
     verified: false,
+    friendUrl: null,
   });
 
   const [step1Done, setStep1Done] = useState(false);
@@ -285,6 +287,7 @@ export default function LineSettings() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [friendUrlCopied, setFriendUrlCopied] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -408,10 +411,17 @@ export default function LineSettings() {
       setTestResult(data);
 
       if (data.success && data.botName) {
+        // botIdからfriendUrlを生成
+        let derivedFriendUrl: string | null = null;
+        if (data.botId) {
+          const normalizedId = data.botId.startsWith('@') ? data.botId : `@${data.botId}`;
+          derivedFriendUrl = `https://line.me/R/ti/p/${normalizedId}`;
+        }
         setConfigState((prev) => ({
           ...prev,
           verified: true,
           botName: data.botName ?? null,
+          friendUrl: derivedFriendUrl ?? prev.friendUrl,
         }));
       }
     } catch {
@@ -443,6 +453,25 @@ export default function LineSettings() {
       setTimeout(() => setCopied(false), 2000);
     }
   }, [webhookUrl]);
+
+  // 友だち追加URLコピー
+  const handleCopyFriendUrl = useCallback(async () => {
+    if (!configState.friendUrl) return;
+    try {
+      await navigator.clipboard.writeText(configState.friendUrl);
+      setFriendUrlCopied(true);
+      setTimeout(() => setFriendUrlCopied(false), 2000);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = configState.friendUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setFriendUrlCopied(true);
+      setTimeout(() => setFriendUrlCopied(false), 2000);
+    }
+  }, [configState.friendUrl]);
 
   const canSave = tokenInput.trim().length > 0 && secretInput.trim().length > 0;
   const canTest = configState.configured || tokenInput.trim().length > 0;
@@ -694,6 +723,43 @@ export default function LineSettings() {
                 )}
               </div>
             )
+          )}
+
+          {/* 友だち追加URL */}
+          {configState.friendUrl && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+              <label className="block text-sm font-medium text-green-800 mb-2">
+                LINE友だち追加URL
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={configState.friendUrl}
+                  className="flex-1 font-mono text-sm bg-white border border-green-200 rounded-lg px-3 py-2.5 text-gray-700 select-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyFriendUrl}
+                  className="flex items-center gap-1.5 bg-green-100 hover:bg-green-200 text-green-700 text-sm px-3 py-2.5 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  {friendUrlCopied ? (
+                    <>
+                      <CheckCircleIcon />
+                      コピーしました
+                    </>
+                  ) : (
+                    <>
+                      <CopyIcon />
+                      コピー
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-green-600 mt-2">
+                このURLを共有すると、ユーザーがLINE友だち追加できます。流入元管理でも自動的に使用されます。
+              </p>
+            </div>
           )}
         </div>
       </StepCard>

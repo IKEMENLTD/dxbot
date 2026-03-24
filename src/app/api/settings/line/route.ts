@@ -11,6 +11,7 @@ interface EncryptedLineConfig {
   encryptedSecret?: string;
   webhookUrl?: string;
   botName?: string | null;
+  botBasicId?: string | null;
   verified?: boolean;
 }
 
@@ -29,6 +30,15 @@ interface LineConfigGetResponse {
   webhookUrl: string | null;
   botName: string | null;
   verified: boolean;
+  friendUrl: string | null;
+}
+
+/** botBasicIdからLINE友だち追加URLを生成する */
+function buildFriendUrl(botBasicId: string | null | undefined): string | null {
+  if (!botBasicId) return null;
+  // basicIdが @ 付きならそのまま、付いていなければ @ を付与
+  const normalizedId = botBasicId.startsWith('@') ? botBasicId : `@${botBasicId}`;
+  return `https://line.me/R/ti/p/${normalizedId}`;
 }
 
 /** 末尾4文字をマスク表示する（短すぎる場合は全マスク） */
@@ -58,6 +68,7 @@ export async function GET(): Promise<NextResponse<LineConfigGetResponse | { erro
         webhookUrl: null,
         botName: null,
         verified: false,
+        friendUrl: null,
       });
     }
 
@@ -90,6 +101,7 @@ export async function GET(): Promise<NextResponse<LineConfigGetResponse | { erro
       webhookUrl: config.webhookUrl ?? null,
       botName: config.botName ?? null,
       verified: config.verified ?? false,
+      friendUrl: buildFriendUrl(config.botBasicId),
     });
   } catch (err) {
     console.error('[API settings/line GET] エラー:', err instanceof Error ? err.message : err);

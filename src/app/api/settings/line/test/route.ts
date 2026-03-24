@@ -20,6 +20,7 @@ interface EncryptedLineConfig {
   encryptedSecret?: string;
   webhookUrl?: string;
   botName?: string | null;
+  botBasicId?: string | null;
   verified?: boolean;
 }
 
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<TestRespo
             ...existing,
             verified: true,
             botName: data.displayName,
+            botBasicId: data.basicId ?? null,
           };
           await setAppSetting('line_config', updated);
         }

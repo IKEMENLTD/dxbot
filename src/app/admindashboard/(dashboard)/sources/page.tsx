@@ -68,8 +68,8 @@ function getTrackingUrl(code: string): string {
   return `/track/${code}`;
 }
 
-function getQrImageUrl(url: string): string {
-  return `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(url)}`;
+function getQrApiUrl(linkId: string): string {
+  return `/api/tracking-links/${linkId}/qr`;
 }
 
 async function fetchWithTimeout(
@@ -1008,7 +1008,7 @@ export default function SourcesPage() {
               {/* QR画像 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={getQrImageUrl(getTrackingUrl(qrLink.code))}
+                src={getQrApiUrl(qrLink.id)}
                 alt={`QRコード: ${qrLink.label}`}
                 width={200}
                 height={200}

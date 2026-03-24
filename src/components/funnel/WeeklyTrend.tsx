@@ -66,8 +66,8 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 export default function WeeklyTrend({ data }: WeeklyTrendProps) {
   return (
     <div>
-      <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-[300px] w-full" style={{ minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
           <LineChart
             data={data}
             margin={{ top: 8, right: 16, bottom: 8, left: 0 }}

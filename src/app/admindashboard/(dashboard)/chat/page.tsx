@@ -487,6 +487,8 @@ export default function ChatPage() {
   const renderChatHeader = () => {
     if (!selectedUser) return null;
 
+    const headerExitConfig = EXIT_CONFIG[selectedUser.recommended_exit] ?? { label: '未設定', color: '#6b7280', colorClass: 'text-gray-500', bgClass: 'bg-gray-100' };
+
     return (
       <div className="px-4 lg:px-6 py-3 lg:py-4 flex items-center justify-between bg-white border-b border-[#E5E8EB] flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -518,12 +520,10 @@ export default function ChatPage() {
             </p>
           </div>
           <span
-            className={`text-[10px] font-medium px-2 py-0.5 flex-shrink-0 ${
-              EXIT_CONFIG[selectedUser.recommended_exit].bgClass
-            } ${EXIT_CONFIG[selectedUser.recommended_exit].colorClass}`}
+            className={`text-[10px] font-medium px-2 py-0.5 flex-shrink-0 ${headerExitConfig.bgClass} ${headerExitConfig.colorClass}`}
             style={{ borderRadius: "9999px" }}
           >
-            {EXIT_CONFIG[selectedUser.recommended_exit].label}
+            {headerExitConfig.label}
           </span>
         </div>
 

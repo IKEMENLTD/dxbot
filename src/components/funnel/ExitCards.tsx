@@ -20,7 +20,7 @@ export default function ExitCards({ data }: ExitCardsProps) {
   return (
     <div className="space-y-3">
       {data.map((metric) => {
-        const config = EXIT_CONFIG[metric.exit_type];
+        const config = EXIT_CONFIG[metric.exit_type] ?? { label: metric.exit_type ?? '未設定', color: '#6b7280', colorClass: 'text-gray-500', bgClass: 'bg-gray-100' };
         return (
           <div
             key={metric.exit_type}

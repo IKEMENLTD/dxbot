@@ -266,13 +266,6 @@ export function stepStartMessage(stepName: string): TextMessage {
 
 // ===== ステップ配信メッセージ群 =====
 
-/** 難易度ラベル */
-const DIFFICULTY_LABELS: Record<1 | 2 | 3, string> = {
-  1: 'Lv.1（かんたん）',
-  2: 'Lv.2（ふつう）',
-  3: 'Lv.3（チャレンジ）',
-};
-
 /** 軸名の日本語ラベル */
 const AXIS_LABELS: Record<keyof AxisScores, string> = {
   a1: '売上・請求管理',
@@ -284,23 +277,44 @@ const AXIS_LABELS: Record<keyof AxisScores, string> = {
 
 /**
  * ステップ内容配信メッセージ
- * タイトル・説明・所要時間・難易度 + 完了/つまずきボタン
+ * タイトル・説明・アクション・完了基準・推奨ツール + 完了/つまずきボタン
  */
 export function stepContentMessage(step: StepDefinition, completedCount: number): TextMessage {
+  const lines: string[] = [
+    `--- Step ${completedCount + 1} ---`,
+    ``,
+    `[${step.name}]`,
+    step.description,
+    ``,
+  ];
+
+  // アクションアイテム
+  if (step.actionItems && step.actionItems.length > 0) {
+    lines.push(`やること:`);
+    step.actionItems.forEach((item, i) => {
+      lines.push(`${i + 1}. ${item}`);
+    });
+    lines.push(``);
+  }
+
+  // 完了基準
+  if (step.completionCriteria) {
+    lines.push(`完了の目安: ${step.completionCriteria}`);
+  }
+
+  lines.push(`所要時間: 約${step.estimatedMinutes}分`);
+
+  // 推奨ツール
+  if (step.recommendedTools && step.recommendedTools.length > 0) {
+    lines.push(`推奨ツール: ${step.recommendedTools.slice(0, 2).join('、')}`);
+  }
+
+  lines.push(``);
+  lines.push(`取り組んだら結果を教えてください。`);
+
   return {
     type: 'text',
-    text: [
-      `--- Step ${completedCount + 1} ---`,
-      ``,
-      `[${step.name}]`,
-      `${step.description}`,
-      ``,
-      `分野: ${AXIS_LABELS[step.axis]}`,
-      `難易度: ${DIFFICULTY_LABELS[step.difficulty]}`,
-      `所要時間: 約${step.estimatedMinutes}分`,
-      ``,
-      `取り組んだら結果を教えてください。`,
-    ].join('\n'),
+    text: lines.join('\n'),
     quickReply: {
       items: [
         {
@@ -418,44 +432,56 @@ export function allStepsCompleteMessage(completedCount: number, level: number): 
   };
 }
 
-/** つまずきタイプ別ヒントメッセージ */
-const STUMBLE_HINTS: Record<StumbleType, (step: StepDefinition) => string> = {
-  how: (step) => [
-    `--- ヒント ---`,
-    ``,
-    `「${step.name}」のやり方について:`,
-    ``,
-    `まずは以下を試してみてください:`,
-    `1. 「${step.name}」で検索して概要を確認`,
-    `2. 無料ツールから始める（有料は後でOK）`,
-    `3. 完璧を目指さず、まず触ってみる`,
-    ``,
-    `それでも分からない場合は、`,
-    `専門スタッフがサポートします。`,
-  ].join('\n'),
+/** つまずきタイプ別ヒントメッセージ（ステップ個別ヒント優先） */
+function buildStumbleHint(step: StepDefinition, stumbleType: StumbleType): string {
+  // ステップ個別ヒントがある場合はそちらを使用
+  const stepHint = step.hints?.[stumbleType];
 
-  time: (step) => [
-    `--- アドバイス ---`,
-    ``,
-    `お忙しい中、取り組もうとする姿勢が大切です。`,
-    ``,
-    `「${step.name}」は約${step.estimatedMinutes}分で完了できます。`,
-    `隙間時間に少しずつ進めてみてください。`,
-    ``,
-    `準備ができたらもう一度挑戦しましょう。`,
-  ].join('\n'),
+  switch (stumbleType) {
+    case 'how':
+      return [
+        `--- ヒント ---`,
+        ``,
+        `「${step.name}」のやり方について:`,
+        ``,
+        stepHint ?? [
+          `まずは以下を試してみてください:`,
+          `1. 無料ツールから始める（有料は後でOK）`,
+          `2. 完璧を目指さず、まず触ってみる`,
+        ].join('\n'),
+        ``,
+        ...(step.recommendedTools && step.recommendedTools.length > 0
+          ? [`推奨ツール: ${step.recommendedTools.join('、')}`, ``]
+          : []),
+        `それでも分からない場合は、`,
+        `専門スタッフがサポートします。`,
+      ].join('\n');
 
-  motivation: (step) => [
-    `--- 応援メッセージ ---`,
-    ``,
-    `DX改善は一歩ずつで大丈夫です。`,
-    ``,
-    `「${step.name}」を完了すると、`,
-    `${AXIS_LABELS[step.axis]}の改善につながります。`,
-    ``,
-    `気が向いたときにもう一度トライしてみてください。`,
-  ].join('\n'),
-};
+    case 'time':
+      return [
+        `--- アドバイス ---`,
+        ``,
+        stepHint ?? `お忙しい中、取り組もうとする姿勢が大切です。`,
+        ``,
+        `「${step.name}」は約${step.estimatedMinutes}分で完了できます。`,
+        `隙間時間に少しずつ進めてみてください。`,
+        ``,
+        `準備ができたらもう一度挑戦しましょう。`,
+      ].join('\n');
+
+    case 'motivation':
+      return [
+        `--- 応援メッセージ ---`,
+        ``,
+        stepHint ?? `DX改善は一歩ずつで大丈夫です。`,
+        ``,
+        `「${step.name}」を完了すると、`,
+        `${AXIS_LABELS[step.axis]}の改善につながります。`,
+        ``,
+        `気が向いたときにもう一度トライしてみてください。`,
+      ].join('\n');
+  }
+}
 
 /**
  * つまずき時のヒントメッセージ
@@ -464,10 +490,9 @@ export function stepStumbleMessage(
   step: StepDefinition,
   stumbleType: StumbleType
 ): TextMessage {
-  const hintGenerator = STUMBLE_HINTS[stumbleType];
   return {
     type: 'text',
-    text: hintGenerator(step),
+    text: buildStumbleHint(step, stumbleType),
     quickReply: {
       items: [
         {

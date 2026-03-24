@@ -47,8 +47,8 @@ export default function RadarChartComponent({ scores, prevScores }: RadarChartPr
       <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
         5軸スコア
       </h3>
-      <div className="w-full" style={{ height: 320 }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full" style={{ height: 320, minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
           <RechartsRadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
             <PolarGrid stroke="#E5E8EB" />
             <PolarAngleAxis

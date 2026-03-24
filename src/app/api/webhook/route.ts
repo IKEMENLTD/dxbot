@@ -595,12 +595,7 @@ async function completeDiagnosis(
     },
   });
 
-  // 診断完了時にCTAチェック（エラーがあってもステップ配信を止めない）
-  try {
-    await checkAndFireCta(userId);
-  } catch (ctaErr) {
-    console.error('[Webhook] 診断完了後CTA チェックエラー（処理は続行）:', ctaErr);
-  }
+  // 診断直後のCTAチェックは行わない（最低1ステップ完了後から開始）
 }
 
 // ===== ステップハンドラ =====

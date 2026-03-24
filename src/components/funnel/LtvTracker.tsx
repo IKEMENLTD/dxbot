@@ -50,7 +50,7 @@ export default function LtvTracker({ users, deals }: LtvTrackerProps) {
           </p>
           <div className="flex items-center gap-2 flex-wrap">
             {userDeals.map((deal, index) => {
-              const config = EXIT_CONFIG[deal.exit_type];
+              const config = EXIT_CONFIG[deal.exit_type] ?? { label: deal.exit_type ?? '未設定', color: '#6b7280', colorClass: 'text-gray-500', bgClass: 'bg-gray-100' };
               return (
                 <div key={deal.id} className="flex items-center gap-2">
                   {index > 0 && (

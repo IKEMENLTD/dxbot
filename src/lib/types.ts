@@ -103,6 +103,32 @@ export interface TrackingLink {
   updated_at: string;
 }
 
+export interface TrackingPerformance {
+  linkId: string;
+  label: string;
+  leadSource: string;
+  clickCount: number;
+  followCount: number;
+  diagnosedCount: number;
+  ctaFiredCount: number;
+  convertedCount: number;
+  diagnosisRate: number;
+  ctaRate: number;
+  conversionRate: number;
+}
+
+export interface TrackingClickDetail {
+  id: string;
+  deviceType: string | null;
+  os: string | null;
+  browser: string | null;
+  referer: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  clickedAt: string;
+}
+
 export interface FunnelKpi {
   week: string;
   inflow: number;

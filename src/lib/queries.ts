@@ -22,6 +22,8 @@ import type {
   FunnelKpi,
   ExitMetrics,
   CustomerStatus,
+  TrackingPerformance,
+  TrackingClickDetail,
 } from './types';
 import type {
   ChatMessageRow,
@@ -1356,6 +1358,310 @@ export async function incrementClickCount(code: string): Promise<string | null> 
     const msg = err instanceof Error ? err.message : 'クリックカウント更新中にエラーが発生しました';
     console.error('[incrementClickCount] エラー:', msg);
     return null;
+  }
+}
+
+/** ユーザーのlead_sourceを更新 */
+export async function updateUserLeadSource(
+  userId: string,
+  leadSource: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const validSources = ['apo', 'threads', 'x', 'instagram', 'referral', 'other'] as const;
+    type ValidSource = typeof validSources[number];
+    const source: ValidSource = validSources.includes(leadSource as ValidSource)
+      ? (leadSource as ValidSource)
+      : 'other';
+
+    const { error } = await supabase
+      .from('users')
+      .update({ lead_source: source })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[updateUserLeadSource] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'lead_source更新中にエラーが発生しました';
+    console.error('[updateUserLeadSource] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** ユーザーのtracking_link_idを更新 */
+export async function updateUserTrackingLinkId(
+  userId: string,
+  trackingLinkId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ tracking_link_id: trackingLinkId })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[updateUserTrackingLinkId] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'tracking_link_id更新中にエラーが発生しました';
+    console.error('[updateUserTrackingLinkId] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** トラッキングクリックデータを保存 */
+export interface TrackingClickInput {
+  trackingLinkId: string;
+  deviceType: string | null;
+  os: string | null;
+  browser: string | null;
+  referer: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  language: string | null;
+  country: string | null;
+}
+
+export async function saveTrackingClick(
+  input: TrackingClickInput
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('tracking_clicks')
+      .insert({
+        tracking_link_id: input.trackingLinkId,
+        device_type: input.deviceType,
+        os: input.os,
+        browser: input.browser,
+        referer: input.referer,
+        utm_source: input.utmSource,
+        utm_medium: input.utmMedium,
+        utm_campaign: input.utmCampaign,
+        utm_content: input.utmContent,
+        language: input.language,
+        country: input.country,
+      });
+
+    if (error) {
+      console.error('[saveTrackingClick] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'クリックデータ保存中にエラーが発生しました';
+    console.error('[saveTrackingClick] エラー:', msg);
+    return { success: false, error: msg };
+  }
+}
+
+/** トラッキングリンクIDをcodeから取得 */
+export async function getTrackingLinkByCode(
+  code: string
+): Promise<{ id: string; destination_url: string } | null> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const link = mockTrackingLinks.find((l) => l.code === code && l.is_active);
+    if (!link) return null;
+    return { id: link.id, destination_url: link.destination_url };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tracking_links')
+      .select('id, destination_url')
+      .eq('code', code)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data) return null;
+
+    const typedData = data as unknown as { id: string; destination_url: string };
+    return typedData;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'トラッキングリンク取得中にエラーが発生しました';
+    console.error('[getTrackingLinkByCode] エラー:', msg);
+    return null;
+  }
+}
+
+/** トラッキングパフォーマンス取得 */
+export async function getTrackingPerformance(): Promise<TrackingPerformance[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    // モックフォールバック
+    return mockTrackingLinks.map((link) => ({
+      linkId: link.id,
+      label: link.label,
+      leadSource: link.lead_source,
+      clickCount: link.click_count,
+      followCount: 0,
+      diagnosedCount: 0,
+      ctaFiredCount: 0,
+      convertedCount: 0,
+      diagnosisRate: 0,
+      ctaRate: 0,
+      conversionRate: 0,
+    }));
+  }
+
+  try {
+    // トラッキングリンク一覧取得
+    const { data: links, error: linksErr } = await supabase
+      .from('tracking_links')
+      .select('id, label, lead_source, click_count')
+      .order('created_at', { ascending: false });
+
+    if (linksErr || !links) {
+      console.error('[getTrackingPerformance] links error:', linksErr?.message);
+      return [];
+    }
+
+    const typedLinks = links as unknown as Array<{
+      id: string;
+      label: string;
+      lead_source: string;
+      click_count: number;
+    }>;
+
+    // 全ユーザーのtracking_link_id別集計
+    const { data: users, error: usersErr } = await supabase
+      .from('users')
+      .select('tracking_link_id, steps_completed, customer_status')
+      .not('tracking_link_id', 'is', null);
+
+    if (usersErr) {
+      console.error('[getTrackingPerformance] users error:', usersErr.message);
+    }
+
+    const typedUsers = (users ?? []) as unknown as Array<{
+      tracking_link_id: string | null;
+      steps_completed: number;
+      customer_status: string;
+    }>;
+
+    // CTA発火数取得
+    const { data: ctaData, error: ctaErr } = await supabase
+      .from('cta_history')
+      .select('user_id');
+
+    if (ctaErr) {
+      console.error('[getTrackingPerformance] cta error:', ctaErr.message);
+    }
+
+    const ctaUserIds = new Set(
+      ((ctaData ?? []) as unknown as Array<{ user_id: string }>).map((c) => c.user_id)
+    );
+
+    // ユーザーID→tracking_link_idのマップ
+    const usersByLink = new Map<string, typeof typedUsers>();
+    for (const u of typedUsers) {
+      if (!u.tracking_link_id) continue;
+      const existing = usersByLink.get(u.tracking_link_id) ?? [];
+      existing.push(u);
+      usersByLink.set(u.tracking_link_id, existing);
+    }
+
+    return typedLinks.map((link) => {
+      const linkUsers = usersByLink.get(link.id) ?? [];
+      const followCount = linkUsers.length;
+      const diagnosedCount = linkUsers.filter((u) => u.steps_completed > 0).length;
+      const ctaFiredCount = linkUsers.filter((u) => ctaUserIds.has(u.tracking_link_id ?? '')).length;
+      const convertedCount = linkUsers.filter((u) => u.customer_status === 'customer').length;
+
+      return {
+        linkId: link.id,
+        label: link.label,
+        leadSource: link.lead_source,
+        clickCount: link.click_count,
+        followCount,
+        diagnosedCount,
+        ctaFiredCount,
+        convertedCount,
+        diagnosisRate: followCount > 0 ? Math.round((diagnosedCount / followCount) * 100) : 0,
+        ctaRate: followCount > 0 ? Math.round((ctaFiredCount / followCount) * 100) : 0,
+        conversionRate: followCount > 0 ? Math.round((convertedCount / followCount) * 100) : 0,
+      };
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'パフォーマンスデータ取得中にエラーが発生しました';
+    console.error('[getTrackingPerformance] エラー:', msg);
+    return [];
+  }
+}
+
+/** トラッキングリンクのクリック詳細取得 */
+export async function getTrackingClickDetails(
+  trackingLinkId: string
+): Promise<TrackingClickDetail[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tracking_clicks')
+      .select('id, device_type, os, browser, referer, utm_source, utm_medium, utm_campaign, clicked_at')
+      .eq('tracking_link_id', trackingLinkId)
+      .order('clicked_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('[getTrackingClickDetails] Supabase error:', error.message);
+      return [];
+    }
+
+    const typedData = (data ?? []) as unknown as Array<{
+      id: string;
+      device_type: string | null;
+      os: string | null;
+      browser: string | null;
+      referer: string | null;
+      utm_source: string | null;
+      utm_medium: string | null;
+      utm_campaign: string | null;
+      clicked_at: string;
+    }>;
+
+    return typedData.map((row) => ({
+      id: row.id,
+      deviceType: row.device_type,
+      os: row.os,
+      browser: row.browser,
+      referer: row.referer,
+      utmSource: row.utm_source,
+      utmMedium: row.utm_medium,
+      utmCampaign: row.utm_campaign,
+      clickedAt: row.clicked_at,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'クリック詳細取得中にエラーが発生しました';
+    console.error('[getTrackingClickDetails] エラー:', msg);
+    return [];
   }
 }
 

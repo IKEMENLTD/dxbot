@@ -30,6 +30,7 @@ export interface Database {
           techstars_started_at: string | null;
           techstars_completed_at: string | null;
           paused_until: string | null;
+          tracking_link_id: string | null;
         };
         Insert: {
           id?: string;
@@ -55,6 +56,7 @@ export interface Database {
           techstars_started_at?: string | null;
           techstars_completed_at?: string | null;
           paused_until?: string | null;
+          tracking_link_id?: string | null;
         };
         Update: {
           id?: string;
@@ -80,6 +82,7 @@ export interface Database {
           techstars_started_at?: string | null;
           techstars_completed_at?: string | null;
           paused_until?: string | null;
+          tracking_link_id?: string | null;
         };
         Relationships: [
           {
@@ -382,6 +385,62 @@ export interface Database {
             columns: ['user_id'];
             isOneToOne: false;
             referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      tracking_clicks: {
+        Row: {
+          id: string;
+          tracking_link_id: string;
+          device_type: string | null;
+          os: string | null;
+          browser: string | null;
+          referer: string | null;
+          utm_source: string | null;
+          utm_medium: string | null;
+          utm_campaign: string | null;
+          utm_content: string | null;
+          language: string | null;
+          country: string | null;
+          clicked_at: string;
+        };
+        Insert: {
+          id?: string;
+          tracking_link_id: string;
+          device_type?: string | null;
+          os?: string | null;
+          browser?: string | null;
+          referer?: string | null;
+          utm_source?: string | null;
+          utm_medium?: string | null;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          language?: string | null;
+          country?: string | null;
+          clicked_at?: string;
+        };
+        Update: {
+          id?: string;
+          tracking_link_id?: string;
+          device_type?: string | null;
+          os?: string | null;
+          browser?: string | null;
+          referer?: string | null;
+          utm_source?: string | null;
+          utm_medium?: string | null;
+          utm_campaign?: string | null;
+          utm_content?: string | null;
+          language?: string | null;
+          country?: string | null;
+          clicked_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'tracking_clicks_tracking_link_id_fkey';
+            columns: ['tracking_link_id'];
+            isOneToOne: false;
+            referencedRelation: 'tracking_links';
             referencedColumns: ['id'];
           },
         ];

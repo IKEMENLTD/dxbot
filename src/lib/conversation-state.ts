@@ -9,6 +9,7 @@ import { getSupabaseServer } from './supabase';
 export type ConversationState =
   | { phase: 'idle' }
   | { phase: 'welcome_sent' }
+  | { phase: 'source_question' }
   | { phase: 'consent_pending' }
   | { phase: 'industry_select' }
   | { phase: 'diagnosis'; questionIndex: number; scores: Partial<AxisScores> }

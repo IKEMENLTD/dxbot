@@ -50,6 +50,78 @@ export function welcomeMessage(name: string | null): TextMessage {
 }
 
 /**
+ * 流入元質問メッセージ（フォロー直後に送信）
+ */
+export function sourceQuestionMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      '友だち追加ありがとうございます！',
+      'まず1つだけ教えてください。',
+      'DXBOTをどこで知りましたか？',
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '営業の紹介',
+            data: 'action=source_answer&value=apo',
+            displayText: '営業の紹介',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'Threads',
+            data: 'action=source_answer&value=threads',
+            displayText: 'Threads',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'X',
+            data: 'action=source_answer&value=x',
+            displayText: 'X',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'Instagram',
+            data: 'action=source_answer&value=instagram',
+            displayText: 'Instagram',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '知人の紹介',
+            data: 'action=source_answer&value=referral',
+            displayText: '知人の紹介',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'その他',
+            data: 'action=source_answer&value=other',
+            displayText: 'その他',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
  * 同意確認メッセージ
  */
 export function consentMessage(): TextMessage {

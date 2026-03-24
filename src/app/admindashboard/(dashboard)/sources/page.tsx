@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { TrackingLink, LeadSource } from "@/lib/types";
+import type { TrackingLink, LeadSource, TrackingPerformance, TrackingClickDetail } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
 // ===== 定数 =====
@@ -46,6 +46,16 @@ interface CreateApiResponse {
 
 interface UpdateApiResponse {
   data?: { id: string; label?: string; is_active?: boolean };
+  error?: string;
+}
+
+interface PerformanceApiResponse {
+  data?: TrackingPerformance[];
+  error?: string;
+}
+
+interface ClicksApiResponse {
+  data?: TrackingClickDetail[];
   error?: string;
 }
 
@@ -116,6 +126,14 @@ export default function SourcesPage() {
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
 
+  // パフォーマンス分析
+  const [performance, setPerformance] = useState<TrackingPerformance[]>([]);
+  const [perfLoading, setPerfLoading] = useState(false);
+  const [showClicksModal, setShowClicksModal] = useState(false);
+  const [clicksData, setClicksData] = useState<TrackingClickDetail[]>([]);
+  const [clicksLoading, setClicksLoading] = useState(false);
+  const [clicksLinkLabel, setClicksLinkLabel] = useState("");
+
   const abortRef = useRef<AbortController | null>(null);
 
   // ===== データ取得 =====
@@ -173,10 +191,61 @@ export default function SourcesPage() {
     }
   }, []);
 
+  // パフォーマンスデータ取得
+  const fetchPerformance = useCallback(async () => {
+    setPerfLoading(true);
+    try {
+      const res = await fetchWithTimeout(
+        "/api/tracking-links/performance",
+        { method: "GET" },
+        API_TIMEOUT_MS
+      );
+      if (res.ok) {
+        const json = (await res.json()) as PerformanceApiResponse;
+        if (json.data) {
+          setPerformance(json.data);
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[Sources] パフォーマンスデータ取得エラー:", err);
+    } finally {
+      setPerfLoading(false);
+    }
+  }, []);
+
+  // クリック詳細取得
+  const fetchClicks = useCallback(async (linkId: string, label: string) => {
+    setClicksLinkLabel(label);
+    setShowClicksModal(true);
+    setClicksLoading(true);
+    setClicksData([]);
+    try {
+      const res = await fetchWithTimeout(
+        `/api/tracking-links/${linkId}/clicks`,
+        { method: "GET" },
+        API_TIMEOUT_MS
+      );
+      if (res.ok) {
+        const json = (await res.json()) as ClicksApiResponse;
+        if (json.data) {
+          setClicksData(json.data);
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[Sources] クリック詳細取得エラー:", err);
+      addToast("error", "クリック詳細の取得に失敗しました");
+    } finally {
+      setClicksLoading(false);
+    }
+  }, [addToast]);
+
   useEffect(() => {
     abortRef.current = new AbortController();
     fetchLinks();
     fetchFriendUrl();
+    fetchPerformance();
     return () => {
       abortRef.current?.abort();
     };
@@ -553,6 +622,122 @@ export default function SourcesPage() {
         </div>
       </div>
 
+      {/* ===== パフォーマンス分析セクション ===== */}
+      <div className="mt-8">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">流入元別パフォーマンス分析</h2>
+
+        {/* KPIサマリカード */}
+        {(() => {
+          const totalClicks = performance.reduce((sum, p) => sum + p.clickCount, 0);
+          const totalFollows = performance.reduce((sum, p) => sum + p.followCount, 0);
+          const avgDiagRate = performance.length > 0
+            ? Math.round(performance.reduce((sum, p) => sum + p.diagnosisRate, 0) / performance.length)
+            : 0;
+          const avgConvRate = performance.length > 0
+            ? Math.round(performance.reduce((sum, p) => sum + p.conversionRate, 0) / performance.length)
+            : 0;
+
+          return (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                <p className="text-xs text-gray-500 mb-1">総クリック数</p>
+                <p className="text-2xl font-bold text-green-600">{totalClicks.toLocaleString()}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                <p className="text-xs text-gray-500 mb-1">総友だち追加数</p>
+                <p className="text-2xl font-bold text-green-600">{totalFollows.toLocaleString()}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                <p className="text-xs text-gray-500 mb-1">平均診断完了率</p>
+                <p className="text-2xl font-bold text-green-600">{avgDiagRate}%</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                <p className="text-xs text-gray-500 mb-1">平均成約率</p>
+                <p className="text-2xl font-bold text-green-600">{avgConvRate}%</p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* パフォーマンステーブル */}
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">ラベル</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">流入元</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">クリック</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">友だち追加</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">診断完了</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">CTA発火</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">成約</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">診断率</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">成約率</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-500">詳細</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perfLoading && (
+                  <tr>
+                    <td colSpan={10} className="text-center py-8 text-gray-400">
+                      読み込み中...
+                    </td>
+                  </tr>
+                )}
+                {!perfLoading && performance.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="text-center py-8 text-gray-400">
+                      パフォーマンスデータがありません
+                    </td>
+                  </tr>
+                )}
+                {!perfLoading && performance.map((p) => (
+                  <tr key={p.linkId} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{p.label}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {LEAD_SOURCE_LABELS[p.leadSource] ?? p.leadSource}
+                    </td>
+                    <td className="px-4 py-3 text-center font-bold text-gray-700">{p.clickCount}</td>
+                    <td className="px-4 py-3 text-center font-bold text-green-600">{p.followCount}</td>
+                    <td className="px-4 py-3 text-center text-gray-700">{p.diagnosedCount}</td>
+                    <td className="px-4 py-3 text-center text-gray-700">{p.ctaFiredCount}</td>
+                    <td className="px-4 py-3 text-center text-gray-700">{p.convertedCount}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        p.diagnosisRate >= 50 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {p.diagnosisRate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        p.conversionRate >= 10 ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {p.conversionRate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => fetchClicks(p.linkId, p.label)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        title="クリック詳細"
+                        aria-label="クリック詳細を表示"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     {/* ===== モーダル（コンテナ外に配置） ===== */}
@@ -727,6 +912,84 @@ export default function SourcesPage() {
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
               >
                 {updating ? "更新中..." : "更新"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== クリック詳細モーダル ===== */}
+      {showClicksModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 p-6 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">
+                クリック詳細: {clicksLinkLabel}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClicksModal(false);
+                  setClicksData([]);
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                aria-label="閉じる"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="overflow-auto flex-1">
+              {clicksLoading ? (
+                <div className="text-center py-12 text-gray-400">読み込み中...</div>
+              ) : clicksData.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">クリックデータがありません</div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">日時</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">デバイス</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">OS</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">ブラウザ</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Source</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Medium</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">リファラー</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clicksData.map((click) => (
+                      <tr key={click.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                          {new Date(click.clickedAt).toLocaleString("ja-JP")}
+                        </td>
+                        <td className="px-3 py-2 text-gray-600">{click.deviceType ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.os ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.browser ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.utmSource ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.utmMedium ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-500 truncate max-w-[150px]" title={click.referer ?? ""}>
+                          {click.referer ?? "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex justify-center mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClicksModal(false);
+                  setClicksData([]);
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                閉じる
               </button>
             </div>
           </div>

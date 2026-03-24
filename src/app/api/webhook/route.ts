@@ -5,7 +5,7 @@ import type { WebhookBody, WebhookEvent, FollowEvent, TextMessageEvent, Postback
 import type { AxisScores, StumbleType } from '@/lib/types';
 import { verifySignatureWithKey, getChannelSecretAsync, replyMessage, getProfile } from '@/lib/line-client';
 import { getState, setState, createUser } from '@/lib/conversation-state';
-import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus } from '@/lib/queries';
+import { saveMessage, updateUserLineUserId, updatePausedUntil, updateUserStatus, updateUserLeadSource } from '@/lib/queries';
 import {
   determineWeakAxis,
   getQuestionAsync,
@@ -32,6 +32,7 @@ import {
 } from '@/lib/cta-service';
 import {
   welcomeMessage,
+  sourceQuestionMessage,
   consentMessage,
   industrySelectMessage,
   industryConfirmMessage,
@@ -240,12 +241,13 @@ async function handleFollow(event: FollowEvent): Promise<void> {
       console.error('[Webhook] handleFollow line_user_id紐付けエラー（処理は続行）:', linkErr);
     }
 
-    // Welcome + 同意確認
+    // Welcome + 流入元質問
     const msg = welcomeMessage(conversation.preferredName);
-    await replyAndSave(userId, event.replyToken, [msg]);
+    const srcMsg = sourceQuestionMessage();
+    await replyAndSave(userId, event.replyToken, [msg, srcMsg]);
 
-    // 状態更新: consent_pending
-    await setState(userId, { state: { phase: 'consent_pending' } });
+    // 状態更新: source_question
+    await setState(userId, { state: { phase: 'source_question' } });
   } catch (error) {
     console.error('[Webhook] handleFollow エラー:', error);
   }
@@ -289,6 +291,11 @@ async function handleTextMessage(event: TextMessageEvent): Promise<void> {
     const { phase } = conversation.state;
 
     switch (phase) {
+      case 'source_question':
+        // 流入元回答待ち中のテキスト入力 → Quick Replyを再送
+        await replyAndSave(userId, event.replyToken, [sourceQuestionMessage()]);
+        break;
+
       case 'consent_pending':
         // テキストで「はい」的な入力
         if (text === 'はい' || text === 'はい、始めます') {
@@ -357,6 +364,9 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
     }
 
     switch (action) {
+      case 'source_answer':
+        await handleSourceAnswer(userId, event.replyToken, params);
+        break;
       case 'consent':
         await handleConsent(userId, event.replyToken, params);
         break;
@@ -406,6 +416,31 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
 }
 
 // ===== 個別ハンドラ =====
+
+/**
+ * 流入元回答処理
+ */
+async function handleSourceAnswer(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  const value = params.get('value') ?? 'other';
+
+  // lead_sourceを保存
+  try {
+    await updateUserLeadSource(userId, value);
+  } catch (err) {
+    console.error('[Webhook] handleSourceAnswer lead_source保存エラー（処理は続行）:', err);
+  }
+
+  // conversation stateにもlead_sourceを保存
+  await setState(userId, { leadSource: value });
+
+  // 同意確認メッセージへ遷移
+  await replyAndSave(userId, replyToken, [consentMessage()]);
+  await setState(userId, { state: { phase: 'consent_pending' } });
+}
 
 /**
  * 同意処理

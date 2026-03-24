@@ -282,6 +282,29 @@ CREATE TABLE IF NOT EXISTS tracking_links (
 CREATE INDEX idx_tracking_links_code ON tracking_links(code);
 CREATE INDEX idx_tracking_links_active ON tracking_links(is_active);
 
+-- ===== tracking_clicks =====
+CREATE TABLE IF NOT EXISTS tracking_clicks (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  tracking_link_id TEXT NOT NULL REFERENCES tracking_links(id) ON DELETE CASCADE,
+  device_type TEXT,
+  os TEXT,
+  browser TEXT,
+  referer TEXT,
+  utm_source TEXT,
+  utm_medium TEXT,
+  utm_campaign TEXT,
+  utm_content TEXT,
+  language TEXT,
+  country TEXT,
+  clicked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_tracking_clicks_link ON tracking_clicks(tracking_link_id);
+CREATE INDEX idx_tracking_clicks_at ON tracking_clicks(clicked_at DESC);
+
+-- users.tracking_link_id（流入元リンクとの紐付け）
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tracking_link_id TEXT REFERENCES tracking_links(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_users_tracking_link ON users(tracking_link_id);
+
 -- ===== VIEWs =====
 
 -- hot_users_view: スコア降順で活動中ユーザー（タグ情報・経過日数付き）
@@ -410,6 +433,7 @@ ALTER TABLE diagnosis_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tracking_clicks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracking_links ENABLE ROW LEVEL SECURITY;
 
 -- users
@@ -507,6 +531,12 @@ CREATE POLICY "deny_anon_select_app_settings" ON app_settings FOR SELECT USING (
 CREATE POLICY "deny_anon_insert_app_settings" ON app_settings FOR INSERT WITH CHECK (false);
 CREATE POLICY "deny_anon_update_app_settings" ON app_settings FOR UPDATE USING (false);
 CREATE POLICY "deny_anon_delete_app_settings" ON app_settings FOR DELETE USING (false);
+
+-- tracking_clicks
+CREATE POLICY "deny_anon_select_tracking_clicks" ON tracking_clicks FOR SELECT TO anon USING (false);
+CREATE POLICY "deny_anon_insert_tracking_clicks" ON tracking_clicks FOR INSERT TO anon WITH CHECK (false);
+CREATE POLICY "deny_anon_update_tracking_clicks" ON tracking_clicks FOR UPDATE TO anon USING (false);
+CREATE POLICY "deny_anon_delete_tracking_clicks" ON tracking_clicks FOR DELETE TO anon USING (false);
 
 -- tracking_links
 CREATE POLICY "deny_anon_select_tracking_links" ON tracking_links FOR SELECT TO anon USING (false);

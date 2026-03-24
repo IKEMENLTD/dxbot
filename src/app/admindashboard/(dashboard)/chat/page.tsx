@@ -95,6 +95,8 @@ export default function ChatPage() {
   // ポーリング用: 最新のタイムスタンプを管理
   const lastPolledAtRef = useRef<string>(new Date().toISOString());
   const pollingAbortRef = useRef<AbortController | null>(null);
+  // 楽観的更新で追加した tempId を追跡（ポーリングとの重複排除用）
+  const pendingTempIdsRef = useRef<Set<string>>(new Set());
 
   const selectedUser = useMemo(
     () => users.find((u) => u.id === selectedUserId) ?? null,
@@ -300,9 +302,45 @@ export default function ChatPage() {
           if (data.messages && data.messages.length > 0) {
             setMessages((prev) => {
               const existingIds = new Set(prev.map((m) => m.id));
-              const newMsgs = data.messages.filter((m) => !existingIds.has(m.id));
-              if (newMsgs.length === 0) return prev;
-              return [...prev, ...newMsgs];
+
+              // 楽観的更新で追加されたtempIdメッセージのcontent+userId+senderを収集
+              // ポーリングで同じメッセージが返ってきた場合、tempIdメッセージを置換する
+              const pendingTempIds = pendingTempIdsRef.current;
+              const tempMsgKeys = new Map<string, string>(); // key -> tempId
+              for (const m of prev) {
+                if (pendingTempIds.has(m.id)) {
+                  const key = `${m.userId}|${m.sender}|${m.content}`;
+                  tempMsgKeys.set(key, m.id);
+                }
+              }
+
+              const newMsgs: ChatMessage[] = [];
+              const tempIdsToRemove = new Set<string>();
+
+              for (const m of data.messages) {
+                if (existingIds.has(m.id)) continue; // DB IDで既に存在
+
+                // 楽観的更新のtempIdメッセージと同じ内容か確認
+                const key = `${m.userId}|${m.sender}|${m.content}`;
+                const matchedTempId = tempMsgKeys.get(key);
+                if (matchedTempId) {
+                  // tempIdメッセージをDB IDメッセージで置換
+                  tempIdsToRemove.add(matchedTempId);
+                  pendingTempIds.delete(matchedTempId);
+                  newMsgs.push(m);
+                  tempMsgKeys.delete(key); // 1対1マッチ
+                } else {
+                  newMsgs.push(m);
+                }
+              }
+
+              if (newMsgs.length === 0 && tempIdsToRemove.size === 0) return prev;
+
+              // tempIdメッセージを除去してから新メッセージを追加
+              const filtered = tempIdsToRemove.size > 0
+                ? prev.filter((m) => !tempIdsToRemove.has(m.id))
+                : prev;
+              return [...filtered, ...newMsgs];
             });
 
             const latestTs = data.messages[data.messages.length - 1].timestamp;
@@ -397,6 +435,7 @@ export default function ChatPage() {
         media,
       };
 
+      pendingTempIdsRef.current.add(tempId);
       setMessages((prev) => [...prev, optimisticMsg]);
       setIsSending(true);
       setError(null);
@@ -420,6 +459,7 @@ export default function ChatPage() {
           const errorMsg = data.error ?? "メッセージ送信に失敗しました";
           setError(errorMsg);
           addToast("error", errorMsg);
+          pendingTempIdsRef.current.delete(tempId);
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
           return;
         }
@@ -427,13 +467,24 @@ export default function ChatPage() {
         const data = (await res.json()) as SendApiResponse;
 
         if (data.messageId) {
-          setMessages((prev) =>
-            prev.map((m) =>
+          const dbId = data.messageId as string;
+          setMessages((prev) => {
+            // ポーリングで既に同じDB IDのメッセージが追加されていないかチェック
+            const alreadyHasDbMsg = prev.some((m) => m.id === dbId);
+            if (alreadyHasDbMsg) {
+              // ポーリングで先にDB IDメッセージが追加された → tempIdメッセージを削除
+              return prev.filter((m) => m.id !== tempId);
+            }
+            // 通常: tempId → DB IDに置換
+            return prev.map((m) =>
               m.id === tempId
-                ? { ...m, id: data.messageId as string, timestamp: data.timestamp ?? now }
+                ? { ...m, id: dbId, timestamp: data.timestamp ?? now }
                 : m
-            )
-          );
+            );
+          });
+          pendingTempIdsRef.current.delete(tempId);
+        } else {
+          pendingTempIdsRef.current.delete(tempId);
         }
 
         lastPolledAtRef.current = data.timestamp ?? now;
@@ -449,6 +500,7 @@ export default function ChatPage() {
         if (err instanceof Error && err.name !== 'AbortError') {
           console.error('[Chat] メッセージ送信エラー:', err);
         }
+        pendingTempIdsRef.current.delete(tempId);
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setError("メッセージ送信中にエラーが発生しました");
         addToast("error", "メッセージ送信中にエラーが発生しました");

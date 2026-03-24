@@ -6,7 +6,7 @@ import MessageList from "@/components/chat/MessageList";
 import ChatInput from "@/components/chat/ChatInput";
 import UserInfoPanel from "@/components/chat/UserInfoPanel";
 import { EXIT_CONFIG } from "@/lib/types";
-import type { User } from "@/lib/types";
+import type { User, UserTag } from "@/lib/types";
 import type { ChatMessage, ContactPreview, MediaAttachment } from "@/lib/chat-types";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -39,6 +39,11 @@ interface SendApiResponse {
 
 interface UsersApiResponse {
   data: User[];
+  error?: string;
+}
+
+interface TagsApiResponse {
+  data: UserTag[];
   error?: string;
 }
 
@@ -83,6 +88,7 @@ export default function ChatPage() {
   const [userTags, setUserTags] = useState<Record<string, string[]>>(
     buildInitialTags
   );
+  const [allTags, setAllTags] = useState<UserTag[]>([]);
 
   // モバイル表示状態
   const screenSize = useScreenSize();
@@ -154,6 +160,25 @@ export default function ChatPage() {
     }
   }, []);
 
+  // ----- タグマスター取得 -----
+  const fetchTags = useCallback(async (signal: AbortSignal) => {
+    try {
+      const res = await fetch("/api/tags", {
+        signal,
+        headers: { "Cache-Control": "no-cache" },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as TagsApiResponse;
+      if (data.data) {
+        setAllTags(data.data);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('[Chat] タグマスター取得エラー:', err);
+      }
+    }
+  }, []);
+
   // ----- 特定ユーザーのメッセージ取得 -----
   const fetchMessagesForUser = useCallback(
     async (userId: string, signal: AbortSignal) => {
@@ -218,6 +243,7 @@ export default function ChatPage() {
         await Promise.all([
           fetchUsers(controller.signal),
           fetchContacts(controller.signal),
+          fetchTags(controller.signal),
         ]);
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') {
@@ -233,7 +259,7 @@ export default function ChatPage() {
     return () => {
       controller.abort();
     };
-  }, [fetchUsers, fetchContacts]);
+  }, [fetchUsers, fetchContacts, fetchTags]);
 
   // ----- 初回ロード後に最初のユーザーを選択（デスクトップ/タブレットのみ） -----
   useEffect(() => {
@@ -513,20 +539,68 @@ export default function ChatPage() {
     [selectedUserId, isSending]
   );
 
-  // ----- タグ操作 -----
-  const handleAddTag = useCallback((userId: string, tagId: string) => {
-    setUserTags((prev) => {
-      const current = prev[userId] ?? [];
-      if (current.includes(tagId)) return prev;
-      return { ...prev, [userId]: [...current, tagId] };
-    });
-  }, []);
+  // ----- タグ操作（楽観的更新 + DB永続化） -----
+  const handleAddTag = useCallback(async (userId: string, tagId: string) => {
+    const prevTags = userTags[userId] ?? [];
+    if (prevTags.includes(tagId)) return;
 
-  const handleRemoveTag = useCallback((userId: string, tagId: string) => {
-    setUserTags((prev) => {
-      const current = prev[userId] ?? [];
-      return { ...prev, [userId]: current.filter((id) => id !== tagId) };
-    });
+    const newTags = [...prevTags, tagId];
+
+    // 楽観的更新
+    setUserTags((prev) => ({ ...prev, [userId]: newTags }));
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: newTags } : u));
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: newTags }),
+      });
+      if (!res.ok) {
+        // ロールバック
+        setUserTags((prev) => ({ ...prev, [userId]: prevTags }));
+        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: prevTags } : u));
+        addToast('error', 'タグの追加に失敗しました');
+      }
+    } catch {
+      // ロールバック
+      setUserTags((prev) => ({ ...prev, [userId]: prevTags }));
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: prevTags } : u));
+      addToast('error', 'タグの追加に失敗しました');
+    }
+  }, [userTags, addToast]);
+
+  const handleRemoveTag = useCallback(async (userId: string, tagId: string) => {
+    const prevTags = userTags[userId] ?? [];
+    const newTags = prevTags.filter((id) => id !== tagId);
+
+    // 楽観的更新
+    setUserTags((prev) => ({ ...prev, [userId]: newTags }));
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: newTags } : u));
+
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: newTags }),
+      });
+      if (!res.ok) {
+        // ロールバック
+        setUserTags((prev) => ({ ...prev, [userId]: prevTags }));
+        setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: prevTags } : u));
+        addToast('error', 'タグの削除に失敗しました');
+      }
+    } catch {
+      // ロールバック
+      setUserTags((prev) => ({ ...prev, [userId]: prevTags }));
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, tags: prevTags } : u));
+      addToast('error', 'タグの削除に失敗しました');
+    }
+  }, [userTags, addToast]);
+
+  // ----- ユーザー情報更新（子コンポーネントからの同期） -----
+  const handleUserUpdated = useCallback((userId: string, updates: Partial<User>) => {
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, ...updates } : u));
   }, []);
 
   // ----- レンダリング -----
@@ -538,8 +612,10 @@ export default function ChatPage() {
     ? {
         user: selectedUser,
         userTagIds: userTags[selectedUser.id] ?? [],
+        allTags,
         onAddTag: handleAddTag,
         onRemoveTag: handleRemoveTag,
+        onUserUpdated: handleUserUpdated,
       }
     : null;
 
@@ -717,6 +793,7 @@ export default function ChatPage() {
             contactPreviews={contactPreviews}
             selectedUserId={selectedUserId}
             userTags={userTags}
+            tagMaster={allTags}
             onSelect={handleSelectUser}
             isMobile
           />
@@ -750,6 +827,7 @@ export default function ChatPage() {
           contactPreviews={contactPreviews}
           selectedUserId={selectedUserId}
           userTags={userTags}
+          tagMaster={allTags}
           onSelect={handleSelectUser}
         />
         {renderChatArea()}
@@ -767,6 +845,7 @@ export default function ChatPage() {
         contactPreviews={contactPreviews}
         selectedUserId={selectedUserId}
         userTags={userTags}
+        tagMaster={allTags}
         onSelect={handleSelectUser}
       />
       {renderChatArea()}
@@ -774,8 +853,10 @@ export default function ChatPage() {
         <UserInfoPanel
           user={selectedUser}
           userTagIds={userTags[selectedUser.id] ?? []}
+          allTags={allTags}
           onAddTag={handleAddTag}
           onRemoveTag={handleRemoveTag}
+          onUserUpdated={handleUserUpdated}
         />
       )}
     </div>

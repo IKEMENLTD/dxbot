@@ -31,6 +31,7 @@ export interface Database {
           techstars_completed_at: string | null;
           paused_until: string | null;
           tracking_link_id: string | null;
+          tags: string[];
           profile_picture_url: string | null;
           status_message: string | null;
         };
@@ -58,6 +59,7 @@ export interface Database {
           techstars_started_at?: string | null;
           techstars_completed_at?: string | null;
           paused_until?: string | null;
+          tags?: string[];
           tracking_link_id?: string | null;
           profile_picture_url?: string | null;
           status_message?: string | null;
@@ -86,6 +88,7 @@ export interface Database {
           techstars_started_at?: string | null;
           techstars_completed_at?: string | null;
           paused_until?: string | null;
+          tags?: string[];
           tracking_link_id?: string | null;
           profile_picture_url?: string | null;
           status_message?: string | null;
@@ -99,6 +102,27 @@ export interface Database {
             referencedColumns: [];
           },
         ];
+      };
+      tags: {
+        Row: {
+          id: string;
+          label: string;
+          color: 'green' | 'orange' | 'gray';
+          sort_order: number;
+        };
+        Insert: {
+          id: string;
+          label: string;
+          color: 'green' | 'orange' | 'gray';
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          label?: string;
+          color?: 'green' | 'orange' | 'gray';
+          sort_order?: number;
+        };
+        Relationships: [];
       };
       deals: {
         Row: {

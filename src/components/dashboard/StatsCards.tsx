@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import type { User, Deal, CtaHistory, FunnelKpi } from "@/lib/types";
-import { mockCtaHistory, mockFunnelKpi, mockDeals } from "@/lib/mock-data";
+import type { User, Deal, FunnelKpi } from "@/lib/types";
 
 interface StatCardData {
   label: string;
@@ -29,15 +28,26 @@ function StatCard({ label, value, highlight }: StatCardData) {
 
 interface KpiData {
   deals: Deal[];
-  ctaHistory: CtaHistory[];
+  ctaFiredCount: number;
   funnelKpi: FunnelKpi[];
+}
+
+interface KpiApiResponse {
+  data?: {
+    funnel?: FunnelKpi[];
+    ctaFiredCount?: number;
+  };
+}
+
+interface DealsApiResponse {
+  data?: Deal[];
 }
 
 export default function StatsCards({ users }: StatsCardsProps) {
   const [kpiData, setKpiData] = useState<KpiData>({
-    deals: mockDeals,
-    ctaHistory: mockCtaHistory,
-    funnelKpi: mockFunnelKpi,
+    deals: [],
+    ctaFiredCount: 0,
+    funnelKpi: [],
   });
 
   useEffect(() => {
@@ -45,19 +55,18 @@ export default function StatsCards({ users }: StatsCardsProps) {
 
     Promise.all([
       fetch("/api/deals", { signal: controller.signal })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((json: { data?: Deal[] } | null) => json?.data ?? mockDeals)
-        .catch(() => mockDeals),
+        .then((res) => (res.ok ? res.json() as Promise<DealsApiResponse> : null))
+        .then((json) => json?.data ?? [])
+        .catch(() => [] as Deal[]),
       fetch("/api/kpi", { signal: controller.signal })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((json: { data?: { funnel?: FunnelKpi[] } } | null) => json?.data?.funnel ?? mockFunnelKpi)
-        .catch(() => mockFunnelKpi),
-    ]).then(([deals, funnelKpi]) => {
+        .then((res) => (res.ok ? res.json() as Promise<KpiApiResponse> : null))
+        .catch(() => null),
+    ]).then(([deals, kpiJson]) => {
       if (!controller.signal.aborted) {
         setKpiData({
-          deals: Array.isArray(deals) ? deals : mockDeals,
-          ctaHistory: mockCtaHistory,
-          funnelKpi: Array.isArray(funnelKpi) ? funnelKpi : mockFunnelKpi,
+          deals: Array.isArray(deals) ? deals : [],
+          ctaFiredCount: kpiJson?.data?.ctaFiredCount ?? 0,
+          funnelKpi: Array.isArray(kpiJson?.data?.funnel) ? kpiJson.data.funnel : [],
         });
       }
     }).catch(() => {
@@ -69,7 +78,7 @@ export default function StatsCards({ users }: StatsCardsProps) {
 
   const stats = useMemo(() => {
     const totalUsers = users.length;
-    const ctaFired = kpiData.ctaHistory.length;
+    const ctaFired = kpiData.ctaFiredCount;
     const latestWeek = kpiData.funnelKpi[kpiData.funnelKpi.length - 1];
     const weeklyInflow = latestWeek ? latestWeek.inflow : 0;
     const completedDeals = kpiData.deals.filter((d) => d.status === "completed").length;

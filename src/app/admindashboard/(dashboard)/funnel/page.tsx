@@ -101,16 +101,21 @@ export default function FunnelPage() {
   // 最新週のデータ
   const latestWeek = funnelKpi[funnelKpi.length - 1];
 
-  // 今月の成約数（3月分を集計）
+  // 現在の月を動的に取得
+  const now = new Date();
+  const currentMonth = now.getMonth(); // 0-indexed
+  const currentMonthStr = `${currentMonth + 1}/`; // "3/", "4/" etc.
+
+  // 今月の成約数（当月分を集計）
   const currentMonthConverted = funnelKpi
-    .filter((w) => w.week.startsWith("3/"))
+    .filter((w) => w.week.startsWith(currentMonthStr))
     .reduce((sum, w) => sum + w.converted, 0);
 
-  // 今月の売上（3月開始のdeal合計）
+  // 今月の売上（当月開始のdeal合計）
   const currentMonthRevenue = deals
     .filter((d) => {
       const startMonth = new Date(d.started_at).getMonth();
-      return startMonth === 2; // 3月 = index 2
+      return startMonth === currentMonth;
     })
     .reduce((sum, d) => sum + d.deal_amount, 0);
 

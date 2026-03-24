@@ -4,7 +4,6 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { User, UserTag } from "@/lib/types";
 import { EXIT_CONFIG, STATUS_CONFIG } from "@/lib/types";
-import { mockTags } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import UserAvatar from "@/components/ui/UserAvatar";
@@ -12,8 +11,12 @@ import UserAvatar from "@/components/ui/UserAvatar";
 interface UserInfoPanelProps {
   user: User;
   userTagIds: string[];
+  /** タグマスター（選択肢） */
+  allTags: UserTag[];
   onAddTag: (userId: string, tagId: string) => void;
   onRemoveTag: (userId: string, tagId: string) => void;
+  /** ユーザー情報更新コールバック（parent state 同期用） */
+  onUserUpdated?: (userId: string, updates: Partial<User>) => void;
   /** モバイルボトムシートとして表示 */
   isMobileSheet?: boolean;
   /** 閉じるコールバック（モバイル/タブレット用） */
@@ -53,8 +56,10 @@ function TagPill({ tag }: { tag: UserTag }) {
 export default function UserInfoPanel({
   user,
   userTagIds,
+  allTags,
   onAddTag,
   onRemoveTag,
+  onUserUpdated,
   isMobileSheet = false,
   onClose,
 }: UserInfoPanelProps) {
@@ -126,6 +131,7 @@ export default function UserInfoPanel({
           addToast("error", "ステータスの更新に失敗しました");
         } else {
           addToast("success", "ステータスを更新しました");
+          onUserUpdated?.(user.id, { customer_status: newStatus as typeof user.customer_status });
         }
       } catch {
         setSelectedStatus(user.customer_status);
@@ -134,7 +140,7 @@ export default function UserInfoPanel({
         setIsStatusUpdating(false);
       }
     },
-    [user.id, user.customer_status, addToast]
+    [user.id, user.customer_status, addToast, onUserUpdated]
   );
 
   const handleSaveNote = useCallback(async () => {
@@ -149,6 +155,7 @@ export default function UserInfoPanel({
       if (res.ok) {
         setNoteSaved(true);
         addToast("success", "メモを保存しました");
+        onUserUpdated?.(user.id, { lead_note: memo });
         setTimeout(() => setNoteSaved(false), 2000);
       } else {
         addToast("error", "メモの保存に失敗しました");
@@ -158,7 +165,7 @@ export default function UserInfoPanel({
     } finally {
       setIsSavingNote(false);
     }
-  }, [user.id, memo, addToast]);
+  }, [user.id, memo, addToast, onUserUpdated]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -175,13 +182,13 @@ export default function UserInfoPanel({
 
   const currentTags = useMemo(() => {
     return userTagIds
-      .map((id) => mockTags.find((t) => t.id === id))
+      .map((id) => allTags.find((t) => t.id === id))
       .filter((t): t is UserTag => t !== undefined);
-  }, [userTagIds]);
+  }, [userTagIds, allTags]);
 
   const availableTags = useMemo(() => {
-    return mockTags.filter((t) => !userTagIds.includes(t.id));
-  }, [userTagIds]);
+    return allTags.filter((t) => !userTagIds.includes(t.id));
+  }, [userTagIds, allTags]);
 
   const exitConfig = EXIT_CONFIG[user.recommended_exit] ?? { label: user.recommended_exit ?? "未設定", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
   const statusConfig = STATUS_CONFIG[user.customer_status] ?? { label: user.customer_status ?? "未設定", colorClass: "text-gray-500" };
@@ -233,9 +240,11 @@ export default function UserInfoPanel({
         <h3 className="text-lg font-bold text-gray-900">
           {user.preferred_name}
         </h3>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {user.company_name}
-        </p>
+        {user.company_name && (
+          <p className="text-xs text-gray-500 mt-0.5">
+            {user.company_name}
+          </p>
+        )}
         <Link
           href={`/admindashboard/users/${user.id}`}
           aria-label={`${user.preferred_name}のカルテを見る`}
@@ -248,7 +257,7 @@ export default function UserInfoPanel({
       {/* Basic Info */}
       <div className="px-5 py-4 border-b border-gray-200">
         <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
-          <InfoRow label="業種" value={user.industry} />
+          <InfoRow label="業種" value={user.industry ?? "未設定"} />
           <InfoRow
             label="リード元"
             value={LEAD_SOURCE_LABELS[user.lead_source] ?? user.lead_source}

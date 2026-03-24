@@ -3,7 +3,6 @@
 import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import type { User, UserTag } from "@/lib/types";
 import type { ChatMessage, ContactPreview } from "@/lib/chat-types";
-import { mockTags } from "@/lib/mock-data";
 import UserAvatar from "@/components/ui/UserAvatar";
 
 interface ContactListProps {
@@ -12,6 +11,8 @@ interface ContactListProps {
   contactPreviews: ContactPreview[];
   selectedUserId: string | null;
   userTags: Record<string, string[]>;
+  /** タグマスターデータ */
+  tagMaster?: UserTag[];
   onSelect: (userId: string) => void;
   /** モバイル全幅表示 */
   isMobile?: boolean;
@@ -56,6 +57,7 @@ export default function ContactList({
   contactPreviews,
   selectedUserId,
   userTags,
+  tagMaster = [],
   onSelect,
   isMobile = false,
 }: ContactListProps) {
@@ -109,7 +111,7 @@ export default function ContactList({
 
       const tagIds = userTags[user.id] ?? [];
       const tags = tagIds
-        .map((id) => mockTags.find((t) => t.id === id))
+        .map((id) => tagMaster.find((t) => t.id === id))
         .filter((t): t is UserTag => t !== undefined);
 
       return {

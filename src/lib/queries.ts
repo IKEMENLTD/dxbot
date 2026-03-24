@@ -10,10 +10,12 @@ import {
   mockStumbles,
   mockFunnelKpi,
   mockExitMetrics,
+  mockTags,
 } from './mock-data';
 import { mockMessages } from './mock-messages';
 import type {
   User,
+  UserTag,
   Deal,
   CtaHistory,
   TimelineEvent,
@@ -1761,5 +1763,73 @@ export async function getRecentCompletedDays(
     const msg = err instanceof Error ? err.message : '最近の完了日数取得中にエラーが発生しました';
     console.error('[getRecentCompletedDays] エラー:', msg);
     return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tags
+// ---------------------------------------------------------------------------
+
+/** タグマスター一覧を取得 */
+export async function getAllTags(): Promise<UserTag[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    return mockTags;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('tags')
+      .select('id, label, color')
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.error('[getAllTags] Supabase error:', error.message);
+      return [];
+    }
+
+    return (data ?? []).map((row) => ({
+      id: row.id as string,
+      label: row.label as string,
+      color: row.color as UserTag['color'],
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'タグ取得中にエラーが発生しました';
+    console.error('[getAllTags] エラー:', msg);
+    return [];
+  }
+}
+
+/** ユーザーのタグ配列を更新 */
+export async function updateUserTags(
+  userId: string,
+  tags: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
+    const user = mockUsers.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, error: 'ユーザーが見つかりません' };
+    }
+    user.tags = tags;
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ tags })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[updateUserTags] Supabase error:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'タグ更新中にエラーが発生しました';
+    console.error('[updateUserTags] エラー:', msg);
+    return { success: false, error: msg };
   }
 }

@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
-import { getUserById, updateUserStatus, completeTechstars, updatePausedUntil, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
+import { getUserById, updateUserStatus, updateUserTags, completeTechstars, updatePausedUntil, getDealsByUserId, getTimelineByUserId, getStumblesByUserId } from '@/lib/queries';
 import type { CustomerStatus } from '@/lib/types';
 
 /** TECHSTARS研修期間（3ヶ月） */
@@ -93,6 +93,30 @@ export async function PATCH(
       return NextResponse.json({
         data: { userId: id, status: 'techstars_grad', techstars_completed_at: new Date().toISOString() },
       });
+    }
+
+    // タグ更新: { tags: ["tag-1", "tag-2"] }
+    if ('tags' in bodyRecord) {
+      if (!Array.isArray(bodyRecord.tags) || !bodyRecord.tags.every((t): t is string => typeof t === 'string')) {
+        return NextResponse.json(
+          { error: 'tags は文字列配列である必要があります' },
+          { status: 400 }
+        );
+      }
+
+      const tagsResult = await updateUserTags(id, bodyRecord.tags as string[]);
+
+      if (!tagsResult.success) {
+        return NextResponse.json(
+          { error: tagsResult.error ?? 'タグ更新に失敗しました' },
+          { status: 500 }
+        );
+      }
+
+      // tags のみの更新の場合はここで返す
+      if (!('status' in bodyRecord)) {
+        return NextResponse.json({ data: { userId: id, tags: bodyRecord.tags } });
+      }
     }
 
     // ステータス更新: { status: "..." }

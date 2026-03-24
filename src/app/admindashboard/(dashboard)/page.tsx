@@ -64,14 +64,14 @@ export default function DashboardPage() {
       result = result.filter((u) => u.lead_source === filters.leadSource);
     }
     if (filters.techstarsGradOnly) {
-      result = result.filter((u) => u.badges.includes("techstars_grad"));
+      result = result.filter((u) => (u.badges ?? []).includes("techstars_grad"));
     }
     if (filters.search.trim()) {
       const q = filters.search.trim().toLowerCase();
       result = result.filter(
         (u) =>
-          u.preferred_name.toLowerCase().includes(q) ||
-          u.company_name.toLowerCase().includes(q)
+          (u.preferred_name ?? "").toLowerCase().includes(q) ||
+          (u.company_name ?? "").toLowerCase().includes(q)
       );
     }
 

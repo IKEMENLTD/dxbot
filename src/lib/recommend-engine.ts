@@ -9,6 +9,7 @@ import type { AxisScores, CustomerStatus, ExitType, LeadSource, StumbleType } fr
 export interface RecommendInput {
   axisScores: AxisScores;
   weakAxis: keyof AxisScores;
+  industry: string | null;
   customerStatus: CustomerStatus;
   leadSource: LeadSource;
   leadNote: string | null;
@@ -49,7 +50,7 @@ const EXIT_TYPES: ExitType[] = ['techstars', 'taskmate', 'veteran_ai', 'custom_d
 
 function calculateBaseScores(input: RecommendInput): ExitScores {
   const scores: ExitScores = { techstars: 0, taskmate: 0, veteran_ai: 0, custom_dev: 0 };
-  const { weakAxis, axisScores } = input;
+  const { weakAxis, axisScores, industry } = input;
 
   // 軸A1 (売上・請求) → ベテランAI第1候補 +30pt / 受託開発 第2候補 +10pt
   if (weakAxis === 'a1') {
@@ -86,6 +87,35 @@ function calculateBaseScores(input: RecommendInput): ExitScores {
       // 軸D(0-5pt) → TECHSTARS +30pt / TaskMate 第2候補 +10pt
       scores.techstars += 30;
       scores.taskmate += 10;
+    }
+  }
+
+  // 業種別加点: 業種で特に重要な軸に+5pt（レコメンド精度向上）
+  if (industry) {
+    switch (industry) {
+      case '建設':
+        // 建設業: a1(請求管理)+5pt → ベテランAI寄り（請求・見積が課題）
+        scores.veteran_ai += 5;
+        break;
+      case '製造':
+        // 製造業: b(繰り返し)+5pt → TaskMate/受託寄り（工程管理）
+        scores.taskmate += 5;
+        break;
+      case '飲食':
+        // 飲食業: a2(連絡・記録)+5pt → ベテランAI寄り（予約・顧客管理）
+        scores.veteran_ai += 5;
+        break;
+      case '小売':
+        // 小売業: c(データ)+5pt → ベテランAI寄り（在庫・売上分析）
+        scores.veteran_ai += 5;
+        break;
+      case 'サービス':
+        // サービス業: a2(連絡・記録)+5pt → ベテランAI寄り（顧客管理）
+        scores.veteran_ai += 5;
+        break;
+      default:
+        // その他: 加点なし
+        break;
     }
   }
 

@@ -127,8 +127,8 @@ export default function ContactList({
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
-        c.user.preferred_name.toLowerCase().includes(q) ||
-        c.user.company_name.toLowerCase().includes(q)
+        (c.user.preferred_name ?? "").toLowerCase().includes(q) ||
+        (c.user.company_name ?? "").toLowerCase().includes(q)
       );
     });
 

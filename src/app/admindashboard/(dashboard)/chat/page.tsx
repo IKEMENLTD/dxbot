@@ -508,7 +508,7 @@ export default function ChatPage() {
             style={{ borderRadius: "50%" }}
           >
             <span className="text-sm font-medium text-gray-600">
-              {selectedUser.preferred_name.slice(0, 1)}
+              {(selectedUser.preferred_name ?? "?").slice(0, 1)}
             </span>
           </div>
           <div className="min-w-0">

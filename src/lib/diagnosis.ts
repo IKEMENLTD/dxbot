@@ -96,9 +96,9 @@ export function calculateScores(answers: Record<string, number>): AxisScores {
  * 合計スコアからバンドを判定
  */
 export function determineBand(totalScore: number): 1 | 2 | 3 | 4 {
-  if (totalScore <= 24) return 1;
-  if (totalScore <= 44) return 2;
-  if (totalScore <= 64) return 3;
+  if (totalScore <= 30) return 1;
+  if (totalScore <= 45) return 2;
+  if (totalScore <= 60) return 3;
   return 4;
 }
 
@@ -106,18 +106,17 @@ export function determineBand(totalScore: number): 1 | 2 | 3 | 4 {
  * 最もスコアが低い軸を判定
  */
 export function determineWeakAxis(scores: AxisScores): keyof AxisScores {
-  const entries: [keyof AxisScores, number][] = [
-    ['a1', scores.a1],
-    ['a2', scores.a2],
-    ['b', scores.b],
-    ['c', scores.c],
-    ['d', scores.d],
-  ];
+  // ビジネス優先度順: d(ITリテラシー) → b(繰り返し) → a1 → a2 → c
+  // 同点の場合、優先度が高い軸を弱軸として選択する
+  // d: ツールが使えないと他が始まらない
+  // b: 自動化は即効性がある
+  const priorityOrder: (keyof AxisScores)[] = ['d', 'b', 'a1', 'a2', 'c'];
 
-  let weakest: keyof AxisScores = 'a1';
-  let minScore = scores.a1;
+  let weakest: keyof AxisScores = priorityOrder[0];
+  let minScore = scores[priorityOrder[0]];
 
-  for (const [axis, score] of entries) {
+  for (const axis of priorityOrder) {
+    const score = scores[axis];
     if (score < minScore) {
       minScore = score;
       weakest = axis;
@@ -182,7 +181,7 @@ export function generateResultMessage(
 
 /** デフォルト診断設定 */
 export const DEFAULT_DIAGNOSIS_CONFIG: DiagnosisConfig = {
-  bandThresholds: [24, 44, 64],
+  bandThresholds: [30, 45, 60],
   bandLabels: ['DX未着手', '部分的にDX', 'DX進行中', 'DX成熟'],
   questions: [
     { axis: 'industry', question: '御社の業種を教えてください' },

@@ -72,7 +72,7 @@ export default function UserHeader({ user }: UserHeaderProps) {
           </span>
 
           {/* Badges */}
-          {user.badges.map((badge) => {
+          {(user.badges ?? []).map((badge) => {
             const badgeConfig = BADGE_CONFIG[badge] ?? { label: badge ?? "不明", colorClass: "text-gray-500", bgClass: "bg-gray-100" };
             return (
               <span

@@ -58,6 +58,7 @@ export async function GET(
     const recommendation = calculateRecommendation({
       axisScores: user.axis_scores,
       weakAxis,
+      industry: user.industry ?? null,
       customerStatus: user.customer_status,
       leadSource: user.lead_source,
       leadNote: user.lead_note,

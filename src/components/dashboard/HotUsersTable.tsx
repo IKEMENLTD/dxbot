@@ -77,7 +77,7 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
             new Date(b.last_action_at).getTime();
           break;
         case "preferred_name":
-          cmp = a.preferred_name.localeCompare(b.preferred_name, "ja");
+          cmp = (a.preferred_name ?? "").localeCompare(b.preferred_name ?? "", "ja");
           break;
       }
       return sortDir === "asc" ? cmp : -cmp;
@@ -227,8 +227,8 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                   {/* Badges */}
                   <td className="px-4 py-3.5">
                     <div className="flex flex-wrap gap-1.5">
-                      {user.badges.length > 0
-                        ? user.badges.map((badge) => (
+                      {(user.badges ?? []).length > 0
+                        ? (user.badges ?? []).map((badge) => (
                             <Badge key={badge} type={badge} />
                           ))
                         : <span className="text-xs text-gray-300">-</span>}

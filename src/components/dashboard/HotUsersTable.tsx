@@ -60,6 +60,11 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
     [sortKey]
   );
 
+  const maxScore = useMemo(() => {
+    if (users.length === 0) return 1;
+    return Math.max(...users.map((u) => u.score), 1);
+  }, [users]);
+
   const sorted = useMemo(() => {
     const arr = [...users];
     arr.sort((a, b) => {
@@ -211,6 +216,12 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                     <span className="text-sm font-semibold text-gray-900">
                       {user.score}
                     </span>
+                    <div className="w-full h-[3px] bg-gray-100 rounded-full mt-1">
+                      <div
+                        className="h-full bg-green-500 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${(user.score / maxScore) * 100}%` }}
+                      />
+                    </div>
                   </td>
                   {/* Last completed step */}
                   <td className="px-4 py-3.5 text-xs text-gray-500 truncate max-w-[200px]">

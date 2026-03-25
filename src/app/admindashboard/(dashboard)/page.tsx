@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import type { User } from "@/lib/types";
 import FilterBar from "@/components/dashboard/FilterBar";
@@ -9,6 +9,8 @@ import HotUsersTable from "@/components/dashboard/HotUsersTable";
 import StatsCards from "@/components/dashboard/StatsCards";
 import TodayActions from "@/components/dashboard/TodayActions";
 import { useToast } from "@/contexts/ToastContext";
+
+const AUTO_REFRESH_INTERVAL = 60_000;
 
 function StepCard({
   number,
@@ -53,10 +55,8 @@ export default function DashboardPage() {
     search: "",
   });
 
-  useEffect(() => {
-    const controller = new AbortController();
-
-    fetch("/api/users", { signal: controller.signal })
+  const fetchUsers = useCallback((signal?: AbortSignal) => {
+    return fetch("/api/users", { signal })
       .then((res) => {
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         return res.json();
@@ -66,7 +66,6 @@ export default function DashboardPage() {
           setUsers(json.data);
         } else {
           setUsers([]);
-          addToast("warning", "APIからデータを取得できませんでした。");
         }
         setError(null);
       })
@@ -75,6 +74,18 @@ export default function DashboardPage() {
         console.error("[Dashboard] データ取得エラー:", err);
         setUsers([]);
         setError("データの取得に失敗しました。");
+      });
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchUsers(controller.signal)
+      .then(() => {
+        // success already handled
+      })
+      .catch(() => {
         addToast("error", "データの取得に失敗しました。");
       })
       .finally(() => {
@@ -85,6 +96,22 @@ export default function DashboardPage() {
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-refresh every 60 seconds (skip when tab is hidden)
+  const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    refreshRef.current = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      fetchUsers();
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => {
+      if (refreshRef.current) {
+        clearInterval(refreshRef.current);
+      }
+    };
+  }, [fetchUsers]);
 
   const filteredUsers = useMemo(() => {
     let result: User[] = users;

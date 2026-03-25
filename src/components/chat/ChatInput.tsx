@@ -194,7 +194,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
               className="relative group overflow-hidden border border-gray-200 bg-gray-50"
             >
               {att.type === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element -- 外部URL画像のためnext/image不使用
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={att.url}
                   alt={att.name}

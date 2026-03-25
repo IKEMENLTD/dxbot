@@ -212,6 +212,8 @@ export default function CtaSettings() {
         },
       }));
     },
+    // SCORE_FIELDSはモジュールスコープの定数（再レンダリングで変化しない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 

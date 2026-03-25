@@ -18,6 +18,7 @@ import {
   reminderFinalMessage,
 } from '@/lib/line-messages';
 import type { LineMessage } from '@/lib/line-types';
+import { findStepByIdAsync } from '@/lib/step-master';
 import type { ReminderConfig } from '@/lib/types';
 import { getSetting } from '@/lib/app-settings';
 
@@ -95,6 +96,7 @@ function determineReminderLevel(inactiveDays: number, cfg: ReminderConfig): Remi
 function createReminderMessage(
   level: ReminderLevel,
   stepName: string | null,
+  estimatedMinutes: number | undefined,
   cfg: ReminderConfig
 ): LineMessage {
   // カスタムメッセージが設定されている場合はそちらを使用
@@ -112,11 +114,11 @@ function createReminderMessage(
   // デフォルトメッセージ
   switch (level) {
     case 'light':
-      return reminderLightMessage(stepName);
+      return reminderLightMessage(stepName, estimatedMinutes);
     case 'medium':
-      return reminderMediumMessage(stepName);
+      return reminderMediumMessage(stepName, estimatedMinutes);
     case 'final':
-      return reminderFinalMessage();
+      return reminderFinalMessage(stepName, estimatedMinutes);
   }
 }
 
@@ -140,8 +142,15 @@ async function sendReminderToUser(
       };
     }
 
+    // ステップID→ステップ名変換
+    const stepDef = user.last_completed_step
+      ? await findStepByIdAsync(user.last_completed_step)
+      : null;
+    const resolvedStepName = stepDef?.name ?? null;
+    const estMinutes = stepDef?.estimatedMinutes ?? undefined;
+
     // メッセージ生成（カスタムメッセージ対応）
-    const message = createReminderMessage(level, user.last_completed_step, cfg);
+    const message = createReminderMessage(level, resolvedStepName, estMinutes, cfg);
 
     // pushMessage送信
     const result = await pushMessage(user.line_user_id, [message]);

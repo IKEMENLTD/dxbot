@@ -219,24 +219,30 @@ export interface Database {
           user_id: string;
           trigger: 'action_boost' | 'apo_early' | 'subsidy_timing' | 'lv40_reached' | 'invoice_stumble' | 'it_literacy';
           recommended_exit: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
+          message: string;
           fired_at: string;
           result: 'pending' | 'clicked' | 'converted' | 'ignored';
+          created_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
           trigger: 'action_boost' | 'apo_early' | 'subsidy_timing' | 'lv40_reached' | 'invoice_stumble' | 'it_literacy';
           recommended_exit: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
+          message?: string;
           fired_at?: string;
           result?: 'pending' | 'clicked' | 'converted' | 'ignored';
+          created_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
           trigger?: 'action_boost' | 'apo_early' | 'subsidy_timing' | 'lv40_reached' | 'invoice_stumble' | 'it_literacy';
           recommended_exit?: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
+          message?: string;
           fired_at?: string;
           result?: 'pending' | 'clicked' | 'converted' | 'ignored';
+          created_at?: string;
         };
         Relationships: [
           {
@@ -392,7 +398,9 @@ export interface Database {
           user_id: string;
           exit_type: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
           score: number;
+          confidence: number;
           reason: string;
+          reasons: Record<string, unknown>[];
           calculated_at: string;
         };
         Insert: {
@@ -400,14 +408,18 @@ export interface Database {
           user_id: string;
           exit_type: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
           score: number;
+          confidence?: number;
           reason?: string;
+          reasons?: Record<string, unknown>[];
         };
         Update: {
           id?: string;
           user_id?: string;
           exit_type?: 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
           score?: number;
+          confidence?: number;
           reason?: string;
+          reasons?: Record<string, unknown>[];
         };
         Relationships: [
           {

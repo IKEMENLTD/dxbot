@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { TrackingLink, LeadSource, TrackingPerformance, TrackingClickDetail } from "@/lib/types";
+import type { TrackingLink, TrackingPerformance, TrackingClickDetail } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
 // ===== 定数 =====

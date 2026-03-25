@@ -15,13 +15,6 @@ interface EncryptedLineConfig {
   verified?: boolean;
 }
 
-/** POST リクエストボディの型（片方だけの更新もサポート） */
-interface SaveLineConfigBody {
-  channelAccessToken?: string;
-  channelSecret?: string;
-  webhookUrl?: string;
-}
-
 /** GET レスポンスの型 */
 interface LineConfigGetResponse {
   configured: boolean;

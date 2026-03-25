@@ -28,6 +28,7 @@ export default function UserAvatar({ name, pictureUrl, size = "md" }: UserAvatar
 
   if (pictureUrl && !imgError) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- 外部URL画像(LINEプロフィール)のためnext/image不使用
       <img
         src={pictureUrl}
         alt={`${name}のプロフィール画像`}

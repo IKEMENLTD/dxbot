@@ -80,6 +80,7 @@ function MediaPreview({ media }: { media: MediaAttachment }) {
   if (media.type === "image") {
     return (
       <>
+        {/* eslint-disable-next-line @next/next/no-img-element -- 外部URL画像のためnext/image不使用 */}
         <img
           src={media.url}
           alt={media.name}
@@ -92,6 +93,7 @@ function MediaPreview({ media }: { media: MediaAttachment }) {
             onClick={() => setExpanded(false)}
           >
             <div className="relative max-w-[90vw] max-h-[90vh]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- 外部URL画像のためnext/image不使用 */}
               <img
                 src={media.url}
                 alt={media.name}

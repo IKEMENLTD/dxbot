@@ -140,7 +140,7 @@ export default function UserInfoPanel({
         setIsStatusUpdating(false);
       }
     },
-    [user.id, user.customer_status, addToast, onUserUpdated]
+    [user, addToast, onUserUpdated]
   );
 
   const handleSaveNote = useCallback(async () => {

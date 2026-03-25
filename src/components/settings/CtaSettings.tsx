@@ -107,6 +107,14 @@ function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response>
   );
 }
 
+// スコア系フィールド（0を許容）- コンポーネント外に定義して参照安定性を確保
+const SCORE_FIELDS = new Set([
+  "axisA1Threshold",
+  "axisDThreshold",
+  "totalScoreThreshold",
+  "stumbleHowCountThreshold",
+]);
+
 // ---------------------------------------------------------------------------
 // コンポーネント
 // ---------------------------------------------------------------------------
@@ -190,14 +198,6 @@ export default function CtaSettings() {
   }, []);
 
   // 数値フィールド更新
-  // スコア系フィールド（0を許容）
-  const SCORE_FIELDS = new Set([
-    "axisA1Threshold",
-    "axisDThreshold",
-    "totalScoreThreshold",
-    "stumbleHowCountThreshold",
-  ]);
-
   const handleNumberChange = useCallback(
     (triggerKey: CtaTrigger, field: string, value: string) => {
       const num = parseInt(value, 10);

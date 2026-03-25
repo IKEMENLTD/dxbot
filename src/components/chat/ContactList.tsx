@@ -122,7 +122,7 @@ export default function ContactList({
         tags,
       };
     });
-  }, [users, messages, userTags, previewMap]);
+  }, [users, messages, userTags, previewMap, tagMaster]);
 
   const sortedContacts = useMemo(() => {
     const filtered = contactData.filter((c) => {

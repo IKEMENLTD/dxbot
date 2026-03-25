@@ -470,12 +470,53 @@ export default function ChatPage() {
       const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
       try {
+        // 画像添付がある場合、先にアップロードして公開URLを取得
+        let imageUrls: string[] | undefined;
+        if (media && media.length > 0) {
+          const imageMedia = media.filter((m) => m.type === "image");
+          if (imageMedia.length > 0) {
+            const uploadResults = await Promise.allSettled(
+              imageMedia.map(async (m) => {
+                const blob = await fetch(m.url).then((r) => r.blob());
+                const formData = new FormData();
+                formData.append("file", blob, m.name);
+                const uploadRes = await fetch("/api/chat/upload", {
+                  method: "POST",
+                  body: formData,
+                  signal: controller.signal,
+                });
+                if (!uploadRes.ok) {
+                  const errData = (await uploadRes.json()) as { error?: string };
+                  throw new Error(errData.error ?? "アップロード失敗");
+                }
+                const data = (await uploadRes.json()) as { url: string };
+                return data.url;
+              })
+            );
+
+            const successUrls: string[] = [];
+            for (const result of uploadResults) {
+              if (result.status === "fulfilled") {
+                successUrls.push(result.value);
+              } else {
+                console.error("[Chat] 画像アップロード失敗:", result.reason);
+              }
+            }
+
+            if (successUrls.length > 0) {
+              imageUrls = successUrls;
+            }
+            // アップロード失敗分は無視してテキストは送信する（フォールバック）
+          }
+        }
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: selectedUserId,
             message: text,
+            imageUrls,
           }),
           signal: controller.signal,
         });

@@ -53,6 +53,7 @@ export interface SaveMessageParams {
   content: string;
   messageType?: MessageType;
   lineMessageId?: string | null;
+  mediaAttachments?: MediaAttachment[];
 }
 
 /** DBの ChatMessageRow をフロントエンドの ChatMessage に変換 */

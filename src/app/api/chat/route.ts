@@ -13,7 +13,8 @@ import {
   getLineUserIdByUserId,
 } from '@/lib/queries';
 import { pushMessage } from '@/lib/line-client';
-import type { TextMessage } from '@/lib/line-types';
+import type { TextMessage, ImageMessage, LineMessage } from '@/lib/line-types';
+import type { MediaAttachment } from '@/lib/chat-types';
 
 // ---------------------------------------------------------------------------
 // GET /api/chat?userId=xxx&limit=50&since=2026-03-20T00:00:00Z
@@ -97,6 +98,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 interface ChatSendRequest {
   userId: string;
   message: string;
+  imageUrls?: string[];
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = (await request.json()) as ChatSendRequest;
-    const { userId, message } = body;
+    const { userId, message, imageUrls } = body;
 
     if (!userId || typeof userId !== 'string') {
       return NextResponse.json(
@@ -150,9 +152,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let lineSent = false;
     let lineMock = false;
 
+    // imageUrlsのバリデーション（最大4件: テキスト1件 + 画像4件 = LINE上限5件）
+    const validImageUrls = Array.isArray(imageUrls)
+      ? imageUrls.filter((u): u is string => typeof u === 'string' && u.startsWith('https://'))
+      : [];
+    const cappedImageUrls = validImageUrls.slice(0, 4);
+
     if (lineUserId) {
-      const lineMsg: TextMessage = { type: 'text', text: message };
-      const pushResult = await pushMessage(lineUserId, [lineMsg]);
+      // テキストメッセージ + ImageMessage(s) を組み立てる
+      const lineMessages: LineMessage[] = [];
+      const textMsg: TextMessage = { type: 'text', text: message };
+      lineMessages.push(textMsg);
+
+      for (const url of cappedImageUrls) {
+        const imgMsg: ImageMessage = {
+          type: 'image',
+          originalContentUrl: url,
+          previewImageUrl: url,
+        };
+        lineMessages.push(imgMsg);
+      }
+
+      // LINE push API は最大5件まで
+      const pushResult = await pushMessage(lineUserId, lineMessages.slice(0, 5));
 
       if (!pushResult.success) {
         // LINE送信失敗 → DBには保存しない（エラーを返す）
@@ -167,6 +189,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       lineMock = pushResult.mock;
     }
 
+    // 画像URLからMediaAttachment配列を構築
+    const mediaForDb: MediaAttachment[] = cappedImageUrls.map((url, idx) => ({
+      id: `img-${Date.now()}-${idx}`,
+      type: 'image' as const,
+      url,
+      name: `image-${idx + 1}`,
+      size: 0,
+      mimeType: 'image/unknown',
+    }));
+
     // LINE送信成功（or LINE未接続）→ DBに保存
     const result = await saveMessage({
       userId,
@@ -174,6 +206,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       direction: 'outbound',
       content: message,
       messageType: 'text',
+      mediaAttachments: mediaForDb.length > 0 ? mediaForDb : undefined,
     });
 
     if (!result.success) {

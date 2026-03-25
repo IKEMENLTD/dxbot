@@ -562,6 +562,19 @@ export async function saveMessage(
   }
 
   try {
+    // media_attachmentsをRecord<string, unknown>[]に変換（DB型に合わせる）
+    const mediaForDb: Record<string, unknown>[] | undefined =
+      params.mediaAttachments && params.mediaAttachments.length > 0
+        ? params.mediaAttachments.map((m) => ({
+            id: m.id,
+            type: m.type,
+            url: m.url,
+            name: m.name,
+            size: m.size,
+            mimeType: m.mimeType,
+          }))
+        : undefined;
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
@@ -573,6 +586,7 @@ export async function saveMessage(
         line_message_id: params.lineMessageId ?? null,
         message_type: params.messageType ?? 'text',
         sent_at: new Date().toISOString(),
+        ...(mediaForDb ? { media_attachments: mediaForDb } : {}),
       })
       .select('id, sent_at')
       .single();

@@ -161,8 +161,15 @@ export interface FlexSeparator {
   color?: string;
 }
 
-/** 送信メッセージ型（テキスト or Flex） */
-export type LineMessage = TextMessage | FlexMessage;
+/** 画像メッセージ */
+export interface ImageMessage {
+  type: 'image';
+  originalContentUrl: string;
+  previewImageUrl: string;
+}
+
+/** 送信メッセージ型（テキスト or Flex or Image） */
+export type LineMessage = TextMessage | FlexMessage | ImageMessage;
 
 /** Reply API リクエスト */
 export interface ReplyMessageRequest {

@@ -89,7 +89,7 @@ describe('stepContentMessage', () => {
   it('難易度3ステップのラベルが正しい', () => {
     const msg = stepContentMessage(MOCK_STEP_HARD, 5);
     expect(msg.text).toContain('自動化ツール導入');
-    expect(msg.text).toContain('Step 6');
+    expect(msg.text).toContain('実践 6:');
   });
 });
 
@@ -97,18 +97,17 @@ describe('stepCompleteMessage', () => {
   it('完了ステップ名と達成数を含む', () => {
     const msg = stepCompleteMessage(MOCK_STEP, 3, false, 4);
     expect(msg.text).toContain('請求書作成');
-    expect(msg.text).toContain('3ステップ達成');
+    expect(msg.text).toContain('3/30ステップ');
   });
 
   it('レベルアップ時にレベルアップメッセージを含む', () => {
     const msg = stepCompleteMessage(MOCK_STEP, 3, true, 5);
-    expect(msg.text).toContain('レベルアップ');
-    expect(msg.text).toContain('Lv.5');
+    expect(msg.text).toContain('Lv.5にアップしました');
   });
 
   it('レベルアップしない場合はレベルアップメッセージなし', () => {
     const msg = stepCompleteMessage(MOCK_STEP, 3, false, 4);
-    expect(msg.text).not.toContain('レベルアップ');
+    expect(msg.text).not.toContain('にアップしました');
   });
 
   it('次のステップへのQuick Replyがある', () => {
@@ -128,20 +127,19 @@ describe('allStepsCompleteMessage', () => {
 describe('stepStumbleMessage', () => {
   it('howタイプでステップ個別ヒントを返す', () => {
     const msg = stepStumbleMessage(MOCK_STEP, 'how');
-    expect(msg.text).toContain('ヒント');
+    expect(msg.text).toContain('やり方について');
     expect(msg.text).toContain('請求書作成');
     expect(msg.text).toContain('freee');
   });
 
   it('timeタイプでアドバイスメッセージを返す', () => {
     const msg = stepStumbleMessage(MOCK_STEP, 'time');
-    expect(msg.text).toContain('アドバイス');
     expect(msg.text).toContain('約15分');
   });
 
   it('motivationタイプで応援メッセージを返す', () => {
     const msg = stepStumbleMessage(MOCK_STEP, 'motivation');
-    expect(msg.text).toContain('応援');
+    expect(msg.text).toContain('改善につながります');
   });
 
   it('再挑戦/スキップのQuick Replyがある', () => {

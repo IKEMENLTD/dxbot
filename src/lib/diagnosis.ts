@@ -17,11 +17,11 @@ export interface DiagnosisQuestion {
 
 /** 5段階選択肢（Q2〜Q6共通） */
 const FIVE_SCALE_OPTIONS: { label: string; value: number }[] = [
-  { label: '1: 全くできていない', value: 1 },
-  { label: '2: ほとんどできていない', value: 2 },
-  { label: '3: 一部できている', value: 3 },
-  { label: '4: おおむねできている', value: 4 },
-  { label: '5: 完全にできている', value: 5 },
+  { label: '1: 紙/手作業のみ', value: 1 },
+  { label: '2: 一部デジタル化', value: 2 },
+  { label: '3: 半分くらいデジタル', value: 3 },
+  { label: '4: ほぼデジタル化', value: 4 },
+  { label: '5: 完全にデジタル化', value: 5 },
 ];
 
 /** 6問の質問定義 */
@@ -135,45 +135,45 @@ const AXIS_LABELS: Record<keyof AxisScores, string> = {
   d: 'ITツール活用',
 };
 
-/** バンド名 */
-const BAND_LABELS: Record<1 | 2 | 3 | 4, string> = {
-  1: 'DX未着手',
-  2: '部分的にDX',
-  3: 'DX進行中',
-  4: 'DX成熟',
-};
+
+/** スコアを星表示に変換（0-15スコア → 5段階星） */
+export function scoreToStars(score: number): string {
+  if (score <= 3) return '\u2605\u2606\u2606\u2606\u2606';
+  if (score <= 6) return '\u2605\u2605\u2606\u2606\u2606';
+  if (score <= 9) return '\u2605\u2605\u2605\u2606\u2606';
+  if (score <= 12) return '\u2605\u2605\u2605\u2605\u2606';
+  return '\u2605\u2605\u2605\u2605\u2605';
+}
 
 /**
  * 結果メッセージを生成
  */
 export function generateResultMessage(
   scores: AxisScores,
-  band: 1 | 2 | 3 | 4,
+  _band: 1 | 2 | 3 | 4,
   weakAxis: keyof AxisScores,
-  industry: string | null
+  _industry: string | null,
+  estimatedMinutes?: number
 ): string {
   const total = scores.a1 + scores.a2 + scores.b + scores.c + scores.d;
-  const industryText = industry ? `[業種: ${industry}]` : '';
+  const minutes = estimatedMinutes ?? 15;
 
   return [
-    `--- DX診断結果 ---`,
-    industryText,
+    `診断おつかれさまでした！`,
     ``,
-    `合計スコア: ${total}/75点`,
-    `DXレベル: Band${band}（${BAND_LABELS[band]}）`,
+    `あなたのDXスコア: ${total}点`,
     ``,
-    `[各軸スコア]`,
-    `  売上・請求管理: ${scores.a1}/15`,
-    `  連絡・記録管理: ${scores.a2}/15`,
-    `  繰り返し作業: ${scores.b}/15`,
-    `  データ経営: ${scores.c}/15`,
-    `  ITツール活用: ${scores.d}/15`,
+    `一番の伸びしろは「${AXIS_LABELS[weakAxis]}」です。`,
+    `ここを改善すると、最も早く効果が出ます。`,
     ``,
-    `弱点: ${AXIS_LABELS[weakAxis]}`,
+    `売上・請求管理 ${scoreToStars(scores.a1)}`,
+    `連絡・記録管理 ${scoreToStars(scores.a2)}`,
+    `繰り返し作業  ${scoreToStars(scores.b)}`,
+    `データ経営    ${scoreToStars(scores.c)}`,
+    `ITツール活用  ${scoreToStars(scores.d)}`,
     ``,
-    `これから${AXIS_LABELS[weakAxis]}を中心に、`,
-    `ステップ形式でDX改善をサポートしていきます！`,
-    `まずはLv.1からスタートしましょう。`,
+    `最初のステップは${minutes}分で完了します。`,
+    `さっそく始めてみましょう！`,
   ].join('\n');
 }
 

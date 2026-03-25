@@ -16,14 +16,14 @@ describe('reminderLightMessage', () => {
     expect(msg.type).toBe('text');
     expect(msg.text).toContain('最近の進捗はいかがですか？');
     expect(msg.text).toContain('請求書作成');
-    expect(msg.quickReply).toBeUndefined();
+    expect(msg.quickReply).toBeDefined();
+    expect(msg.quickReply?.items).toHaveLength(2);
   });
 
   it('ステップ名なしで進捗確認メッセージを生成する', () => {
     const msg = reminderLightMessage(null);
     expect(msg.type).toBe('text');
     expect(msg.text).toContain('最近の進捗はいかがですか？');
-    expect(msg.text).not.toContain('現在のステップ:');
   });
 });
 
@@ -66,7 +66,6 @@ describe('reminderFinalMessage', () => {
   it('最終リマインダーメッセージを生成する', () => {
     const msg = reminderFinalMessage();
     expect(msg.type).toBe('text');
-    expect(msg.text).toContain('最終リマインダー');
     expect(msg.text).toContain('いつでも再開できます');
     expect(msg.quickReply).toBeDefined();
     expect(msg.quickReply?.items).toHaveLength(2);

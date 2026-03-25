@@ -8,21 +8,29 @@ import type { StepDefinition } from './step-master';
 import { INDUSTRIES, generateResultMessage } from './diagnosis';
 
 /**
- * Welcomeメッセージ
+ * Welcomeメッセージ（施策2: フロー最適化 - consentと一体化）
  */
 export function welcomeMessage(name: string | null): TextMessage {
-  const greeting = name ? `${name}さん、` : '';
+  const greeting = name ? `${name}さん、こんにちは！` : 'こんにちは！';
   return {
     type: 'text',
     text: [
-      `${greeting}友だち追加ありがとうございます！`,
-      `DXBOTは、御社のDX（デジタル化）を`,
-      `ステップ形式でサポートするBOTです。`,
+      greeting,
       ``,
-      `まずは簡単な診断（6問）で`,
-      `御社の現状を把握させてください。`,
+      `「パソコン作業をもっとラクにしたい」`,
+      `そう思ったこと、ありませんか？`,
       ``,
-      `診断を始めてもよろしいですか？`,
+      `DXBOTが、1日15分のカンタンな実践で`,
+      `業務のムダをなくすお手伝いをします。`,
+      ``,
+      `まず6問のカンタン診断で、`,
+      `一番効果が出るポイントを見つけましょう！`,
+      ``,
+      `カンタンな6問の診断で、`,
+      `今すぐ改善できるポイントが分かります。`,
+      ``,
+      `所要時間は約2分です。`,
+      `始めてみますか？`,
     ].join('\n'),
     quickReply: {
       items: [
@@ -56,8 +64,7 @@ export function sourceQuestionMessage(): TextMessage {
   return {
     type: 'text',
     text: [
-      '友だち追加ありがとうございます！',
-      'まず1つだけ教えてください。',
+      '1つだけ教えてください。',
       'DXBOTをどこで知りましたか？',
     ].join('\n'),
     quickReply: {
@@ -122,12 +129,18 @@ export function sourceQuestionMessage(): TextMessage {
 }
 
 /**
- * 同意確認メッセージ
+ * 同意確認メッセージ（再診断・テキスト入力時用）
  */
 export function consentMessage(): TextMessage {
   return {
     type: 'text',
-    text: '診断を始めてもよろしいですか？',
+    text: [
+      'カンタンな6問の診断で、',
+      '今すぐ改善できるポイントが分かります。',
+      '',
+      '所要時間は約2分です。',
+      '始めてみますか？',
+    ].join('\n'),
     quickReply: {
       items: [
         {
@@ -227,26 +240,29 @@ export function diagnosisResultMessage(
   scores: AxisScores,
   band: 1 | 2 | 3 | 4,
   weakAxis: keyof AxisScores,
-  industry: string | null
+  industry: string | null,
+  estimatedMinutes?: number
 ): TextMessage {
   return {
     type: 'text',
-    text: generateResultMessage(scores, band, weakAxis, industry),
+    text: generateResultMessage(scores, band, weakAxis, industry, estimatedMinutes),
   };
 }
 
 /**
  * ステップ開始案内メッセージ（診断完了後に表示）
  */
-export function stepStartMessage(stepName: string): TextMessage {
+export function stepStartMessage(stepName: string, estimatedMinutes?: number): TextMessage {
+  const minutes = estimatedMinutes ?? 15;
   return {
     type: 'text',
     text: [
-      `--- ステップ開始 ---`,
+      `次の実践テーマが決まりました！`,
       ``,
-      `次のステップ: ${stepName}`,
+      `「${stepName}」`,
       ``,
-      `準備ができたら「スタート」ボタンを押してください。`,
+      `約${minutes}分でできる内容です。`,
+      `スタートを押すと詳しい手順が届きます。`,
     ].join('\n'),
     quickReply: {
       items: [
@@ -281,7 +297,7 @@ const AXIS_LABELS: Record<keyof AxisScores, string> = {
  */
 export function stepContentMessage(step: StepDefinition, completedCount: number): TextMessage {
   const lines: string[] = [
-    `--- Step ${completedCount + 1} ---`,
+    `実践 ${completedCount + 1}:`,
     ``,
     `[${step.name}]`,
     step.description,
@@ -330,32 +346,40 @@ export function stepContentMessage(step: StepDefinition, completedCount: number)
           type: 'action',
           action: {
             type: 'postback',
-            label: 'やり方が分からない',
+            label: 'もう少し詳しく知りたい',
             data: `action=step_stumble&stepId=${step.id}&type=how`,
-            displayText: 'やり方が分からない',
+            displayText: 'もう少し詳しく知りたい',
           },
         },
         {
           type: 'action',
           action: {
             type: 'postback',
-            label: '時間がない',
+            label: '今週は忙しい',
             data: `action=step_stumble&stepId=${step.id}&type=time`,
-            displayText: '時間がない',
+            displayText: '今週は忙しい',
           },
         },
         {
           type: 'action',
           action: {
             type: 'postback',
-            label: 'やる気が出ない',
+            label: '他のステップを先にやりたい',
             data: `action=step_stumble&stepId=${step.id}&type=motivation`,
-            displayText: 'やる気が出ない',
+            displayText: '他のステップを先にやりたい',
           },
         },
       ],
     },
   };
+}
+
+/** 進捗バー生成（10段階: 完了数/30ステップ） */
+function stepProgressBar(completedCount: number, totalSteps: number): string {
+  const ratio = Math.min(completedCount / totalSteps, 1);
+  const filled = Math.round(ratio * 10);
+  const empty = 10 - filled;
+  return '\u2588'.repeat(filled) + '\u2591'.repeat(empty);
 }
 
 /**
@@ -365,22 +389,25 @@ export function stepCompleteMessage(
   completedStep: StepDefinition,
   completedCount: number,
   levelUp: boolean,
-  newLevel: number
+  newLevel: number,
+  nextStep?: StepDefinition | null
 ): TextMessage {
   const lines: string[] = [
-    `--- ステップ完了 ---`,
+    `「${completedStep.name}」クリアです！`,
+    `おつかれさまでした！`,
     ``,
-    `「${completedStep.name}」を完了しました！`,
-    `これで${completedCount}ステップ達成です。`,
+    `進捗: ${stepProgressBar(completedCount, 30)} ${completedCount}/30ステップ`,
   ];
 
   if (levelUp) {
     lines.push(``);
-    lines.push(`*** レベルアップ！ Lv.${newLevel} ***`);
+    lines.push(`Lv.${newLevel}にアップしました！`);
   }
 
-  lines.push(``);
-  lines.push(`次のステップに進みましょう。`);
+  if (nextStep) {
+    lines.push(``);
+    lines.push(`次は「${nextStep.name}」、約${nextStep.estimatedMinutes}分です。`);
+  }
 
   return {
     type: 'text',
@@ -417,8 +444,6 @@ export function allStepsCompleteMessage(completedCount: number, level: number): 
   return {
     type: 'text',
     text: [
-      `--- 全ステップ完了 ---`,
-      ``,
       `おめでとうございます！`,
       `${completedCount}ステップ全て完了しました。`,
       `現在のレベル: Lv.${level}`,
@@ -440,8 +465,6 @@ function buildStumbleHint(step: StepDefinition, stumbleType: StumbleType): strin
   switch (stumbleType) {
     case 'how':
       return [
-        `--- ヒント ---`,
-        ``,
         `「${step.name}」のやり方について:`,
         ``,
         stepHint ?? [
@@ -459,8 +482,6 @@ function buildStumbleHint(step: StepDefinition, stumbleType: StumbleType): strin
 
     case 'time':
       return [
-        `--- アドバイス ---`,
-        ``,
         stepHint ?? `お忙しい中、取り組もうとする姿勢が大切です。`,
         ``,
         `「${step.name}」は約${step.estimatedMinutes}分で完了できます。`,
@@ -471,8 +492,6 @@ function buildStumbleHint(step: StepDefinition, stumbleType: StumbleType): strin
 
     case 'motivation':
       return [
-        `--- 応援メッセージ ---`,
-        ``,
         stepHint ?? `DX改善は一歩ずつで大丈夫です。`,
         ``,
         `「${step.name}」を完了すると、`,
@@ -594,31 +613,29 @@ const EXIT_HEADLINES: Record<ExitType, string> = {
 /** 出口タイプごとのCTA説明文 */
 const EXIT_DESCRIPTIONS: Record<ExitType, string> = {
   techstars: [
-    'ツールを入れる前に、使いこなせる人を育てませんか。',
-    '業種向けの研修プランがあります。',
-    '3ヶ月で基礎が身につきます。',
+    'ツール導入の前に、使える人を育てませんか。',
+    '業種に合わせた研修プランをご用意しています。',
   ].join('\n'),
   taskmate: [
-    '毎週のステップ、専任サポート付きで。',
-    '月5万×6ヶ月。',
+    '専任サポート付きで、毎週一歩ずつ前進。',
+    '詳しい内容をお伝えできます。',
   ].join('\n'),
   veteran_ai: [
-    'ベテランAIで課題を解決。',
-    'インボイス対応もこれ1つ。',
-    'MAX550万補助。',
+    'インボイス対応も経費管理も、これ1つで完結。',
+    '最大550万円の補助金が使えます。',
   ].join('\n'),
   custom_dev: [
-    '汎用ツールでは解決しにくい課題を根本解決。',
-    'MAX450万補助。',
+    '汎用ツールでは難しい課題を、根本から解決。',
+    '最大450万円の補助金が活用できます。',
   ].join('\n'),
 };
 
 /** 出口タイプごとのCTAボタンラベル */
 const EXIT_CTA_LABELS: Record<ExitType, string> = {
-  techstars: '研修の詳細を見る',
-  taskmate: '詳しく聞く',
-  veteran_ai: '無料デモ',
-  custom_dev: '相談する',
+  techstars: '無料で相談する',
+  taskmate: '無料で相談する',
+  veteran_ai: '無料で相談する',
+  custom_dev: '無料で相談する',
 };
 
 /** トリガー理由のパーソナライズ文 */
@@ -722,9 +739,9 @@ export function ctaProposalMessage(
             type: 'button',
             action: {
               type: 'postback',
-              label: '今はいい',
+              label: 'また今度',
               data: `action=cta_response&ctaId=${ctaId}&value=decline`,
-              displayText: '今はいい',
+              displayText: 'また今度',
             },
             style: 'secondary',
             margin: 'sm',
@@ -745,8 +762,9 @@ export function ctaInterestedReplyMessage(): TextMessage {
     text: [
       'ありがとうございます！',
       '',
-      '担当者から改めてご連絡いたします。',
-      'お気軽にご質問をお待ちしております。',
+      '1〜2営業日以内に、担当者からご連絡します。',
+      'その前にご質問があれば、',
+      'ここにメッセージを送ってください。',
     ].join('\n'),
   };
 }
@@ -772,37 +790,56 @@ export function ctaDeclineReplyMessage(): TextMessage {
 export type ReminderLevel = 'light' | 'medium' | 'final';
 
 /**
- * 3日放置: 軽いリマインダー（進捗確認 + 現在のステップ名）
+ * 3日放置: 軽いリマインダー（進捗確認 + 現在のステップ名 + 所要時間）
  */
-export function reminderLightMessage(stepName: string | null): TextMessage {
-  const stepInfo = stepName ? `\n現在のステップ: ${stepName}` : '';
+export function reminderLightMessage(stepName: string | null, estimatedMinutes?: number): TextMessage {
+  const stepInfo = stepName ? `\n「${stepName}」が待っています。` : '';
+  const timeInfo = estimatedMinutes ? `約${estimatedMinutes}分で完了できます。` : '';
   return {
     type: 'text',
     text: [
-      `--- お知らせ ---`,
-      ``,
       `最近の進捗はいかがですか？${stepInfo}`,
+      timeInfo,
       ``,
       `お時間のあるときに、`,
       `少しずつ進めてみてください。`,
-      ``,
-      `「ステップ」と送信すると再開できます。`,
     ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '再開する',
+            data: 'action=reminder_resume',
+            displayText: '再開する',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '一時停止',
+            data: 'action=reminder_pause',
+            displayText: '一時停止',
+          },
+        },
+      ],
+    },
   };
 }
 
 /**
  * 7日放置: 強めのリマインダー（ステップが待っている + Quick Reply）
  */
-export function reminderMediumMessage(stepName: string | null): TextMessage {
+export function reminderMediumMessage(stepName: string | null, estimatedMinutes?: number): TextMessage {
   const stepInfo = stepName ? `「${stepName}」が` : 'ステップが';
+  const timeInfo = estimatedMinutes ? `約${estimatedMinutes}分で完了できます。\n` : '';
   return {
     type: 'text',
     text: [
-      `--- リマインダー ---`,
-      ``,
       `${stepInfo}待っています。`,
-      ``,
+      timeInfo,
       `DX改善は一歩ずつで大丈夫です。`,
       `いつでも再開できます。`,
     ].join('\n'),
@@ -834,12 +871,13 @@ export function reminderMediumMessage(stepName: string | null): TextMessage {
 /**
  * 14日放置: 最終リマインダー（最終案内 + Quick Reply）
  */
-export function reminderFinalMessage(): TextMessage {
+export function reminderFinalMessage(stepName?: string | null, estimatedMinutes?: number): TextMessage {
+  const stepInfo = stepName ? `「${stepName}」が待っています。\n` : '';
+  const timeInfo = estimatedMinutes ? `約${estimatedMinutes}分で完了できます。\n` : '';
   return {
     type: 'text',
     text: [
-      `--- 最終リマインダー ---`,
-      ``,
+      `${stepInfo}${timeInfo}`,
       `いつでも再開できます。`,
       ``,
       `DXの取り組みを再開したいときは、`,

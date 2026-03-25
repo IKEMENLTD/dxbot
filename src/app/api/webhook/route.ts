@@ -234,7 +234,7 @@ function formatPostbackContent(data: string): string {
     case 'step_pause':
       return '今日はここまで';
     case 'cta_response':
-      return value === 'interested' ? '詳しく聞く' : '今はいい';
+      return value === 'interested' ? '無料で相談する' : 'また今度';
     case 'reminder_resume':
       return '再開する';
     case 'reminder_pause':
@@ -329,13 +329,12 @@ async function handleFollow(event: FollowEvent): Promise<void> {
       console.error('[Webhook] handleFollow プロフィール保存エラー（処理は続行）:', profileErr);
     }
 
-    // Welcome + 流入元質問
+    // Welcome（consent統合済み）を送信 → consent_pendingフェーズへ
     const msg = welcomeMessage(conversation.preferredName);
-    const srcMsg = sourceQuestionMessage();
-    await replyAndSave(userId, event.replyToken, [msg, srcMsg]);
+    await replyAndSave(userId, event.replyToken, [msg]);
 
-    // 状態更新: source_question
-    await setState(userId, { state: { phase: 'source_question' } });
+    // 状態更新: consent_pending（source_questionは診断後に移動）
+    await setState(userId, { state: { phase: 'consent_pending' } });
   } catch (error) {
     console.error('[Webhook] handleFollow エラー:', error);
   }
@@ -507,6 +506,7 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
 
 /**
  * 流入元回答処理
+ * 施策2: 診断後に流入元を聞く → 回答後にstep_readyへ遷移
  */
 async function handleSourceAnswer(
   userId: string,
@@ -525,9 +525,43 @@ async function handleSourceAnswer(
   // conversation stateにもlead_sourceを保存
   await setState(userId, { leadSource: value });
 
-  // 同意確認メッセージへ遷移
-  await replyAndSave(userId, replyToken, [consentMessage()]);
-  await setState(userId, { state: { phase: 'consent_pending' } });
+  // DBからweak_axisを取得してstep_readyへ遷移
+  let weakAxis: keyof AxisScores = 'd'; // デフォルト
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('weak_axis')
+        .eq('id', userId)
+        .single();
+      if (data?.weak_axis) {
+        weakAxis = data.weak_axis as keyof AxisScores;
+      }
+    } catch (err) {
+      console.error('[Webhook] handleSourceAnswer weak_axis取得エラー（デフォルト使用）:', err);
+    }
+  }
+
+  // 最初のステップ名と所要時間を取得
+  const firstStep = await getNextStepAsync([], weakAxis);
+  const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
+  const firstStepMinutes = firstStep ? firstStep.estimatedMinutes : 15;
+
+  // ステップ開始案内を送信
+  const stepMsg = stepStartMessage(firstStepName, firstStepMinutes);
+  await replyAndSave(userId, replyToken, [stepMsg]);
+
+  // step_readyフェーズへ遷移
+  await setState(userId, {
+    state: {
+      phase: 'step_ready',
+      weakAxis,
+      completedStepIds: [],
+      stumbleCount: 0,
+      stumbleHowCount: 0,
+    },
+  });
 }
 
 /**
@@ -659,15 +693,15 @@ async function completeDiagnosis(
   const band = await determineBandAsync(total);
   const weakAxis = determineWeakAxis(scores);
 
-  // 弱軸の最初のステップ名を取得
+  // 弱軸の最初のステップの所要時間を取得
   const firstStep = await getNextStepAsync([], weakAxis);
-  const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
+  const firstStepMinutes = firstStep ? firstStep.estimatedMinutes : 15;
 
-  // 結果メッセージ送信
-  const resultMsg = diagnosisResultMessage(scores, band, weakAxis, industry);
-  const stepMsg = stepStartMessage(firstStepName);
+  // 結果メッセージ + 流入元質問を送信（施策2: source_questionは診断後に移動）
+  const resultMsg = diagnosisResultMessage(scores, band, weakAxis, industry, firstStepMinutes);
+  const srcMsg = sourceQuestionMessage();
 
-  await replyAndSave(userId, replyToken, [resultMsg, stepMsg]);
+  await replyAndSave(userId, replyToken, [resultMsg, srcMsg]);
 
   // usersテーブルに診断結果を保存
   const supabase = getSupabaseServer();
@@ -685,16 +719,17 @@ async function completeDiagnosis(
     }
   }
 
-  // step_readyフェーズへ（スタートボタン待ち）
+  // source_questionフェーズへ（流入元回答待ち）
+  // weakAxis情報はsource_question回答後にstep_readyへ引き継ぐ
   await setState(userId, {
-    state: {
-      phase: 'step_ready',
-      weakAxis,
-      completedStepIds: [],
-      stumbleCount: 0,
-      stumbleHowCount: 0,
-    },
+    state: { phase: 'source_question' },
   });
+
+  // weakAxis等を一時的にメモリ外に保持する手段がないため、
+  // diagnosis_complete経由にする代わりにconversation stateに保存
+  // → source_question回答後にstep_readyへ遷移するためにdiagnosis結果を保持
+  // 方針: completeDiagnosisの結果はusersテーブルに保存済みなので、
+  //        handleSourceAnswerでDBからweak_axisを復元してstep_readyに遷移する
 
   // 診断直後のCTAチェックは行わない（最低1ステップ完了後から開始）
 }
@@ -856,8 +891,8 @@ async function handleStepComplete(
     return;
   }
 
-  // 完了祝福メッセージ
-  const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel);
+  // 完了祝福メッセージ（次のステップ情報を含む）
+  const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel, nextStep);
   await replyAndSave(userId, replyToken, [completeMsg]);
 
   // 状態をstep_readyに更新（次ステップ待ち）

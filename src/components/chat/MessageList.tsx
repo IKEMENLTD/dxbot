@@ -35,7 +35,7 @@ function formatPostbackDisplay(content: string): string {
       case "step_retry": return "もう一度挑戦";
       case "step_skip": return "スキップして次へ";
       case "step_pause": return "今日はここまで";
-      case "cta_response": return value === "interested" ? "詳しく聞く" : "今はいい";
+      case "cta_response": return value === "interested" ? "無料で相談する" : "また今度";
       case "reminder_resume": return "再開する";
       case "reminder_pause": return "一時停止";
       case "reminder_stop": return "配信停止";

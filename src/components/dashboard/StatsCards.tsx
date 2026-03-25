@@ -87,7 +87,7 @@ export default function StatsCards({ users }: StatsCardsProps) {
   }, [users, kpiData]);
 
   const cards: StatCardData[] = [
-    { label: "池の総人数", value: stats.totalUsers },
+    { label: "リード総数", value: stats.totalUsers },
     { label: "今週の流入数", value: stats.weeklyInflow },
     { label: "CTA発火中", value: stats.ctaFired },
     { label: "成約件数", value: stats.completedDeals, highlight: true },

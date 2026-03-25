@@ -32,29 +32,55 @@ const TABS: TabDef[] = [
   { key: "diagnosis", label: "診断設定" },
 ];
 
+const TAB_HELP: Record<TabKey, string> = {
+  line: "LINE Messaging APIのチャネル設定。BOTの動作に必須です。",
+  tags: "ユーザーに付けるタグの管理。チャットやリード管理でフィルタに使えます。",
+  leadSource: "リードソース(APO/Threads/X等)のラベル管理。",
+  templates: "チャットで使える定型文テンプレートの管理。",
+  exit: "推奨出口(TECHSTARS/TaskMate/ベテランAI/受託)のラベルと色設定。",
+  status: "顧客ステータス(見込み/コンタクト済/面談済等)のラベル設定。",
+  steps: "LINE BOTが配信する30ステップの内容を編集できます。",
+  cta: "自動CTA(営業提案)の発火条件と閾値を設定します。",
+  reminder: "放置ユーザーへの自動リマインダーの間隔とメッセージを設定します。",
+  diagnosis: "初回診断のバンド閾値・質問テキスト・業種リストを設定します。",
+};
+
 function TabContent({ tab }: { tab: TabKey }) {
-  switch (tab) {
-    case "line":
-      return <LineSettings />;
-    case "tags":
-      return <TagSettings />;
-    case "leadSource":
-      return <LeadSourceSettings />;
-    case "templates":
-      return <TemplateSettings />;
-    case "exit":
-      return <ExitSettings />;
-    case "status":
-      return <StatusSettings />;
-    case "steps":
-      return <StepSettings />;
-    case "cta":
-      return <CtaSettings />;
-    case "reminder":
-      return <ReminderSettings />;
-    case "diagnosis":
-      return <DiagnosisSettings />;
-  }
+  const helpText = TAB_HELP[tab];
+
+  const component = (() => {
+    switch (tab) {
+      case "line":
+        return <LineSettings />;
+      case "tags":
+        return <TagSettings />;
+      case "leadSource":
+        return <LeadSourceSettings />;
+      case "templates":
+        return <TemplateSettings />;
+      case "exit":
+        return <ExitSettings />;
+      case "status":
+        return <StatusSettings />;
+      case "steps":
+        return <StepSettings />;
+      case "cta":
+        return <CtaSettings />;
+      case "reminder":
+        return <ReminderSettings />;
+      case "diagnosis":
+        return <DiagnosisSettings />;
+    }
+  })();
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-4 border-l-2 border-green-400 pl-3">
+        {helpText}
+      </p>
+      {component}
+    </div>
+  );
 }
 
 export default function SettingsPage() {

@@ -1,11 +1,24 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
+
+interface SidebarKpi {
+  totalUsers: number;
+  completedDeals: number;
+}
+
+interface UsersApiResponse {
+  data?: Array<Record<string, unknown>>;
+}
+
+interface DealsApiResponse {
+  data?: Array<{ status?: string }>;
+}
 
 const navItems = [
   {
@@ -118,6 +131,31 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
   const isDragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const [kpi, setKpi] = useState<SidebarKpi>({ totalUsers: 0, completedDeals: 0 });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.all([
+      fetch("/api/users", { signal: controller.signal })
+        .then((res) => (res.ok ? (res.json() as Promise<UsersApiResponse>) : null))
+        .catch(() => null),
+      fetch("/api/deals", { signal: controller.signal })
+        .then((res) => (res.ok ? (res.json() as Promise<DealsApiResponse>) : null))
+        .catch(() => null),
+    ]).then(([usersJson, dealsJson]) => {
+      if (controller.signal.aborted) return;
+      const totalUsers = Array.isArray(usersJson?.data) ? usersJson.data.length : 0;
+      const completedDeals = Array.isArray(dealsJson?.data)
+        ? dealsJson.data.filter((d) => d.status === "completed").length
+        : 0;
+      setKpi({ totalUsers, completedDeals });
+    }).catch(() => {
+      // abort含む全エラーをキャッチ
+    });
+
+    return () => controller.abort();
+  }, []);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -161,7 +199,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
           {!collapsed && (
             <div className="min-w-0">
               <div className="text-sm font-bold text-white tracking-wide whitespace-nowrap">DXBOT</div>
-              <div className="text-[10px] text-white/60 tracking-wider whitespace-nowrap">Admin v5.3</div>
+              <div className="text-[10px] text-white/60 tracking-wider whitespace-nowrap">Admin v6.0</div>
             </div>
           )}
         </div>
@@ -207,8 +245,10 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       <div className="shrink-0 px-3 py-3 overflow-hidden border-t border-white/10">
         {!collapsed && (
           <div className="px-2 mb-2">
-            <div className="text-[11px] text-white/50 font-medium whitespace-nowrap">TECHSTARS / IKEMEN</div>
-            <div className="text-[11px] text-white/50 mt-0.5 whitespace-nowrap">池: 10人 / 成約: 4件</div>
+            <div className="text-[11px] text-white/50 font-medium whitespace-nowrap">DXBOT</div>
+            <div className="text-[11px] text-white/50 mt-0.5 whitespace-nowrap">
+              リード: {kpi.totalUsers}人 / 成約: {kpi.completedDeals}件
+            </div>
           </div>
         )}
         <LogoutButton collapsed={collapsed} />

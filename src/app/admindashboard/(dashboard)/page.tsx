@@ -1,17 +1,49 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import type { User } from "@/lib/types";
 import FilterBar from "@/components/dashboard/FilterBar";
 import type { FilterState } from "@/components/dashboard/FilterBar";
 import HotUsersTable from "@/components/dashboard/HotUsersTable";
 import StatsCards from "@/components/dashboard/StatsCards";
+import TodayActions from "@/components/dashboard/TodayActions";
 import { useToast } from "@/contexts/ToastContext";
+
+function StepCard({
+  number,
+  title,
+  description,
+  href,
+}: {
+  number: number;
+  title: string;
+  description: string;
+  href?: string;
+}) {
+  const content = (
+    <div className="border border-gray-200 rounded-xl p-4 hover:border-green-300 transition-colors">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold flex items-center justify-center">
+          {number}
+        </span>
+        <span className="text-sm font-semibold text-gray-900">{title}</span>
+      </div>
+      <p className="text-xs text-gray-500">{description}</p>
+    </div>
+  );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
+}
 
 export default function DashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(0);
   const { addToast } = useToast();
   const [filters, setFilters] = useState<FilterState>({
     exit: "all",
@@ -45,7 +77,10 @@ export default function DashboardPage() {
         setError("データの取得に失敗しました。");
         addToast("error", "データの取得に失敗しました。");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setNow(Date.now());
+        setLoading(false);
+      });
 
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,6 +154,36 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <StatsCards users={users} />
+
+      {/* Today's actions */}
+      <TodayActions users={users} now={now} />
+
+      {/* Empty state onboarding */}
+      {users.length === 0 && !loading && (
+        <section className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm text-center">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">DXBOTへようこそ</h3>
+          <p className="text-sm text-gray-500 mb-6">まずは以下の手順でセットアップを完了してください</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+            <StepCard
+              number={1}
+              title="LINE BOTを設定"
+              description="設定 → LINE連携タブで認証情報を保存"
+              href="/admindashboard/settings"
+            />
+            <StepCard
+              number={2}
+              title="トラッキングリンクを作成"
+              description="流入元管理でリンクを発行"
+              href="/admindashboard/sources"
+            />
+            <StepCard
+              number={3}
+              title="友だち追加を促す"
+              description="リンクやQRコードをSNS等で共有"
+            />
+          </div>
+        </section>
+      )}
 
       {/* Filter bar */}
       <FilterBar filters={filters} onFilterChange={setFilters} />

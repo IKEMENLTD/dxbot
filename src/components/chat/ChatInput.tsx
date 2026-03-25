@@ -71,6 +71,11 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   const handleSend = async () => {
     const trimmed = value.trim();
     if ((!trimmed && attachments.length === 0) || disabled || sending) return;
+    // テキストなし + 添付のみの場合は警告
+    if (!trimmed && attachments.length > 0) {
+      addToast("warning", "テキストを入力してから送信してください。画像のみの送信は現在対応していません。");
+      return;
+    }
     setSending(true);
     try {
       await onSend(trimmed, attachments.length > 0 ? attachments : undefined);

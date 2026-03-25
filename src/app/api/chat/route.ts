@@ -121,9 +121,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    if (!message || typeof message !== 'string') {
+    if (typeof message !== 'string') {
       return NextResponse.json(
-        { error: 'メッセージが空です。' },
+        { error: 'メッセージの形式が不正です。' },
+        { status: 400 }
+      );
+    }
+
+    // テキストが空の場合は送信不可（画像のみの送信は現在未対応）
+    if (!message.trim()) {
+      return NextResponse.json(
+        { error: 'テキストを入力してください。画像のみの送信は現在対応していません。' },
         { status: 400 }
       );
     }

@@ -6,10 +6,11 @@ import Link from "next/link";
 export default function UserLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // プレースホルダー: まだ動作しない
+    setError("この機能は現在準備中です。管理者の方は /admindashboard/login からログインしてください。");
   }
 
   return (
@@ -38,7 +39,19 @@ export default function UserLoginPage() {
             アカウントにログインしてください
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-6 mb-4">
+            <p className="text-xs text-amber-700 text-center">
+              ユーザーログイン機能は準備中です。管理者の方は<a href="/admindashboard/login" className="underline font-medium">こちら</a>からログインしてください。
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-red-700 text-center">{error}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 メールアドレス
@@ -72,7 +85,7 @@ export default function UserLoginPage() {
               type="submit"
               className="w-full bg-[#06C755] text-white rounded-lg px-4 py-3 text-sm font-semibold hover:bg-[#05B04C] transition-colors"
             >
-              ログイン
+              ログイン（準備中）
             </button>
           </form>
 

@@ -99,7 +99,9 @@ export async function checkAndFireCta(
     // 5. 重複チェック（24時間ガード）
     const isDuplicate = await hasRecentCtaFire(lineUserId, ctaResult.trigger);
     if (isDuplicate) {
-      console.log(`[CTA] 24h以内に同一トリガー発火済み: user=${lineUserId}, trigger=${ctaResult.trigger}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[CTA] 24h以内に同一トリガー発火済み: user=${lineUserId}, trigger=${ctaResult.trigger}`);
+      }
       return { fired: false, trigger: ctaResult.trigger, exit: ctaResult.exit, ctaId: null };
     }
 
@@ -137,7 +139,7 @@ export async function checkAndFireCta(
     // 9. badgesにcta_fired追加
     await addCtaFiredBadge(lineUserId, user);
 
-    console.log(`[CTA] 発火成功: user=${lineUserId}, trigger=${ctaResult.trigger}, exit=${ctaResult.exit}`);
+    console.info(`[CTA] 発火成功: user=${lineUserId}, trigger=${ctaResult.trigger}, exit=${ctaResult.exit}`);
 
     return {
       fired: true,
@@ -171,7 +173,7 @@ export async function handleCtaInterested(
     // 管理者通知: chat_messagesにシステムメッセージとして保存
     await saveCtaNotification(lineUserId, ctaId, 'interested');
 
-    console.log(`[CTA] 興味あり応答: user=${lineUserId}, ctaId=${ctaId}`);
+    console.info(`[CTA] 興味あり応答: user=${lineUserId}, ctaId=${ctaId}`);
   } catch (err) {
     console.error('[CTA] handleCtaInterested エラー:', err);
   }
@@ -188,7 +190,7 @@ export async function handleCtaDeclined(
   try {
     await updateCtaResult(ctaId, 'ignored');
 
-    console.log(`[CTA] 辞退応答: user=${lineUserId}, ctaId=${ctaId}`);
+    console.info(`[CTA] 辞退応答: user=${lineUserId}, ctaId=${ctaId}`);
   } catch (err) {
     console.error('[CTA] handleCtaDeclined エラー:', err);
   }

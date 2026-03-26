@@ -8,10 +8,11 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // プレースホルダー: まだ動作しない
+    setError("この機能は現在準備中です。LINEで友だち追加していただくことでDX診断を開始できます。");
   }
 
   return (
@@ -40,7 +41,19 @@ export default function RegisterPage() {
             アカウントを作成してDXの第一歩を踏み出しましょう
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-6 mb-4">
+            <p className="text-xs text-amber-700 text-center">
+              新規登録機能は準備中です。LINEで友だち追加していただくことでDX診断を開始できます。
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-red-700 text-center">{error}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-1">
                 会社名
@@ -102,7 +115,7 @@ export default function RegisterPage() {
               type="submit"
               className="w-full bg-[#06C755] text-white rounded-lg px-4 py-3 text-sm font-semibold hover:bg-[#05B04C] transition-colors"
             >
-              無料で始める
+              新規登録（準備中）
             </button>
           </form>
 

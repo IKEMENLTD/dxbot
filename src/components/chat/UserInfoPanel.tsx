@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { User, UserTag } from "@/lib/types";
-import { EXIT_CONFIG, STATUS_CONFIG } from "@/lib/types";
+import { EXIT_CONFIG, STATUS_CONFIG, LEAD_SOURCE_LABELS } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import UserAvatar from "@/components/ui/UserAvatar";
@@ -31,15 +31,6 @@ const TAG_COLOR_CLASSES: Record<UserTag["color"], { bg: string; text: string }> 
   green: { bg: "bg-green-50", text: "text-green-700" },
   orange: { bg: "bg-orange-50", text: "text-orange-700" },
   gray: { bg: "bg-gray-100", text: "text-gray-600" },
-};
-
-const LEAD_SOURCE_LABELS: Record<string, string> = {
-  apo: "アポ",
-  threads: "Threads",
-  x: "X",
-  instagram: "Instagram",
-  referral: "紹介",
-  other: "その他",
 };
 
 function TagPill({ tag }: { tag: UserTag }) {

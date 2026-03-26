@@ -2,29 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { TrackingLink, TrackingPerformance, TrackingClickDetail } from "@/lib/types";
+import { LEAD_SOURCE_LABELS } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
 // ===== 定数 =====
 
 const API_TIMEOUT_MS = 120000;
 
-const LEAD_SOURCE_OPTIONS: { value: string; label: string }[] = [
-  { value: "apo", label: "APO" },
-  { value: "threads", label: "Threads" },
-  { value: "x", label: "X (Twitter)" },
-  { value: "instagram", label: "Instagram" },
-  { value: "referral", label: "紹介" },
-  { value: "other", label: "その他" },
-];
-
-const LEAD_SOURCE_LABELS: Record<string, string> = {
-  apo: "APO",
-  threads: "Threads",
-  x: "X (Twitter)",
-  instagram: "Instagram",
-  referral: "紹介",
-  other: "その他",
-};
+const LEAD_SOURCE_OPTIONS: { value: string; label: string }[] = Object.entries(
+  LEAD_SOURCE_LABELS
+).map(([value, label]) => ({ value, label }));
 
 const FALLBACK_DESTINATION_URL = "https://lin.ee/";
 
@@ -74,22 +61,17 @@ function getQrApiUrl(linkId: string): string {
 
 async function fetchWithTimeout(
   url: string,
-  options: RequestInit,
-  timeoutMs: number
+  options: RequestInit = {},
+  timeoutMs: number = API_TIMEOUT_MS
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  const mergedSignal = options.signal
-    ? options.signal
-    : controller.signal;
-
   try {
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       ...options,
-      signal: mergedSignal,
+      signal: controller.signal,
     });
-    return response;
+    return res;
   } finally {
     clearTimeout(timeoutId);
   }

@@ -2,7 +2,9 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import type { User, LeadSource } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import type { User } from "@/lib/types";
+import { LEAD_SOURCE_LABELS } from "@/lib/types";
 import { timeAgo } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import ExitBadge from "@/components/ui/ExitBadge";
@@ -14,15 +16,6 @@ type SortDir = "asc" | "desc";
 interface HotUsersTableProps {
   users: User[];
 }
-
-const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
-  apo: "APO",
-  threads: "Threads",
-  x: "X",
-  instagram: "Instagram",
-  referral: "紹介",
-  other: "その他",
-};
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) {
@@ -44,6 +37,7 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 export default function HotUsersTable({ users }: HotUsersTableProps) {
+  const router = useRouter();
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
@@ -174,11 +168,12 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                 <tr
                   key={user.id}
                   className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/admindashboard/users/${user.id}`)}
                   onMouseEnter={() => setHoveredRow(user.id)}
                   onMouseLeave={() => setHoveredRow(null)}
                 >
                   {/* Name + company + avatar */}
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <Link href={`/admindashboard/users/${user.id}`} className="flex items-center gap-3">
                       <UserAvatar
                         name={user.preferred_name}
@@ -246,7 +241,7 @@ export default function HotUsersTable({ users }: HotUsersTableProps) {
                     </div>
                   </td>
                   {/* Quick action */}
-                  <td className="px-4 py-3.5">
+                  <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                     {isHovered && (
                       <Link
                         href={`/admindashboard/users/${user.id}`}

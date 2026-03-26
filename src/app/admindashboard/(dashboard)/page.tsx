@@ -147,7 +147,7 @@ export default function DashboardPage() {
           <div className="h-5 w-40 bg-gray-100 animate-pulse rounded-2xl" />
           <div className="h-3 w-60 bg-gray-100 animate-pulse rounded-2xl mt-2" />
         </div>
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-20 bg-gray-100 animate-pulse rounded-2xl" />
           ))}

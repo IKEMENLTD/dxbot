@@ -1,18 +1,9 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { EXIT_CONFIG, STATUS_CONFIG } from "@/lib/types";
+import { EXIT_CONFIG, STATUS_CONFIG, LEAD_SOURCE_LABELS } from "@/lib/types";
 import type { ExitType, CustomerStatus, LeadSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
-  apo: "APO",
-  threads: "Threads",
-  x: "X",
-  instagram: "Instagram",
-  referral: "紹介",
-  other: "その他",
-};
 
 export interface FilterState {
   exit: ExitType | "all";

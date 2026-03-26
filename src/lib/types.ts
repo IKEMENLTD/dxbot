@@ -244,6 +244,15 @@ export interface DiagnosisConfig {
   scoreMultiplier: number; // デフォルト: 3
 }
 
+export const LEAD_SOURCE_LABELS: Record<string, string> = {
+  apo: "APO",
+  threads: "Threads",
+  x: "X (Twitter)",
+  instagram: "Instagram",
+  referral: "紹介",
+  other: "その他",
+};
+
 export const STATUS_CONFIG: Record<CustomerStatus, { label: string; colorClass: string }> = {
   prospect:         { label: '見込み',        colorClass: 'text-gray-500' },
   contacted:        { label: 'コンタクト済',   colorClass: 'text-green-600' },

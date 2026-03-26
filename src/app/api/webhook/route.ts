@@ -513,6 +513,12 @@ async function handleSourceAnswer(
   replyToken: string,
   params: Map<string, string>
 ): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation || conversation.state.phase !== 'source_question') {
+    // 不正なフェーズからの呼び出し → 無視
+    return;
+  }
+
   const value = params.get('value') ?? 'other';
 
   // lead_sourceを保存
@@ -572,6 +578,12 @@ async function handleConsent(
   replyToken: string,
   params: Map<string, string>
 ): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation || conversation.state.phase !== 'consent_pending') {
+    // 不正なフェーズからの呼び出し → 無視
+    return;
+  }
+
   const value = params.get('value');
 
   if (value === 'yes') {
@@ -598,6 +610,12 @@ async function handleIndustrySelect(
   replyToken: string,
   params: Map<string, string>
 ): Promise<void> {
+  const conversation = await getState(userId);
+  if (!conversation || conversation.state.phase !== 'industry_select') {
+    // 不正なフェーズからの呼び出し → 無視
+    return;
+  }
+
   const industry = params.get('value') ?? '';
 
   // 業種を保存
@@ -639,8 +657,14 @@ async function handleDiagnosisAnswer(
   const state = conversation.state;
   if (state.phase !== 'diagnosis') return;
 
+  const validAxes = new Set(['a1', 'a2', 'b', 'c', 'd']);
   const axis = params.get('axis') ?? '';
   const value = parseInt(params.get('value') ?? '0', 10);
+
+  if (!validAxes.has(axis) || isNaN(value) || value < 1 || value > 5) {
+    // 不正な軸またはスコア値 → 無視
+    return;
+  }
 
   // スコアを記録
   const updatedScores: Partial<AxisScores> = {
@@ -776,17 +800,11 @@ async function deliverNextStep(
   const nextStep = await getNextStepAsync(completedStepIds, weakAxis);
 
   if (!nextStep) {
-    // 全ステップ完了
+    // 全ステップ完了 → idleに遷移（再度「診断」で再診断可能）
     const level = calculateLevel(completedStepIds.length);
     await replyAndSave(userId, replyToken, [allStepsCompleteMessage(completedStepIds.length, level)]);
     await setState(userId, {
-      state: {
-        phase: 'step_ready',
-        weakAxis,
-        completedStepIds,
-        stumbleCount,
-        stumbleHowCount,
-      },
+      state: { phase: 'idle' },
     });
     return;
   }

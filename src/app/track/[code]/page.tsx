@@ -20,17 +20,19 @@ function parseUserAgent(ua: string): DeviceInfo {
     deviceType = "tablet";
   }
 
-  // OS
+  // OS（iPhoneのUAは"Mac OS X"を含むためiOS判定を先にする）
   let os = "unknown";
-  if (/Windows/i.test(ua)) os = "Windows";
-  else if (/Mac OS X|Macintosh/i.test(ua)) os = "macOS";
-  else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
+  if (/iPhone|iPod/i.test(ua)) os = "iOS";
+  else if (/iPad/i.test(ua)) os = "iPadOS";
   else if (/Android/i.test(ua)) os = "Android";
+  else if (/Windows/i.test(ua)) os = "Windows";
+  else if (/Mac OS X|Macintosh/i.test(ua)) os = "macOS";
   else if (/Linux/i.test(ua)) os = "Linux";
 
-  // ブラウザ
+  // ブラウザ（LINE内ブラウザも検出）
   let browser = "unknown";
-  if (/Edg\//i.test(ua)) browser = "Edge";
+  if (/Line\//i.test(ua)) browser = "LINE";
+  else if (/Edg\//i.test(ua)) browser = "Edge";
   else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) browser = "Chrome";
   else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
   else if (/Firefox\//i.test(ua)) browser = "Firefox";

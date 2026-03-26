@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { ReminderConfig } from "@/lib/types";
+import { useToast } from "@/contexts/ToastContext";
 
 /** デフォルトリマインダー設定 */
 const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
@@ -17,24 +18,11 @@ const DEFAULT_REMINDER_CONFIG: ReminderConfig = {
 /** フェッチタイムアウト(ms) */
 const FETCH_TIMEOUT_MS = 20000;
 
-/** トースト表示時間(ms) */
-const TOAST_DURATION_MS = 3000;
-
-interface ToastState {
-  message: string;
-  type: "success" | "error";
-}
-
 export default function ReminderSettings() {
   const [config, setConfig] = useState<ReminderConfig>(DEFAULT_REMINDER_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<ToastState | null>(null);
-
-  const showToast = useCallback((message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), TOAST_DURATION_MS);
-  }, []);
+  const { addToast } = useToast();
 
   // 初期ロード
   useEffect(() => {
@@ -74,9 +62,9 @@ export default function ReminderSettings() {
       config.mediumDays >= config.finalDays ||
       config.finalDays >= config.stopDays
     ) {
-      showToast(
-        "日数は昇順で設定してください（軽め < 強め < 最終 < 配信停止）",
-        "error"
+      addToast(
+        "error",
+        "日数は昇順で設定してください（軽め < 強め < 最終 < 配信停止）"
       );
       return;
     }
@@ -96,16 +84,16 @@ export default function ReminderSettings() {
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "保存に失敗しました" }));
         const errMsg = typeof errBody.error === "string" ? errBody.error : "保存に失敗しました";
-        showToast(errMsg, "error");
+        addToast("error", errMsg);
         return;
       }
 
-      showToast("リマインダー設定を保存しました", "success");
+      addToast("success", "リマインダー設定を保存しました");
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        showToast("保存がタイムアウトしました", "error");
+        addToast("error", "保存がタイムアウトしました");
       } else {
-        showToast("保存中にエラーが発生しました", "error");
+        addToast("error", "保存中にエラーが発生しました");
       }
     } finally {
       clearTimeout(timeoutId);
@@ -142,19 +130,6 @@ export default function ReminderSettings() {
 
   return (
     <div>
-      {/* トースト */}
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-opacity ${
-            toast.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-orange-50 text-orange-700 border border-orange-200"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
       {/* リマインダー間隔設定 */}
       <div className="mb-6">
         <h3 className="text-sm font-medium text-gray-700 mb-3">リマインダー間隔（日数）</h3>

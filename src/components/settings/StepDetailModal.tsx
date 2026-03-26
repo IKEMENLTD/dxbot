@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { StepDefinition, StepHints } from "@/lib/step-master";
 import type { AxisScores } from "@/lib/types";
 
@@ -114,11 +114,20 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // ===== メインコンポーネント =====
 
 export default function StepDetailModal({ step, onSave, onClose }: StepDetailModalProps) {
+  // ESCキーで閉じる
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   // ローカル編集ステート
   const [name, setName] = useState(step.name);
   const [description, setDescription] = useState(step.description);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(step.difficulty);
-  const [estimatedMinutes, setEstimatedMinutes] = useState(step.estimatedMinutes);
+  const [estimatedMinutesStr, setEstimatedMinutesStr] = useState(String(step.estimatedMinutes));
   const [actionItems, setActionItems] = useState<string[]>([...step.actionItems]);
   const [completionCriteria, setCompletionCriteria] = useState(step.completionCriteria);
   const [recommendedTools, setRecommendedTools] = useState<string[]>([...step.recommendedTools]);
@@ -136,23 +145,27 @@ export default function StepDetailModal({ step, onSave, onClose }: StepDetailMod
     const cleanedActionItems = actionItems.filter((item) => item.trim() !== "");
     const cleanedTools = recommendedTools.filter((tool) => tool.trim() !== "");
 
+    // 所要時間: string -> number 変換（NaNなら元の値を保持）
+    const parsedMinutes = parseInt(estimatedMinutesStr, 10);
+    const resolvedMinutes = isNaN(parsedMinutes) ? step.estimatedMinutes : parsedMinutes;
+
     const updated: StepDefinition = {
       ...step,
       name,
       description,
       difficulty,
-      estimatedMinutes,
+      estimatedMinutes: resolvedMinutes,
       actionItems: cleanedActionItems,
       completionCriteria,
       recommendedTools: cleanedTools,
       hints,
     };
     onSave(updated);
-  }, [step, name, description, difficulty, estimatedMinutes, actionItems, completionCriteria, recommendedTools, hints, onSave]);
+  }, [step, name, description, difficulty, estimatedMinutesStr, actionItems, completionCriteria, recommendedTools, hints, onSave]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div>
@@ -239,16 +252,10 @@ export default function StepDetailModal({ step, onSave, onClose }: StepDetailMod
                 <div className="flex-1">
                   <label className="block text-xs text-gray-500 mb-1">所要時間（分）</label>
                   <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    value={estimatedMinutes}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (!isNaN(val) && val >= 1 && val <= 999) {
-                        setEstimatedMinutes(val);
-                      }
-                    }}
+                    type="text"
+                    inputMode="numeric"
+                    value={estimatedMinutesStr}
+                    onChange={(e) => setEstimatedMinutesStr(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 text-right focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
                   />
                 </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { DiagnosisConfig, DiagnosisAxis } from "@/lib/types";
+import { useToast } from "@/contexts/ToastContext";
 
 /** デフォルト診断設定 */
 const DEFAULT_DIAGNOSIS_CONFIG: DiagnosisConfig = {
@@ -32,25 +33,12 @@ const AXIS_LABELS: Record<DiagnosisAxis, string> = {
 /** フェッチタイムアウト(ms) */
 const FETCH_TIMEOUT_MS = 20000;
 
-/** トースト表示時間(ms) */
-const TOAST_DURATION_MS = 3000;
-
-interface ToastState {
-  message: string;
-  type: "success" | "error";
-}
-
 export default function DiagnosisSettings() {
   const [config, setConfig] = useState<DiagnosisConfig>(DEFAULT_DIAGNOSIS_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<ToastState | null>(null);
   const [newIndustry, setNewIndustry] = useState("");
-
-  const showToast = useCallback((message: string, type: "success" | "error") => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), TOAST_DURATION_MS);
-  }, []);
+  const { addToast } = useToast();
 
   // 初期ロード
   useEffect(() => {
@@ -87,11 +75,11 @@ export default function DiagnosisSettings() {
     // バリデーション: 閾値は昇順
     const [b1, b2, b3] = config.bandThresholds;
     if (b1 >= b2 || b2 >= b3) {
-      showToast("バンド閾値は昇順で設定してください（Band1 < Band2 < Band3）", "error");
+      addToast("error", "バンド閾値は昇順で設定してください（Band1 < Band2 < Band3）");
       return;
     }
     if (config.scoreMultiplier < 1) {
-      showToast("スコア倍率は1以上を設定してください", "error");
+      addToast("error", "スコア倍率は1以上を設定してください");
       return;
     }
 
@@ -110,16 +98,16 @@ export default function DiagnosisSettings() {
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "保存に失敗しました" }));
         const errMsg = typeof errBody.error === "string" ? errBody.error : "保存に失敗しました";
-        showToast(errMsg, "error");
+        addToast("error", errMsg);
         return;
       }
 
-      showToast("診断設定を保存しました", "success");
+      addToast("success", "診断設定を保存しました");
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        showToast("保存がタイムアウトしました", "error");
+        addToast("error", "保存がタイムアウトしました");
       } else {
-        showToast("保存中にエラーが発生しました", "error");
+        addToast("error", "保存中にエラーが発生しました");
       }
     } finally {
       clearTimeout(timeoutId);
@@ -175,7 +163,7 @@ export default function DiagnosisSettings() {
     const trimmed = newIndustry.trim();
     if (!trimmed) return;
     if (config.industries.includes(trimmed)) {
-      showToast("既に存在する業種です", "error");
+      addToast("error", "既に存在する業種です");
       return;
     }
     setConfig((prev) => ({ ...prev, industries: [...prev.industries, trimmed] }));
@@ -209,19 +197,6 @@ export default function DiagnosisSettings() {
 
   return (
     <div>
-      {/* トースト */}
-      {toast && (
-        <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-opacity ${
-            toast.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-orange-50 text-orange-700 border border-orange-200"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
       {/* バンド閾値設定 */}
       <div className="mb-6">
         <h3 className="text-sm font-medium text-gray-700 mb-3">バンド閾値設定</h3>

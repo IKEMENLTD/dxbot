@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { CtaConfig, CtaTrigger } from "@/lib/types";
+import { useToast } from "@/contexts/ToastContext";
 
 // ---------------------------------------------------------------------------
 // デフォルト設定値（cta-engine.ts の DEFAULT_CTA_CONFIG と同一）
@@ -123,15 +124,8 @@ export default function CtaSettings() {
   const [config, setConfig] = useState<CtaConfig>(DEFAULT_CTA_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [openTrigger, setOpenTrigger] = useState<CtaTrigger | null>(null);
-
-  // トースト自動消去
-  useEffect(() => {
-    if (!toast) return;
-    const id = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(id);
-  }, [toast]);
+  const { addToast } = useToast();
 
   // DB読み込み
   useEffect(() => {
@@ -170,21 +164,21 @@ export default function CtaSettings() {
         const json: { error?: string } = await res.json();
         throw new Error(json.error ?? "保存に失敗しました");
       }
-      setToast({ type: "success", message: "CTA設定を保存しました" });
+      addToast("success", "CTA設定を保存しました");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "保存に失敗しました";
-      setToast({ type: "error", message: msg });
+      addToast("error", msg);
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, addToast]);
 
   // デフォルトに戻す
   const handleReset = useCallback(() => {
     if (!window.confirm("CTA設定をデフォルト値に戻しますか？")) return;
     setConfig(DEFAULT_CTA_CONFIG);
-    setToast({ type: "success", message: "デフォルト値に戻しました（保存ボタンで確定してください）" });
-  }, []);
+    addToast("success", "デフォルト値に戻しました（保存ボタンで確定してください）");
+  }, [addToast]);
 
   // トグル切替
   const handleToggle = useCallback((triggerKey: CtaTrigger) => {
@@ -212,8 +206,6 @@ export default function CtaSettings() {
         },
       }));
     },
-    // SCORE_FIELDSはモジュールスコープの定数（再レンダリングで変化しない）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -247,19 +239,6 @@ export default function CtaSettings() {
 
   return (
     <div>
-      {/* トースト */}
-      {toast && (
-        <div
-          className={`mb-4 px-4 py-3 rounded-xl text-sm font-medium ${
-            toast.type === "success"
-              ? "bg-green-50 text-green-700 border border-green-200"
-              : "bg-orange-50 text-orange-700 border border-orange-200"
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
-
       {/* トリガーカード一覧 */}
       <div className="space-y-3">
         {TRIGGER_META.map((meta) => {

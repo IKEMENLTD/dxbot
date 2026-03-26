@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { useAppSetting } from "@/hooks/useAppSetting";
+import { useToast } from "@/contexts/ToastContext";
 
 interface LeadSourceItem {
   id: string;
@@ -28,6 +29,7 @@ export default function LeadSourceSettings() {
     loading,
     error: dbError,
   } = useAppSetting<LeadSourceItem[]>("lead_sources", [...INITIAL_SOURCES], STORAGE_KEYS.LEAD_SOURCES);
+  const { addToast } = useToast();
 
   const [newId, setNewId] = useState("");
   const [newLabel, setNewLabel] = useState("");
@@ -36,11 +38,16 @@ export default function LeadSourceSettings() {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const updateSources = useCallback((updater: (prev: LeadSourceItem[]) => LeadSourceItem[]) => {
+  const updateSources = useCallback(async (updater: (prev: LeadSourceItem[]) => LeadSourceItem[]) => {
     const next = updater(sources);
     setSources(next);
-    saveSources(next);
-  }, [sources, setSources, saveSources]);
+    const result = await saveSources(next);
+    if (result.success) {
+      addToast("success", "保存しました");
+    } else {
+      addToast("error", result.error ?? "保存に失敗しました");
+    }
+  }, [sources, setSources, saveSources, addToast]);
 
   const handleIdChange = (value: string) => {
     setNewId(value);

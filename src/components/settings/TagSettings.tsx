@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { mockTags, mockUsers } from "@/lib/mock-data";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { useAppSetting } from "@/hooks/useAppSetting";
+import { useToast } from "@/contexts/ToastContext";
 import type { UserTag, TagColor } from "@/lib/types";
 
 const COLOR_OPTIONS: { value: TagColor; label: string; pillClass: string }[] = [
@@ -31,12 +31,6 @@ interface CsvImportResult {
   errors: string[];
 }
 
-interface TagAssignResult {
-  success: number;
-  skipped: number;
-  errors: string[];
-}
-
 export default function TagSettings() {
   const {
     value: tags,
@@ -44,7 +38,8 @@ export default function TagSettings() {
     save: saveTags,
     loading,
     error: dbError,
-  } = useAppSetting<UserTag[]>("tags", [...mockTags], STORAGE_KEYS.TAGS);
+  } = useAppSetting<UserTag[]>("tags", [], STORAGE_KEYS.TAGS);
+  const { addToast } = useToast();
 
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState<TagColor>("green");
@@ -54,25 +49,20 @@ export default function TagSettings() {
 
   // CSV import state
   const [showCsvPanel, setShowCsvPanel] = useState(false);
-  const [csvMode, setCsvMode] = useState<"tags" | "assign">("tags");
-  const [importResult, setImportResult] = useState<CsvImportResult | TagAssignResult | null>(null);
+  const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Tag assignment state (for display)
-  const [userTagAssignments, setUserTagAssignments] = useState<Record<string, string[]>>(() => {
-    const result: Record<string, string[]> = {};
-    for (const user of mockUsers) {
-      result[user.id] = user.tags ?? [];
-    }
-    return result;
-  });
-
-  const updateTags = useCallback((updater: (prev: UserTag[]) => UserTag[]) => {
+  const updateTags = useCallback(async (updater: (prev: UserTag[]) => UserTag[]) => {
     const next = updater(tags);
     setTags(next);
     // DB保存は楽観的更新（overrideValueで最新値を直接渡す）
-    saveTags(next);
-  }, [tags, setTags, saveTags]);
+    const result = await saveTags(next);
+    if (result.success) {
+      addToast("success", "保存しました");
+    } else {
+      addToast("error", result.error ?? "保存に失敗しました");
+    }
+  }, [tags, setTags, saveTags, addToast]);
 
   const handleAdd = () => {
     const trimmed = newLabel.trim();
@@ -113,12 +103,7 @@ export default function TagSettings() {
     reader.onload = (event) => {
       const text = event.target?.result;
       if (typeof text !== "string") return;
-
-      if (csvMode === "tags") {
-        processTagCsv(text);
-      } else {
-        processAssignCsv(text);
-      }
+      processTagCsv(text);
     };
     reader.readAsText(file);
 
@@ -168,68 +153,9 @@ export default function TagSettings() {
     setImportResult({ success, skipped, errors });
   };
 
-  const processAssignCsv = (text: string) => {
-    const lines = text.split(/\r?\n/).filter((line) => line.trim());
-    let success = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    const hasHeader = !!lines[0]?.match(/^(ユーザー|user|名前)/i);
-    const startIdx = hasHeader ? 1 : 0;
-
-    const newAssignments = { ...userTagAssignments };
-
-    for (let i = startIdx; i < lines.length; i++) {
-      const parts = lines[i].split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
-      const userName = parts[0];
-      const tagLabel = parts[1];
-      const dataRowNum = i - startIdx + 1;
-
-      if (!userName || !tagLabel) {
-        errors.push(`データ${dataRowNum}行目: ユーザー名またはタグ名が空です`);
-        continue;
-      }
-
-      const user = mockUsers.find(
-        (u) => u.preferred_name === userName || u.id === userName || u.company_name === userName
-      );
-      if (!user) {
-        errors.push(`データ${dataRowNum}行目: 「${userName}」が見つかりません`);
-        continue;
-      }
-
-      const tag = tags.find((t) => t.label === tagLabel || t.id === tagLabel);
-      if (!tag) {
-        errors.push(`データ${dataRowNum}行目: タグ「${tagLabel}」が存在しません`);
-        continue;
-      }
-
-      const currentTags = newAssignments[user.id] ?? [];
-      if (currentTags.includes(tag.id)) {
-        skipped++;
-        continue;
-      }
-
-      newAssignments[user.id] = [...currentTags, tag.id];
-      success++;
-    }
-
-    setUserTagAssignments(newAssignments);
-    setImportResult({ success, skipped, errors });
-  };
-
   const handleDownloadTemplate = () => {
-    let content: string;
-    let filename: string;
-
-    if (csvMode === "tags") {
-      content = "ラベル,カラー\n要フォロー,orange\n契約済み,green\n休眠,gray";
-      filename = "タグマスタテンプレート.csv";
-    } else {
-      content = "ユーザー名,タグ名\n田中太郎,高確度\n鈴木花子,フォロー必要";
-      filename = "タグ割当テンプレート.csv";
-    }
-
+    const content = "ラベル,カラー\n要フォロー,orange\n契約済み,green\n休眠,gray";
+    const filename = "タグマスタテンプレート.csv";
     const bom = "\uFEFF";
     const blob = new Blob([bom + content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -389,49 +315,12 @@ export default function TagSettings() {
 
         {showCsvPanel && (
           <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
-            {/* モード切替 */}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setCsvMode("tags"); setImportResult(null); }}
-                className={`px-3.5 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  csvMode === "tags"
-                    ? "bg-green-600 text-white border-green-600"
-                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                タグマスタ追加
-              </button>
-              <button
-                type="button"
-                onClick={() => { setCsvMode("assign"); setImportResult(null); }}
-                className={`px-3.5 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  csvMode === "assign"
-                    ? "bg-green-600 text-white border-green-600"
-                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                ユーザーにタグ割当
-              </button>
-            </div>
-
             {/* 説明 */}
             <div className="text-xs text-gray-500 space-y-1">
-              {csvMode === "tags" ? (
-                <>
-                  <p className="font-medium text-gray-700">タグマスタの一括追加</p>
-                  <p>CSV形式: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">ラベル,カラー</span></p>
-                  <p>カラー: green（緑）/ orange（オレンジ）/ gray（グレー）</p>
-                  <p>1行目がヘッダーの場合は自動スキップします</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium text-gray-700">ユーザーへのタグ一括割当</p>
-                  <p>CSV形式: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">ユーザー名,タグ名</span></p>
-                  <p>ユーザー名は氏名・会社名・IDのいずれかで検索します</p>
-                  <p>存在しないタグは先にタグマスタに追加してください</p>
-                </>
-              )}
+              <p className="font-medium text-gray-700">タグマスタの一括追加</p>
+              <p>CSV形式: <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200">ラベル,カラー</span></p>
+              <p>カラー: green（緑）/ orange（オレンジ）/ gray（グレー）</p>
+              <p>1行目がヘッダーの場合は自動スキップします</p>
             </div>
 
             {/* ボタン群 */}

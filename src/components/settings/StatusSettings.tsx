@@ -5,6 +5,7 @@ import type { CustomerStatus } from "@/lib/types";
 import { STATUS_CONFIG } from "@/lib/types";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { useAppSetting } from "@/hooks/useAppSetting";
+import { useToast } from "@/contexts/ToastContext";
 
 interface StatusItem {
   id: CustomerStatus;
@@ -28,6 +29,7 @@ export default function StatusSettings() {
     loading,
     error: dbError,
   } = useAppSetting<StatusItem[]>("statuses", buildInitialStatuses(), STORAGE_KEYS.STATUSES);
+  const { addToast } = useToast();
 
   const [editingId, setEditingId] = useState<CustomerStatus | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -41,11 +43,16 @@ export default function StatusSettings() {
     }
   }, [editingId]);
 
-  const updateStatuses = useCallback((updater: (prev: StatusItem[]) => StatusItem[]) => {
+  const updateStatuses = useCallback(async (updater: (prev: StatusItem[]) => StatusItem[]) => {
     const next = updater(statuses);
     setStatuses(next);
-    saveStatuses(next);
-  }, [statuses, setStatuses, saveStatuses]);
+    const result = await saveStatuses(next);
+    if (result.success) {
+      addToast("success", "保存しました");
+    } else {
+      addToast("error", result.error ?? "保存に失敗しました");
+    }
+  }, [statuses, setStatuses, saveStatuses, addToast]);
 
   const handleEditStart = (item: StatusItem) => {
     setEditingId(item.id);

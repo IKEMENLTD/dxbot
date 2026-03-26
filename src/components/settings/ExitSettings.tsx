@@ -5,6 +5,7 @@ import type { ExitType } from "@/lib/types";
 import { EXIT_CONFIG } from "@/lib/types";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { useAppSetting } from "@/hooks/useAppSetting";
+import { useToast } from "@/contexts/ToastContext";
 
 interface ExitItem {
   id: ExitType;
@@ -44,6 +45,7 @@ export default function ExitSettings() {
     loading,
     error: dbError,
   } = useAppSetting<ExitItem[]>("exits", buildInitialExits(), STORAGE_KEYS.EXITS);
+  const { addToast } = useToast();
 
   const [editingId, setEditingId] = useState<ExitType | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -57,11 +59,16 @@ export default function ExitSettings() {
     }
   }, [editingId]);
 
-  const updateExits = useCallback((updater: (prev: ExitItem[]) => ExitItem[]) => {
+  const updateExits = useCallback(async (updater: (prev: ExitItem[]) => ExitItem[]) => {
     const next = updater(exits);
     setExits(next);
-    saveExits(next);
-  }, [exits, setExits, saveExits]);
+    const result = await saveExits(next);
+    if (result.success) {
+      addToast("success", "保存しました");
+    } else {
+      addToast("error", result.error ?? "保存に失敗しました");
+    }
+  }, [exits, setExits, saveExits, addToast]);
 
   const handleEditStart = (item: ExitItem) => {
     setEditingId(item.id);

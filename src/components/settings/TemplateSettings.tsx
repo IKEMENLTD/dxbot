@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { STORAGE_KEYS } from "@/lib/storage";
 import { useAppSetting } from "@/hooks/useAppSetting";
+import { useToast } from "@/contexts/ToastContext";
 
 const MAX_TEMPLATE_LENGTH = 200;
 
@@ -27,6 +28,7 @@ export default function TemplateSettings() {
     loading,
     error: dbError,
   } = useAppSetting<TemplateItem[]>("templates", [...INITIAL_TEMPLATES], STORAGE_KEYS.TEMPLATES);
+  const { addToast } = useToast();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -44,11 +46,16 @@ export default function TemplateSettings() {
     }
   }, [editingId]);
 
-  const updateTemplates = useCallback((updater: (prev: TemplateItem[]) => TemplateItem[]) => {
+  const updateTemplates = useCallback(async (updater: (prev: TemplateItem[]) => TemplateItem[]) => {
     const next = updater(templates);
     setTemplates(next);
-    saveTemplates(next);
-  }, [templates, setTemplates, saveTemplates]);
+    const result = await saveTemplates(next);
+    if (result.success) {
+      addToast("success", "保存しました");
+    } else {
+      addToast("error", result.error ?? "保存に失敗しました");
+    }
+  }, [templates, setTemplates, saveTemplates, addToast]);
 
   const handleAdd = () => {
     const trimmed = newText.trim();

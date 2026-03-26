@@ -45,42 +45,30 @@ const TAB_HELP: Record<TabKey, string> = {
   diagnosis: "初回診断のバンド閾値・質問テキスト・業種リストを設定します。",
 };
 
-function TabContent({ tab }: { tab: TabKey }) {
-  const helpText = TAB_HELP[tab];
-
-  const component = (() => {
-    switch (tab) {
-      case "line":
-        return <LineSettings />;
-      case "tags":
-        return <TagSettings />;
-      case "leadSource":
-        return <LeadSourceSettings />;
-      case "templates":
-        return <TemplateSettings />;
-      case "exit":
-        return <ExitSettings />;
-      case "status":
-        return <StatusSettings />;
-      case "steps":
-        return <StepSettings />;
-      case "cta":
-        return <CtaSettings />;
-      case "reminder":
-        return <ReminderSettings />;
-      case "diagnosis":
-        return <DiagnosisSettings />;
-    }
-  })();
-
-  return (
-    <div>
-      <p className="text-xs text-gray-500 mb-4 border-l-2 border-green-400 pl-3">
-        {helpText}
-      </p>
-      {component}
-    </div>
-  );
+/** タブキーに対応するコンポーネントを返すヘルパー */
+function TabComponent({ tab }: { tab: TabKey }) {
+  switch (tab) {
+    case "line":
+      return <LineSettings />;
+    case "tags":
+      return <TagSettings />;
+    case "leadSource":
+      return <LeadSourceSettings />;
+    case "templates":
+      return <TemplateSettings />;
+    case "exit":
+      return <ExitSettings />;
+    case "status":
+      return <StatusSettings />;
+    case "steps":
+      return <StepSettings />;
+    case "cta":
+      return <CtaSettings />;
+    case "reminder":
+      return <ReminderSettings />;
+    case "diagnosis":
+      return <DiagnosisSettings />;
+  }
 }
 
 export default function SettingsPage() {
@@ -117,8 +105,17 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        {/* タブコンテンツ */}
-        <TabContent tab={activeTab} />
+        {/* タブコンテンツ: 全タブを常にレンダリングし、非アクティブはCSSで隠す（未保存データ消失防止） */}
+        {TABS.map((tab) => (
+          <div key={tab.key} style={{ display: activeTab === tab.key ? "block" : "none" }}>
+            {TAB_HELP[tab.key] && (
+              <p className="text-xs text-gray-500 mb-4 border-l-2 border-green-400 pl-3">
+                {TAB_HELP[tab.key]}
+              </p>
+            )}
+            <TabComponent tab={tab.key} />
+          </div>
+        ))}
       </div>
     </div>
   );

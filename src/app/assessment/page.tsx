@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PRECISION_QUESTIONS, PRECISION_OPTIONS } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG } from '@/lib/types';
+import { INDUSTRIES } from '@/lib/assessment-constants';
 import type { LevelBand } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -24,11 +25,6 @@ interface AssessmentResult {
   levelBand: LevelBand;
 }
 
-const INDUSTRIES = [
-  '製造業', '建設業', '卸売業・小売業', '飲食・宿泊業', '医療・福祉',
-  '情報通信業', '不動産業', '運輸業', '教育・学習支援', 'サービス業（他に分類されないもの）', 'その他',
-];
-
 const AXIS_LABELS: Record<string, string> = {
   a1: '売上・請求管理',
   a2: '連絡・記録管理',
@@ -42,10 +38,7 @@ const AXIS_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 const COLORS = {
-  bg: '#050505',
-  surface: '#0d0d0d',
   border: '#222',
-  borderActive: '#3b82f6',
   accent: '#3b82f6',
   accentDim: '#1d4ed8',
   text: '#e5e7eb',
@@ -117,7 +110,7 @@ function ProfileStep({
         </h1>
         <p style={{ color: COLORS.textMuted, marginTop: 16, fontSize: 14, lineHeight: 1.7 }}>
           30問の設問（約15分）であなたの会社のDX推進レベルをLv.1〜50で測定します。
-          業種別の平均と比較したスコアレポートを即時表示します。
+          回答後すぐに5軸のDXスコアとレベルを表示します。
         </p>
       </div>
 
@@ -125,8 +118,9 @@ function ProfileStep({
       <form onSubmit={handleSubmit} noValidate>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div>
-            <label style={labelStyle}>氏名</label>
+            <label htmlFor="field-name" style={labelStyle}>氏名</label>
             <input
+              id="field-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -140,8 +134,9 @@ function ProfileStep({
           </div>
 
           <div>
-            <label style={labelStyle}>会社名</label>
+            <label htmlFor="field-company" style={labelStyle}>会社名</label>
             <input
+              id="field-company"
               type="text"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
@@ -155,8 +150,9 @@ function ProfileStep({
           </div>
 
           <div>
-            <label style={labelStyle}>業種</label>
+            <label htmlFor="field-industry" style={labelStyle}>業種</label>
             <select
+              id="field-industry"
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
               style={{
@@ -207,22 +203,25 @@ function ProfileStep({
 // ---------------------------------------------------------------------------
 
 function SurveyStep({
+  answers,
+  onAnswerChange,
   onComplete,
 }: {
+  answers: number[];
+  onAnswerChange: (answers: number[]) => void;
   onComplete: (answers: number[]) => void;
 }) {
-  const [answers, setAnswers] = useState<number[]>(new Array(30).fill(0));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState('');
 
   const question = PRECISION_QUESTIONS[currentIndex];
-  const progress = ((currentIndex) / 30) * 100;
+  const progress = ((currentIndex + 1) / 30) * 100;
   const selected = answers[currentIndex];
 
   function handleSelect(value: number) {
     const next = [...answers];
     next[currentIndex] = value;
-    setAnswers(next);
+    onAnswerChange(next);
     setError('');
   }
 
@@ -360,6 +359,7 @@ function SurveyStep({
 // ---------------------------------------------------------------------------
 
 function ResultStep({ result }: { result: AssessmentResult }) {
+  const lineUrl = process.env.NEXT_PUBLIC_LINE_URL ?? '#';
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
   const maxAxisScore = 30; // 6問 × 5点
 
@@ -478,7 +478,7 @@ function ResultStep({ result }: { result: AssessmentResult }) {
           具体的なアクションを毎日お届けします。
         </p>
         <a
-          href="https://lin.ee/your-line-id"
+          href={lineUrl}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -508,8 +508,9 @@ export default function AssessmentPage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [answers, setAnswers] = useState<number[]>(new Array(30).fill(0));
 
-  async function handleSurveyComplete(answers: number[]) {
+  async function handleSurveyComplete(completedAnswers: number[]) {
     if (!profile) return;
     setStep('submitting');
 
@@ -520,7 +521,7 @@ export default function AssessmentPage() {
       const res = await fetch('/api/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, answers }),
+        body: JSON.stringify({ ...profile, answers: completedAnswers }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -553,7 +554,13 @@ export default function AssessmentPage() {
   }
 
   if (step === 'survey') {
-    return <SurveyStep onComplete={handleSurveyComplete} />;
+    return (
+      <SurveyStep
+        answers={answers}
+        onAnswerChange={setAnswers}
+        onComplete={handleSurveyComplete}
+      />
+    );
   }
 
   if (step === 'submitting') {
@@ -568,18 +575,21 @@ export default function AssessmentPage() {
           gap: 20,
         }}
       >
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            border: `3px solid ${COLORS.border}`,
-            borderTopColor: COLORS.accent,
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{
+                width: 10,
+                height: 10,
+                background: COLORS.accent,
+                animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+              }}
+            />
+          ))}
+        </div>
         <p style={{ color: COLORS.textMuted, fontSize: 14 }}>スコアを計算中...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
       </div>
     );
   }

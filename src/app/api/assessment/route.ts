@@ -4,20 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase';
 import { computePrecisionResult } from '@/lib/precision-interview';
-import type { LevelBand } from '@/lib/types';
-
-const INDUSTRIES = [
-  '製造業', '建設業', '卸売業・小売業', '飲食・宿泊業', '医療・福祉',
-  '情報通信業', '不動産業', '運輸業', '教育・学習支援', 'サービス業（他に分類されないもの）', 'その他',
-];
-
-function getLevelBandFromLevel(level: number): LevelBand {
-  if (level <= 10) return 'lv_01_10';
-  if (level <= 20) return 'lv_11_20';
-  if (level <= 30) return 'lv_21_30';
-  if (level <= 40) return 'lv_31_40';
-  return 'lv_41_50';
-}
+import { getLevelBand } from '@/lib/step-delivery';
+import { INDUSTRIES } from '@/lib/assessment-constants';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
@@ -38,7 +26,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (typeof company_name !== 'string' || company_name.trim().length === 0 || company_name.length > 100) {
       return NextResponse.json({ error: '会社名を正しく入力してください（1〜100文字）' }, { status: 400 });
     }
-    if (typeof industry !== 'string' || !INDUSTRIES.includes(industry)) {
+    if (typeof industry !== 'string' || !(INDUSTRIES as readonly string[]).includes(industry)) {
       return NextResponse.json({ error: '業種を選択してください' }, { status: 400 });
     }
     if (!Array.isArray(answers) || answers.length !== 30) {
@@ -52,7 +40,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // --- サーバーサイドでスコア計算（クライアント値は使用しない） ---
     const result = computePrecisionResult(answers as number[]);
-    const levelBand = getLevelBandFromLevel(result.exactLevel);
+    const levelBand = getLevelBand(result.exactLevel);
 
     // --- Supabase保存 ---
     const supabase = getSupabaseServer();

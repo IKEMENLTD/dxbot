@@ -227,7 +227,7 @@ function SurveyStep({
   }
 
   function handleNext() {
-    if (!selected) {
+    if (selected === 0) {
       setError('選択肢を選んでください');
       return;
     }

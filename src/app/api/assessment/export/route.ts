@@ -54,7 +54,11 @@ export async function GET(): Promise<NextResponse> {
   ].join(',');
 
   const csvRows = rows.map((r) => {
-    const axisScores = r.axis_scores as { a1: number; a2: number; b: number; c: number; d: number };
+    const rawScores = r.axis_scores;
+    const axisScores: { a1: number; a2: number; b: number; c: number; d: number } =
+      rawScores !== null && typeof rawScores === 'object' && !Array.isArray(rawScores)
+        ? (rawScores as { a1: number; a2: number; b: number; c: number; d: number })
+        : { a1: 0, a2: 0, b: 0, c: 0, d: 0 };
     return [
       escapeCsv(r.id),
       escapeCsv(new Date(r.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })),

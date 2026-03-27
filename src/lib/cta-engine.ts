@@ -3,6 +3,7 @@
 import type { AxisScores, CustomerStatus, CtaConfig, CtaTrigger, ExitType, LeadSource } from './types';
 import type { RecommendResult } from './recommend-engine';
 import { getSetting } from './app-settings';
+import { getLevelClassification } from './step-delivery';
 
 // ---------------------------------------------------------------------------
 // 入出力型定義
@@ -186,24 +187,26 @@ export function evaluateCtaWithConfig(input: CtaInput, config: CtaConfig): CtaRe
         recommendation.primaryExit === 'veteran_ai' || recommendation.primaryExit === 'custom_dev'
           ? recommendation.primaryExit
           : 'veteran_ai';
+      const classification = getLevelClassification(user.level);
       return {
         shouldFire: true,
         trigger: 'subsidy_timing',
         exit: subsidyExit,
-        message: `補助金の申請時期です。${getExitLabel(subsidyExit)}で補助金活用をご提案`,
+        message: `${classification.bandLabel}（${classification.phaseLabel}）の時期に補助金申請のチャンスです。${getExitLabel(subsidyExit)}で補助金活用をご提案`,
         priority: 'medium',
       };
     }
   }
 
-  // トリガー4: Lv.40到達
+  // トリガー4: 推進段階（Lv.31-40ゾーン）到達
   if (config.lv40_reached.enabled) {
     if (user.level >= config.lv40_reached.levelThreshold) {
+      const classification = getLevelClassification(user.level);
       return {
         shouldFire: true,
         trigger: 'lv40_reached',
         exit: recommendation.primaryExit,
-        message: `Lv.${config.lv40_reached.levelThreshold}到達。${getExitLabel(recommendation.primaryExit)}への移行をご提案します`,
+        message: `${classification.bandLabel}ゾーン（${classification.stageLabel}）に到達。${getExitLabel(recommendation.primaryExit)}への移行をご提案します`,
         priority: 'medium',
       };
     }

@@ -910,7 +910,7 @@ async function handleStepComplete(
   }
 
   // 完了祝福メッセージ（次のステップ情報を含む）
-  const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel, nextStep);
+  const completeMsg = stepCompleteMessage(completedStep, newCompletedCount, levelUp, newLevel, previousLevel, nextStep);
   await replyAndSave(userId, replyToken, [completeMsg]);
 
   // 状態をstep_readyに更新（次ステップ待ち）

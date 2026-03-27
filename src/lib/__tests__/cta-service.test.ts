@@ -81,7 +81,7 @@ describe('CTA Engine evaluateCta', () => {
     expect(result.priority).toBe('high');
   });
 
-  it('トリガー4: Lv.40到達（補助金時期外）', () => {
+  it('トリガー4: Lv.31-40ゾーン到達（推進段階）（補助金時期外）', () => {
     // 補助金時期（1-3月, 6-8月）にはsubsidy_timingが先に発火するため
     // lv40_reachedが単独で発火するのは4-5月, 9-12月のみ。
     // ここではshouldFire=trueかつ適切なトリガーが選ばれることを検証
@@ -93,6 +93,15 @@ describe('CTA Engine evaluateCta', () => {
     expect(result.shouldFire).toBe(true);
     // 補助金時期ならsubsidy_timing、それ以外ならlv40_reached
     expect(['lv40_reached', 'subsidy_timing']).toContain(result.trigger);
+    // lv40_reached発火時はバンド範囲表記を含むメッセージが返る
+    if (result.trigger === 'lv40_reached') {
+      expect(result.message).toContain('Lv.31-40');
+      expect(result.message).toContain('推進段階');
+    }
+    // subsidy_timing発火時はバンドラベルとフェーズ名を含む
+    if (result.trigger === 'subsidy_timing') {
+      expect(result.message).toContain('補助金');
+    }
   });
 
   it('トリガー5: インボイスstumble - A1低+請求関連', () => {

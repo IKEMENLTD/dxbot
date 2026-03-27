@@ -6,6 +6,7 @@ import type { StumbleType } from './types';
 import type { DiagnosisQuestion } from './diagnosis';
 import type { StepDefinition } from './step-master';
 import { INDUSTRIES, generateResultMessage } from './diagnosis';
+import { getLevelClassification, hasBandChanged, hasPhaseChanged } from './step-delivery';
 
 /**
  * Welcomeメッセージ（施策2: フロー最適化 - consentと一体化）
@@ -387,6 +388,7 @@ export function stepCompleteMessage(
   completedCount: number,
   levelUp: boolean,
   newLevel: number,
+  previousLevel: number,
   nextStep?: StepDefinition | null
 ): TextMessage {
   const lines: string[] = [
@@ -397,8 +399,22 @@ export function stepCompleteMessage(
   ];
 
   if (levelUp) {
+    const classification = getLevelClassification(newLevel);
+    const bandMoved = hasBandChanged(previousLevel, newLevel);
+    const phaseMoved = hasPhaseChanged(previousLevel, newLevel);
+
     lines.push(``);
-    lines.push(`Lv.${newLevel}にアップしました！`);
+    // バンド移行（小分類突破）= 主要マイルストーン
+    if (bandMoved) {
+      lines.push(`【${classification.bandLabel}ゾーンに突入！】`);
+      lines.push(`${classification.axisLabel}の領域に入りました。`);
+      if (phaseMoved) {
+        lines.push(`${classification.phaseLabel}（${classification.phase === 'phase_practice' ? 'Lv.21-40' : 'Lv.41-50'}）へ進みました！`);
+      }
+    } else {
+      // 同バンド内レベルアップ = シンプルに範囲を表示
+      lines.push(`${classification.bandLabel}ゾーン内でレベルアップ！`);
+    }
   }
 
   if (nextStep) {
@@ -438,12 +454,13 @@ export function stepCompleteMessage(
  * 全ステップ完了メッセージ
  */
 export function allStepsCompleteMessage(completedCount: number, level: number): TextMessage {
+  const classification = getLevelClassification(level);
   return {
     type: 'text',
     text: [
       `おめでとうございます！`,
       `${completedCount}ステップ全て完了しました。`,
-      `現在のレベル: Lv.${level}`,
+      `現在: ${classification.bandLabel}ゾーン（${classification.stageLabel} / ${classification.phaseLabel}）`,
       ``,
       `DX改善の基礎が身につきました。`,
       `さらなるDX推進については、`,
@@ -640,7 +657,7 @@ const TRIGGER_REASONS: Record<CtaTrigger, string> = {
   action_boost: '行動が加速しています！次のステージへ進みませんか？',
   apo_early: 'アポからのスタートで素晴らしい進捗です。',
   subsidy_timing: '補助金の申請時期です。このタイミングを活かしませんか？',
-  lv40_reached: 'Lv.40到達、おめでとうございます！さらなるDX推進へ。',
+  lv40_reached: 'Lv.31-40ゾーン（推進段階）に到達！さらなるDX推進へ。',
   invoice_stumble: '請求まわりの課題、まとめて解決できます。',
   it_literacy: 'ITの基礎から一緒にステップアップしましょう。',
 };

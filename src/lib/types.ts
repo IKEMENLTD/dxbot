@@ -1,5 +1,125 @@
 // ===== DXBOT 型定義 =====
 
+// ---------------------------------------------------------------------------
+// レベル分類型（大分類 / 中分類 / 小分類）
+// ---------------------------------------------------------------------------
+
+/** 小分類: Lv.10刻みの範囲バンド（5軸と1:1対応） */
+export type LevelBand =
+  | 'lv_01_10'  // Lv.1-10   売上・請求管理の基礎 (axis a1)
+  | 'lv_11_20'  // Lv.11-20  記録整備・連絡管理の定着 (axis a2)
+  | 'lv_21_30'  // Lv.21-30  自動化導入・業務効率化 (axis b)
+  | 'lv_31_40'  // Lv.31-40  データ活用・経営改善 (axis c)
+  | 'lv_41_50'; // Lv.41-50  ITツール統合・DX完成 (axis d)
+
+/** 中分類: DX習熟フェーズ（3段階） */
+export type LevelPhase =
+  | 'phase_entry'    // 入門期 Lv.1-20
+  | 'phase_practice' // 実践期 Lv.21-40
+  | 'phase_advanced'; // 活用期 Lv.41-50
+
+/** 大分類: DX推進ステージ（2段階） */
+export type LevelStage =
+  | 'stage_early'  // 育成段階 Lv.1-30
+  | 'stage_mature'; // 推進段階 Lv.31-50
+
+export interface LevelClassification {
+  stage: LevelStage;
+  stageLabel: string;   // "育成段階" | "推進段階"
+  phase: LevelPhase;
+  phaseLabel: string;   // "入門期" | "実践期" | "活用期"
+  band: LevelBand;
+  bandLabel: string;    // "Lv.1-10" | "Lv.11-20" など
+  bandRange: string;    // "1-10" | "11-20" など（CSV用）
+  bandStart: number;
+  bandEnd: number;
+  axis: string;         // 対応軸 "a1" | "a2" | "b" | "c" | "d"
+  axisLabel: string;    // "売上・請求管理" など
+  description: string;  // 状態の説明文
+}
+
+export const LEVEL_BAND_CONFIG: Record<LevelBand, {
+  label: string;
+  range: string;
+  start: number;
+  end: number;
+  phase: LevelPhase;
+  stage: LevelStage;
+  axis: string;
+  axisLabel: string;
+  description: string;
+}> = {
+  lv_01_10: {
+    label: 'Lv.1-10', range: '1-10', start: 1, end: 10,
+    phase: 'phase_entry', stage: 'stage_early',
+    axis: 'a1', axisLabel: '売上・請求管理',
+    description: 'DXの第一歩。請求・売上管理のデジタル化に取り組んでいます',
+  },
+  lv_11_20: {
+    label: 'Lv.11-20', range: '11-20', start: 11, end: 20,
+    phase: 'phase_entry', stage: 'stage_early',
+    axis: 'a2', axisLabel: '連絡・記録管理',
+    description: '連絡・記録管理をデジタル化し、業務の基盤が整いつつあります',
+  },
+  lv_21_30: {
+    label: 'Lv.21-30', range: '21-30', start: 21, end: 30,
+    phase: 'phase_practice', stage: 'stage_early',
+    axis: 'b', axisLabel: '繰り返し作業の自動化',
+    description: '業務の自動化に着手。生産性向上の実感が出てくる段階です',
+  },
+  lv_31_40: {
+    label: 'Lv.31-40', range: '31-40', start: 31, end: 40,
+    phase: 'phase_practice', stage: 'stage_mature',
+    axis: 'c', axisLabel: 'データ経営',
+    description: 'データを活用した経営判断ができるようになっています',
+  },
+  lv_41_50: {
+    label: 'Lv.41-50', range: '41-50', start: 41, end: 50,
+    phase: 'phase_advanced', stage: 'stage_mature',
+    axis: 'd', axisLabel: 'ITツール活用',
+    description: 'ITツールが業務に完全統合。DXが日常業務に定着しています',
+  },
+};
+
+export const LEVEL_PHASE_CONFIG: Record<LevelPhase, {
+  label: string;
+  bandRange: string;
+  description: string;
+}> = {
+  phase_entry: {
+    label: '入門期',
+    bandRange: 'Lv.1-20',
+    description: 'DXの基礎を学び、業務改善の第一歩を踏み出している段階',
+  },
+  phase_practice: {
+    label: '実践期',
+    bandRange: 'Lv.21-40',
+    description: '業務自動化・データ活用で生産性を向上させている段階',
+  },
+  phase_advanced: {
+    label: '活用期',
+    bandRange: 'Lv.41-50',
+    description: 'ITツールが完全統合されDXが日常業務に定着した段階',
+  },
+};
+
+export const LEVEL_STAGE_CONFIG: Record<LevelStage, {
+  label: string;
+  bandRange: string;
+  description: string;
+}> = {
+  stage_early: {
+    label: '育成段階',
+    bandRange: 'Lv.1-30',
+    description: 'DXの基礎固め〜業務改善の実践',
+  },
+  stage_mature: {
+    label: '推進段階',
+    bandRange: 'Lv.31-50',
+    description: 'データ活用〜DX完全定着',
+  },
+};
+
 export type ExitType = 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
 export type CustomerStatus = 'prospect' | 'contacted' | 'meeting' | 'customer' | 'churned' | 'techstars_active' | 'techstars_grad';
 export type LeadSource = 'apo' | 'threads' | 'x' | 'instagram' | 'referral' | 'other';

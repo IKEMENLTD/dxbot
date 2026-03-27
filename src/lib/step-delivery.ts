@@ -1,6 +1,18 @@
 // ===== ステップ配信 DB永続化ロジック =====
 
-import type { StumbleType, TimelineEvent } from './types';
+import type {
+  StumbleType,
+  TimelineEvent,
+  LevelBand,
+  LevelPhase,
+  LevelStage,
+  LevelClassification,
+} from './types';
+import {
+  LEVEL_BAND_CONFIG,
+  LEVEL_PHASE_CONFIG,
+  LEVEL_STAGE_CONFIG,
+} from './types';
 import { getSupabaseServer } from './supabase';
 
 /**
@@ -191,10 +203,9 @@ export async function updateUserStepCounters(
 
 /**
  * レベル計算: 完了ステップ数に基づく
- * 各ステップの難易度に応じてスコアを加算し、レベルを算出
+ * 1ステップ = 約Lv.1.5、最大Lv.45（30ステップ全完了時）
  */
 export function calculateLevel(stepsCompleted: number): number {
-  // 1ステップ = 約Lv.1.5、最大Lv.45（30ステップ全完了時）
   return Math.floor(stepsCompleted * 1.5);
 }
 
@@ -208,4 +219,78 @@ export function calculateScoreForStep(difficulty: 1 | 2 | 3): number {
     3: 30,
   };
   return scoreMap[difficulty];
+}
+
+// ---------------------------------------------------------------------------
+// レベル分類: 大分類 / 中分類 / 小分類
+// ---------------------------------------------------------------------------
+
+/**
+ * 小分類: レベルからバンド（Lv.10刻み範囲）を返す
+ * Lv.0はlv_01_10扱い
+ */
+export function getLevelBand(level: number): LevelBand {
+  if (level <= 10) return 'lv_01_10';
+  if (level <= 20) return 'lv_11_20';
+  if (level <= 30) return 'lv_21_30';
+  if (level <= 40) return 'lv_31_40';
+  return 'lv_41_50';
+}
+
+/**
+ * 中分類: レベルからフェーズを返す
+ * 入門期(Lv.1-20) / 実践期(Lv.21-40) / 活用期(Lv.41-50)
+ */
+export function getLevelPhase(level: number): LevelPhase {
+  return LEVEL_BAND_CONFIG[getLevelBand(level)].phase;
+}
+
+/**
+ * 大分類: レベルからステージを返す
+ * 育成段階(Lv.1-30) / 推進段階(Lv.31-50)
+ */
+export function getLevelStage(level: number): LevelStage {
+  return LEVEL_BAND_CONFIG[getLevelBand(level)].stage;
+}
+
+/**
+ * フル分類情報: CSV出力・UI表示・CTA判定に使用
+ */
+export function getLevelClassification(level: number): LevelClassification {
+  const band = getLevelBand(level);
+  const bandConfig = LEVEL_BAND_CONFIG[band];
+  const phase = bandConfig.phase;
+  const stage = bandConfig.stage;
+  const phaseConfig = LEVEL_PHASE_CONFIG[phase];
+  const stageConfig = LEVEL_STAGE_CONFIG[stage];
+
+  return {
+    stage,
+    stageLabel: stageConfig.label,
+    phase,
+    phaseLabel: phaseConfig.label,
+    band,
+    bandLabel: bandConfig.label,
+    bandRange: bandConfig.range,
+    bandStart: bandConfig.start,
+    bandEnd: bandConfig.end,
+    axis: bandConfig.axis,
+    axisLabel: bandConfig.axisLabel,
+    description: bandConfig.description,
+  };
+}
+
+/**
+ * レベルアップ時にバンド移行があったか判定
+ * バンド移行 = 小分類が変わった = 主要マイルストーン
+ */
+export function hasBandChanged(previousLevel: number, newLevel: number): boolean {
+  return getLevelBand(previousLevel) !== getLevelBand(newLevel);
+}
+
+/**
+ * フェーズ移行があったか判定（中分類）
+ */
+export function hasPhaseChanged(previousLevel: number, newLevel: number): boolean {
+  return getLevelPhase(previousLevel) !== getLevelPhase(newLevel);
 }

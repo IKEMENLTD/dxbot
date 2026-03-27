@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PRECISION_QUESTIONS, PRECISION_OPTIONS } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG } from '@/lib/types';
 import { INDUSTRIES } from '@/lib/assessment-constants';
@@ -358,8 +358,7 @@ function SurveyStep({
 // ResultStep コンポーネント
 // ---------------------------------------------------------------------------
 
-function ResultStep({ result }: { result: AssessmentResult }) {
-  const lineUrl = process.env.NEXT_PUBLIC_LINE_URL ?? '#';
+function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: string | null }) {
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
   const maxAxisScore = 30; // 6問 × 5点
 
@@ -477,23 +476,29 @@ function ResultStep({ result }: { result: AssessmentResult }) {
           LINEで友達追加すると、今のレベルから次のステップへ進むための
           具体的なアクションを毎日お届けします。
         </p>
-        <a
-          href={lineUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-block',
-            background: '#06c755',
-            color: '#fff',
-            padding: '14px 32px',
-            fontSize: 15,
-            fontWeight: 700,
-            textDecoration: 'none',
-            letterSpacing: '0.05em',
-          }}
-        >
-          LINE で改善ステップを受け取る
-        </a>
+        {lineUrl ? (
+          <a
+            href={lineUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-block',
+              background: '#06c755',
+              color: '#fff',
+              padding: '14px 32px',
+              fontSize: 15,
+              fontWeight: 700,
+              textDecoration: 'none',
+              letterSpacing: '0.05em',
+            }}
+          >
+            LINE で改善ステップを受け取る
+          </a>
+        ) : (
+          <p style={{ color: COLORS.textDim, fontSize: 13 }}>
+            LINE連携は準備中です。しばらくお待ちください。
+          </p>
+        )}
       </div>
     </div>
   );
@@ -509,6 +514,17 @@ export default function AssessmentPage() {
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [answers, setAnswers] = useState<number[]>(new Array(30).fill(0));
+  const [lineUrl, setLineUrl] = useState<string | null>(null);
+
+  // 管理画面のLINE設定から友だち追加URLを取得
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/assessment/config', { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null }> : null))
+      .then((data) => { if (data) setLineUrl(data.lineUrl); })
+      .catch(() => { /* フォールバック: null のまま */ });
+    return () => controller.abort();
+  }, []);
 
   async function handleSurveyComplete(completedAnswers: number[]) {
     if (!profile) return;
@@ -595,7 +611,7 @@ export default function AssessmentPage() {
   }
 
   if (step === 'result' && result) {
-    return <ResultStep result={result} />;
+    return <ResultStep result={result} lineUrl={lineUrl} />;
   }
 
   // error

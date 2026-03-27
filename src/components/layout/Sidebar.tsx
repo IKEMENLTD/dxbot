@@ -64,6 +64,18 @@ const navItems = [
     ),
   },
   {
+    href: "/admindashboard/assessments",
+    label: "診断回答",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="3" width="14" height="14" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M7 7H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M7 10H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M7 13H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     href: "/admindashboard/settings",
     label: "設定",
     icon: (

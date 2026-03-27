@@ -523,6 +523,48 @@ export interface Database {
         };
         Relationships: [];
       };
+      assessment_responses: {
+        Row: {
+          id: string;
+          created_at: string;
+          name: string;
+          company_name: string;
+          industry: string;
+          answers: number[];
+          axis_scores: { a1: number; a2: number; b: number; c: number; d: number };
+          precision_score: number;
+          exact_level: number;
+          level_band: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
+          line_user_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          name: string;
+          company_name: string;
+          industry: string;
+          answers: number[];
+          axis_scores: { a1: number; a2: number; b: number; c: number; d: number };
+          precision_score: number;
+          exact_level: number;
+          level_band: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
+          line_user_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          name?: string;
+          company_name?: string;
+          industry?: string;
+          answers?: number[];
+          axis_scores?: { a1: number; a2: number; b: number; c: number; d: number };
+          precision_score?: number;
+          exact_level?: number;
+          level_band?: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
+          line_user_id?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       hot_users_view: {

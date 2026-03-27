@@ -1,12 +1,17 @@
 // ===== LINE メッセージテンプレート =====
 
 import type { TextMessage, FlexMessage, LineMessage } from './line-types';
-import type { AxisScores } from './types';
+import type { AxisScores, LevelBand } from './types';
+import { LEVEL_BAND_CONFIG, LEVEL_PHASE_CONFIG, LEVEL_STAGE_CONFIG } from './types';
 import type { StumbleType } from './types';
 import type { DiagnosisQuestion } from './diagnosis';
 import type { StepDefinition } from './step-master';
 import { INDUSTRIES, generateResultMessage } from './diagnosis';
 import { getLevelClassification, hasBandChanged, hasPhaseChanged } from './step-delivery';
+import type { BandSurveyQuestion } from './band-survey';
+import { BAND_SURVEY_QUESTION_COUNT } from './band-survey';
+import type { PrecisionQuestion } from './precision-interview';
+import { PRECISION_QUESTION_COUNT } from './precision-interview';
 
 /**
  * Welcomeメッセージ（施策2: フロー最適化 - consentと一体化）
@@ -976,4 +981,237 @@ export function reminderResumeConfirmMessage(stepName: string | null): TextMessa
  */
 export function toMessages(...msgs: (TextMessage | FlexMessage)[]): LineMessage[] {
   return msgs;
+}
+
+// ============================================================
+// Stage 2: バンドサーベイ メッセージ
+// ============================================================
+
+const BAND_SURVEY_TOTAL = BAND_SURVEY_QUESTION_COUNT; // 15
+
+/**
+ * バンドサーベイ開始案内
+ * source_question回答後に送信
+ */
+export function bandSurveyIntroMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      'ありがとうございます！',
+      '',
+      '次に、あなたの現在のDXレベルを',
+      'もう少し詳しく確認させてください。',
+      '',
+      '【レベル判定サーベイ】',
+      `全${BAND_SURVEY_TOTAL}問・所要時間: 約5分`,
+      '3択でサクサク答えられます。',
+      '',
+      'あなたが Lv.1-10 なのか Lv.11-20 なのか…',
+      'どのゾーンにいるかを特定します。',
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'サーベイ開始',
+            data: 'action=band_survey_start',
+            displayText: 'サーベイを始める',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'スキップして開始',
+            data: 'action=band_survey_skip',
+            displayText: 'スキップしてステップへ',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * バンドサーベイ 1問分のメッセージ（3択quickReply）
+ */
+export function bandSurveyQuestionMessage(question: BandSurveyQuestion): TextMessage {
+  const current = question.index + 1;
+  return {
+    type: 'text',
+    text: [
+      `[Q${current}/${BAND_SURVEY_TOTAL}] ${question.question}`,
+      progressBar(current, BAND_SURVEY_TOTAL),
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'やっている',
+            data: 'action=band_survey&value=2',
+            displayText: 'やっている',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '少しだけ',
+            data: 'action=band_survey&value=1',
+            displayText: '少しだけ',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'まだ',
+            data: 'action=band_survey&value=0',
+            displayText: 'まだ',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * バンドサーベイ完了 → ゾーン判定結果
+ */
+export function bandSurveyResultMessage(band: LevelBand, initialLevel: number): TextMessage {
+  const config = LEVEL_BAND_CONFIG[band];
+  const phaseConfig = LEVEL_PHASE_CONFIG[config.phase];
+  const stageConfig = LEVEL_STAGE_CONFIG[config.stage];
+
+  return {
+    type: 'text',
+    text: [
+      'サーベイ完了！',
+      '',
+      `あなたのDXレベルゾーン:`,
+      `【 ${config.label} 】`,
+      `${stageConfig.label} / ${phaseConfig.label}`,
+      `対応軸: ${config.axisLabel}`,
+      '',
+      config.description,
+      '',
+      `仮レベル Lv.${initialLevel} からスタートします。`,
+      '',
+      'さらに精密なレベル測定（約15分）も',
+      '行いますか？より正確なスタート地点で',
+      '効率よく進められます。',
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '精密測定する（推奨）',
+            data: 'action=precision_start',
+            displayText: '精密測定を受ける',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'このまま開始',
+            data: 'action=precision_skip',
+            displayText: 'このままステップへ',
+          },
+        },
+      ],
+    },
+  };
+}
+
+// ============================================================
+// Stage 3: 精密ヒアリング メッセージ
+// ============================================================
+
+const PRECISION_TOTAL = PRECISION_QUESTION_COUNT; // 30
+
+/**
+ * 精密ヒアリング開始案内
+ */
+export function precisionInterviewIntroMessage(): TextMessage {
+  return {
+    type: 'text',
+    text: [
+      '【精密レベル測定】',
+      `全${PRECISION_TOTAL}問・所要時間: 約15分`,
+      '',
+      '5段階評価で答えていただくことで、',
+      `Lv.1〜50の中で1単位の精度で`,
+      'あなたの正確なDXレベルを特定します。',
+      '',
+      '測定後は、あなたのレベルに',
+      'ぴったり合ったステップからスタートできます。',
+    ].join('\n'),
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '測定開始',
+            data: 'action=precision_begin',
+            displayText: '精密測定を開始する',
+          },
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * 精密ヒアリング 1問分のメッセージ（5択quickReply）
+ */
+export function precisionQuestionMessage(question: PrecisionQuestion): TextMessage {
+  const current = question.index + 1;
+  return {
+    type: 'text',
+    text: [
+      `[Q${current}/${PRECISION_TOTAL}] ${question.question}`,
+      progressBar(current, PRECISION_TOTAL),
+    ].join('\n'),
+    quickReply: {
+      items: [
+        { type: 'action', action: { type: 'postback', label: '1: 全くない',     data: 'action=precision&value=1', displayText: '1: 全くない' } },
+        { type: 'action', action: { type: 'postback', label: '2: ほとんどない', data: 'action=precision&value=2', displayText: '2: ほとんどない' } },
+        { type: 'action', action: { type: 'postback', label: '3: 半分くらい',   data: 'action=precision&value=3', displayText: '3: 半分くらい' } },
+        { type: 'action', action: { type: 'postback', label: '4: ほぼできてる', data: 'action=precision&value=4', displayText: '4: ほぼできてる' } },
+        { type: 'action', action: { type: 'postback', label: '5: 完全にできる', data: 'action=precision&value=5', displayText: '5: 完全にできる' } },
+      ],
+    },
+  };
+}
+
+/**
+ * 精密ヒアリング完了 → 確定レベル表示
+ */
+export function precisionResultMessage(exactLevel: number, band: LevelBand): TextMessage {
+  const config = LEVEL_BAND_CONFIG[band];
+  const phaseConfig = LEVEL_PHASE_CONFIG[config.phase];
+  const stageConfig = LEVEL_STAGE_CONFIG[config.stage];
+
+  return {
+    type: 'text',
+    text: [
+      '精密測定完了！',
+      '',
+      'あなたの確定レベル:',
+      `【 Lv.${exactLevel} 】`,
+      `ゾーン: ${config.label}`,
+      `${stageConfig.label} / ${phaseConfig.label}`,
+      '',
+      `このレベルに合わせた最適なステップから`,
+      `スタートします。`,
+    ].join('\n'),
+  };
 }

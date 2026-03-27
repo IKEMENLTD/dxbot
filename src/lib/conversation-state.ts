@@ -1,7 +1,7 @@
 // ===== 会話状態管理 =====
 // Supabase接続時はDBに永続化、未接続時はインメモリfallback
 
-import type { AxisScores } from './types';
+import type { AxisScores, LevelBand } from './types';
 import type { LineProfile } from './line-types';
 import { getSupabaseServer } from './supabase';
 
@@ -14,6 +14,10 @@ export type ConversationState =
   | { phase: 'industry_select' }
   | { phase: 'diagnosis'; questionIndex: number; scores: Partial<AxisScores> }
   | { phase: 'diagnosis_complete'; scores: AxisScores }
+  // Stage 2: バンドサーベイ（15問・3択、~5分）→ Lv.10刻みバンドを判定
+  | { phase: 'band_survey'; questionIndex: number; answers: number[] }
+  // Stage 3: 精密ヒアリング（30問・5択、~15分）→ 1単位でレベルを確定
+  | { phase: 'precision_interview'; questionIndex: number; answers: number[]; targetBand: LevelBand }
   | { phase: 'step_ready'; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number; stumbleHowCount: number }
   | { phase: 'step_active'; currentStepId: string; weakAxis: keyof AxisScores; completedStepIds: string[]; stumbleCount: number; stumbleHowCount: number };
 

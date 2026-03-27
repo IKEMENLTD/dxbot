@@ -53,7 +53,24 @@ import {
   reminderPauseConfirmMessage,
   reminderStopConfirmMessage,
   reminderResumeConfirmMessage,
+  bandSurveyIntroMessage,
+  bandSurveyQuestionMessage,
+  bandSurveyResultMessage,
+  precisionInterviewIntroMessage,
+  precisionQuestionMessage,
+  precisionResultMessage,
 } from '@/lib/line-messages';
+import {
+  getBandSurveyQuestion,
+  BAND_SURVEY_QUESTION_COUNT,
+  computeBandSurveyResult,
+} from '@/lib/band-survey';
+import type { LevelBand } from '@/lib/types';
+import {
+  getPrecisionQuestion,
+  PRECISION_QUESTION_COUNT,
+  computePrecisionResult,
+} from '@/lib/precision-interview';
 
 /**
  * replyMessage送信 + outbound保存のラッパー（fire-and-forget で保存）
@@ -481,6 +498,29 @@ async function handlePostback(event: PostbackEvent): Promise<void> {
       case 'step_pause':
         await handleStepPause(userId, event.replyToken);
         break;
+      // Stage 2: バンドサーベイ
+      case 'band_survey_start':
+        await handleBandSurveyStart(userId, event.replyToken);
+        break;
+      case 'band_survey_skip':
+        await handleBandSurveySkip(userId, event.replyToken);
+        break;
+      case 'band_survey':
+        await handleBandSurveyAnswer(userId, event.replyToken, params);
+        break;
+      // Stage 3: 精密ヒアリング
+      case 'precision_start':
+        await handlePrecisionStart(userId, event.replyToken);
+        break;
+      case 'precision_skip':
+        await handlePrecisionSkip(userId, event.replyToken);
+        break;
+      case 'precision_begin':
+        await handlePrecisionBegin(userId, event.replyToken);
+        break;
+      case 'precision':
+        await handlePrecisionAnswer(userId, event.replyToken, params);
+        break;
       case 'cta_response':
         await handleCtaResponse(userId, event.replyToken, params);
         break;
@@ -549,16 +589,290 @@ async function handleSourceAnswer(
     }
   }
 
-  // 最初のステップ名と所要時間を取得
+  // バンドサーベイ案内を送信（Stage 2開始）
+  await replyAndSave(userId, replyToken, [bandSurveyIntroMessage()]);
+
+  // band_surveyフェーズへ遷移（weakAxisはDBに保存済み）
+  await setState(userId, {
+    state: {
+      phase: 'band_survey',
+      questionIndex: -1, // -1 = イントロ表示済み、開始待ち
+      answers: [],
+    },
+  });
+}
+
+// ============================================================
+// Stage 2: バンドサーベイ ハンドラ
+// ============================================================
+
+/** バンドサーベイ開始（Q1を送信） */
+async function handleBandSurveyStart(userId: string, replyToken: string): Promise<void> {
+  try {
+    const q = getBandSurveyQuestion(0);
+    if (!q) return;
+    await replyAndSave(userId, replyToken, [bandSurveyQuestionMessage(q)]);
+    await setState(userId, {
+      state: { phase: 'band_survey', questionIndex: 0, answers: [] },
+    });
+  } catch (err) {
+    console.error('[Webhook] handleBandSurveyStart エラー:', err);
+  }
+}
+
+/** バンドサーベイ スキップ → 直接step_ready（Lv.1-10スタート） */
+async function handleBandSurveySkip(userId: string, replyToken: string): Promise<void> {
+  try {
+    await startStepReady(userId, replyToken);
+  } catch (err) {
+    console.error('[Webhook] handleBandSurveySkip エラー:', err);
+  }
+}
+
+/** バンドサーベイ 回答処理（1問ずつ） */
+async function handleBandSurveyAnswer(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  try {
+    const conversation = await getState(userId);
+    if (!conversation) return;
+    const state = conversation.state;
+    if (state.phase !== 'band_survey') return;
+    // questionIndex < 0 = 開始前（startボタン押下前の古いメッセージ再タップ等）→ 無視
+    if (state.questionIndex < 0) return;
+
+    const value = parseInt(params.get('value') ?? '0', 10);
+    if (isNaN(value) || value < 0 || value > 2) return;
+
+    const updatedAnswers = [...state.answers, value];
+    const nextIndex = state.questionIndex + 1;
+
+    if (nextIndex < BAND_SURVEY_QUESTION_COUNT) {
+      // 次の設問を送信
+      const nextQ = getBandSurveyQuestion(nextIndex);
+      if (!nextQ) return;
+
+      await setState(userId, {
+        state: { phase: 'band_survey', questionIndex: nextIndex, answers: updatedAnswers },
+      });
+      await replyAndSave(userId, replyToken, [bandSurveyQuestionMessage(nextQ)]);
+    } else {
+      // 全問完了 → バンド判定
+      await completeBandSurvey(userId, replyToken, updatedAnswers);
+    }
+  } catch (err) {
+    console.error('[Webhook] handleBandSurveyAnswer エラー:', err);
+  }
+}
+
+/** バンドサーベイ完了 → 結果表示・DBへ保存 */
+async function completeBandSurvey(
+  userId: string,
+  replyToken: string,
+  answers: number[]
+): Promise<void> {
+  const result = computeBandSurveyResult(answers);
+
+  // DBにバンド・仮レベルを保存
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      await supabase.from('users').update({
+        level: result.initialLevel,
+        band_survey_score: result.totalScore,
+        assessed_band: result.band,
+        level_source: 'band_survey',
+      }).eq('id', userId);
+    } catch (err) {
+      console.error('[Webhook] completeBandSurvey DB保存エラー:', err);
+    }
+  }
+
+  // 結果メッセージを送信（精密ヒアリングへの誘導付き）
+  await replyAndSave(userId, replyToken, [bandSurveyResultMessage(result.band, result.initialLevel)]);
+
+  // precision_interview待機フェーズ（targetBandを保持）
+  await setState(userId, {
+    state: {
+      phase: 'precision_interview',
+      questionIndex: -1, // -1 = 案内表示前
+      answers: [],
+      targetBand: result.band,
+    },
+  });
+}
+
+// ============================================================
+// Stage 3: 精密ヒアリング ハンドラ
+// ============================================================
+
+/** 精密ヒアリング 開始案内を表示 */
+async function handlePrecisionStart(userId: string, replyToken: string): Promise<void> {
+  try {
+    const conversation = await getState(userId);
+    if (!conversation) return;
+    const state = conversation.state;
+    if (state.phase !== 'precision_interview') return;
+
+    await replyAndSave(userId, replyToken, [precisionInterviewIntroMessage()]);
+    // questionIndexは-1のまま（beginで0に進む）
+  } catch (err) {
+    console.error('[Webhook] handlePrecisionStart エラー:', err);
+  }
+}
+
+/** 精密ヒアリング スキップ → バンドの仮レベルでstep_ready */
+async function handlePrecisionSkip(userId: string, replyToken: string): Promise<void> {
+  try {
+    await startStepReady(userId, replyToken);
+  } catch (err) {
+    console.error('[Webhook] handlePrecisionSkip エラー:', err);
+  }
+}
+
+/** 精密ヒアリング Q1送信 */
+async function handlePrecisionBegin(userId: string, replyToken: string): Promise<void> {
+  try {
+    const conversation = await getState(userId);
+    if (!conversation) return;
+    const state = conversation.state;
+    if (state.phase !== 'precision_interview') return;
+
+    const q = getPrecisionQuestion(0);
+    if (!q) return;
+
+    await setState(userId, {
+      state: { ...state, questionIndex: 0, answers: [] },
+    });
+    await replyAndSave(userId, replyToken, [precisionQuestionMessage(q)]);
+  } catch (err) {
+    console.error('[Webhook] handlePrecisionBegin エラー:', err);
+  }
+}
+
+/** 精密ヒアリング 回答処理（1問ずつ） */
+async function handlePrecisionAnswer(
+  userId: string,
+  replyToken: string,
+  params: Map<string, string>
+): Promise<void> {
+  try {
+    const conversation = await getState(userId);
+    if (!conversation) return;
+    const state = conversation.state;
+    if (state.phase !== 'precision_interview') return;
+    // questionIndex < 0 = precision_begin 前の古いメッセージ再タップ等 → 無視
+    if (state.questionIndex < 0) return;
+
+    const value = parseInt(params.get('value') ?? '3', 10);
+    if (isNaN(value) || value < 1 || value > 5) return;
+
+    const updatedAnswers = [...state.answers, value];
+    const nextIndex = state.questionIndex + 1;
+
+    if (nextIndex < PRECISION_QUESTION_COUNT) {
+      const nextQ = getPrecisionQuestion(nextIndex);
+      if (!nextQ) return;
+
+      await setState(userId, {
+        state: { ...state, questionIndex: nextIndex, answers: updatedAnswers },
+      });
+      await replyAndSave(userId, replyToken, [precisionQuestionMessage(nextQ)]);
+    } else {
+      // 全問完了 → 確定レベル計算
+      // targetBand は conversation-state で LevelBand 型として保証済み
+      await completePrecisionInterview(userId, replyToken, updatedAnswers, state.targetBand);
+    }
+  } catch (err) {
+    console.error('[Webhook] handlePrecisionAnswer エラー:', err);
+  }
+}
+
+/** 精密ヒアリング完了 → 確定レベル設定・step_ready遷移 */
+async function completePrecisionInterview(
+  userId: string,
+  replyToken: string,
+  answers: number[],
+  targetBand: LevelBand
+): Promise<void> {
+  const result = computePrecisionResult(answers, targetBand);
+
+  // DBに確定レベルを保存
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      await supabase.from('users').update({
+        level: result.exactLevel,
+        precision_score: result.totalScore,
+        level_source: 'precision',
+      }).eq('id', userId);
+    } catch (err) {
+      console.error('[Webhook] completePrecisionInterview DB保存エラー:', err);
+    }
+  }
+
+  // weak_axis を取得してステップ情報を構築
+  let weakAxis: keyof AxisScores = 'd';
+  const db = getSupabaseServer();
+  if (db) {
+    try {
+      const { data } = await db.from('users').select('weak_axis').eq('id', userId).single();
+      if (data?.weak_axis) weakAxis = data.weak_axis as keyof AxisScores;
+    } catch { /* デフォルト使用 */ }
+  }
   const firstStep = await getNextStepAsync([], weakAxis);
   const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
   const firstStepMinutes = firstStep ? firstStep.estimatedMinutes : 15;
 
-  // ステップ開始案内を送信
+  // replyToken は1回のみ使用: 確定レベル + ステップ開始案内 をまとめて送信
+  const resultMsg = precisionResultMessage(result.exactLevel, targetBand);
+  const stepMsg = stepStartMessage(firstStepName, firstStepMinutes);
+  await replyAndSave(userId, replyToken, [resultMsg, stepMsg]);
+
+  // 状態のみ遷移（replyAndSave は上で完了済み）
+  await setState(userId, {
+    state: {
+      phase: 'step_ready',
+      weakAxis,
+      completedStepIds: [],
+      stumbleCount: 0,
+      stumbleHowCount: 0,
+    },
+  });
+}
+
+// ============================================================
+// 共通: step_readyへの遷移ヘルパー
+// ============================================================
+
+/** DBからweak_axisを取得してstep_readyフェーズに遷移 */
+async function startStepReady(userId: string, replyToken: string): Promise<void> {
+  let weakAxis: keyof AxisScores = 'd';
+  const supabase = getSupabaseServer();
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('weak_axis')
+        .eq('id', userId)
+        .single();
+      if (data?.weak_axis) {
+        weakAxis = data.weak_axis as keyof AxisScores;
+      }
+    } catch (err) {
+      console.error('[Webhook] startStepReady weak_axis取得エラー（デフォルト使用）:', err);
+    }
+  }
+
+  const firstStep = await getNextStepAsync([], weakAxis);
+  const firstStepName = firstStep ? firstStep.name : 'DX基礎チェック';
+  const firstStepMinutes = firstStep ? firstStep.estimatedMinutes : 15;
+
   const stepMsg = stepStartMessage(firstStepName, firstStepMinutes);
   await replyAndSave(userId, replyToken, [stepMsg]);
 
-  // step_readyフェーズへ遷移
   await setState(userId, {
     state: {
       phase: 'step_ready',

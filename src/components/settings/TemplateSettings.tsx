@@ -34,9 +34,6 @@ export default function TemplateSettings() {
   const [editValue, setEditValue] = useState("");
   const [newText, setNewText] = useState("");
 
-  // Delete confirmation
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
   // Focus management
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -71,7 +68,6 @@ export default function TemplateSettings() {
 
   const handleDeleteConfirm = (id: string) => {
     updateTemplates((prev) => prev.filter((t) => t.id !== id));
-    setDeletingId(null);
     if (editingId === id) {
       setEditingId(null);
       setEditValue("");
@@ -146,8 +142,9 @@ export default function TemplateSettings() {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={handleEditKeyDown}
+                        placeholder="定型文を入力（Shift+Enterで改行、Enterで保存）"
                         rows={2}
-                        className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1 transition-colors resize-none ${
+                        className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 transition-colors resize-none ${
                           isEditValueOverLimit
                             ? "border-orange-400 focus:ring-orange-200"
                             : "border-green-300 focus:ring-green-200"
@@ -162,25 +159,7 @@ export default function TemplateSettings() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {deletingId === template.id ? (
-                    <div className="bg-orange-50 rounded-xl p-2 flex items-center gap-2">
-                      <span className="text-xs text-gray-600">削除しますか？</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteConfirm(template.id)}
-                        className="bg-orange-600 text-white rounded-lg text-xs px-2 py-1"
-                      >
-                        はい
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(null)}
-                        className="bg-gray-100 text-gray-600 rounded-lg text-xs px-2 py-1"
-                      >
-                        いいえ
-                      </button>
-                    </div>
-                  ) : editingId === template.id ? (
+                  {editingId === template.id ? (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -209,7 +188,11 @@ export default function TemplateSettings() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDeletingId(template.id)}
+                        onClick={() => {
+                          if (window.confirm("この定型文を削除しますか？")) {
+                            handleDeleteConfirm(template.id);
+                          }
+                        }}
                         className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
                       >
                         削除
@@ -240,7 +223,7 @@ export default function TemplateSettings() {
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
-              placeholder="定型文を入力"
+              placeholder="定型文を入力（Shift+Enterで改行、Enterで追加）"
               rows={2}
               className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 transition-colors resize-none ${
                 isNewTextOverLimit

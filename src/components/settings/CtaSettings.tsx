@@ -209,20 +209,6 @@ export default function CtaSettings() {
     []
   );
 
-  // 補助金月チェックボックス
-  const handleMonthToggle = useCallback((month: number) => {
-    setConfig((prev) => {
-      const current = prev.subsidy_timing.subsidyMonths;
-      const next = current.includes(month)
-        ? current.filter((m) => m !== month)
-        : [...current, month].sort((a, b) => a - b);
-      return {
-        ...prev,
-        subsidy_timing: { ...prev.subsidy_timing, subsidyMonths: next },
-      };
-    });
-  }, []);
-
   // アコーディオン
   const toggleAccordion = useCallback((key: CtaTrigger) => {
     setOpenTrigger((prev) => (prev === key ? null : key));
@@ -310,24 +296,28 @@ export default function CtaSettings() {
                         value={config.action_boost.normalDays}
                         onChange={(v) => handleNumberChange("action_boost", "normalDays", v)}
                         suffix="日以内"
+                        helpText="通常ユーザー：最終行動から何日で発火するか"
                       />
                       <NumberField
                         label="通常: ステップ数"
                         value={config.action_boost.normalSteps}
                         onChange={(v) => handleNumberChange("action_boost", "normalSteps", v)}
                         suffix="ステップ以上"
+                        helpText="通常ユーザー：何ステップ完了後に発火するか"
                       />
                       <NumberField
                         label="TECHSTARS修了者: 日数"
                         value={config.action_boost.techstarsGradDays}
                         onChange={(v) => handleNumberChange("action_boost", "techstarsGradDays", v)}
                         suffix="日以内"
+                        helpText="卒業生：最終行動から何日で発火するか"
                       />
                       <NumberField
                         label="TECHSTARS修了者: ステップ数"
                         value={config.action_boost.techstarsGradSteps}
                         onChange={(v) => handleNumberChange("action_boost", "techstarsGradSteps", v)}
                         suffix="ステップ以上"
+                        helpText="卒業生：何ステップ完了後に発火するか"
                       />
                     </div>
                   )}
@@ -340,12 +330,14 @@ export default function CtaSettings() {
                         value={config.apo_early.days}
                         onChange={(v) => handleNumberChange("apo_early", "days", v)}
                         suffix="日以内"
+                        helpText="ユーザー参加から何日以内に発火するか"
                       />
                       <NumberField
                         label="ステップ数"
                         value={config.apo_early.steps}
                         onChange={(v) => handleNumberChange("apo_early", "steps", v)}
                         suffix="ステップ以上"
+                        helpText="何ステップ以下の段階で発火するか"
                       />
                     </div>
                   )}
@@ -358,30 +350,36 @@ export default function CtaSettings() {
                         value={config.subsidy_timing.levelThreshold}
                         onChange={(v) => handleNumberChange("subsidy_timing", "levelThreshold", v)}
                         suffix="以上"
+                        helpText="このレベル以上のユーザーが対象になる"
                       />
                       <div>
-                        <label className="block text-xs text-gray-500 mb-2">
+                        <label className="block text-xs text-gray-500 mb-1">
                           申請対象月
                         </label>
-                        <div className="flex flex-wrap gap-2">
-                          {MONTH_LABELS.map((label, idx) => {
-                            const month = idx + 1;
-                            const checked = config.subsidy_timing.subsidyMonths.includes(month);
-                            return (
-                              <button
-                                key={month}
-                                type="button"
-                                onClick={() => handleMonthToggle(month)}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                                  checked
-                                    ? "bg-green-600 text-white border-green-600"
-                                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                                }`}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
+                        <p className="text-[11px] text-gray-400 mb-2">補助金申請時期として発火する月（複数選択可）</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map((month) => (
+                            <label
+                              key={month}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={config.subsidy_timing.subsidyMonths.includes(month)}
+                                onChange={(e) => {
+                                  const months = e.target.checked
+                                    ? [...config.subsidy_timing.subsidyMonths, month].sort((a, b) => a - b)
+                                    : config.subsidy_timing.subsidyMonths.filter((m) => m !== month);
+                                  setConfig((prev) => ({
+                                    ...prev,
+                                    subsidy_timing: { ...prev.subsidy_timing, subsidyMonths: months },
+                                  }));
+                                }}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              {month}月
+                            </label>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -394,6 +392,7 @@ export default function CtaSettings() {
                       value={config.lv40_reached.levelThreshold}
                       onChange={(v) => handleNumberChange("lv40_reached", "levelThreshold", v)}
                       suffix="以上"
+                      helpText="このレベル以上に到達したとき発火する"
                     />
                   )}
 
@@ -404,6 +403,7 @@ export default function CtaSettings() {
                       value={config.invoice_stumble.axisA1Threshold}
                       onChange={(v) => handleNumberChange("invoice_stumble", "axisA1Threshold", v)}
                       suffix="以下で発火"
+                      helpText="売上・請求管理スコアがこの値以下で発火する"
                     />
                   )}
 
@@ -415,18 +415,21 @@ export default function CtaSettings() {
                         value={config.it_literacy.stumbleHowCountThreshold}
                         onChange={(v) => handleNumberChange("it_literacy", "stumbleHowCountThreshold", v)}
                         suffix="回以上"
+                        helpText="「やり方がわからない」の回数がこれ以上で発火する"
                       />
                       <NumberField
                         label="軸D閾値"
                         value={config.it_literacy.axisDThreshold}
                         onChange={(v) => handleNumberChange("it_literacy", "axisDThreshold", v)}
                         suffix="以下"
+                        helpText="ITツール活用スコアがこの値以下で発火する"
                       />
                       <NumberField
                         label="全体スコア閾値"
                         value={config.it_literacy.totalScoreThreshold}
                         onChange={(v) => handleNumberChange("it_literacy", "totalScoreThreshold", v)}
                         suffix="以下"
+                        helpText="合計スコアがこの値以下で発火する"
                       />
                     </div>
                   )}
@@ -472,12 +475,16 @@ interface NumberFieldProps {
   value: number;
   onChange: (value: string) => void;
   suffix?: string;
+  helpText?: string;
 }
 
-function NumberField({ label, value, onChange, suffix }: NumberFieldProps) {
+function NumberField({ label, value, onChange, suffix, helpText }: NumberFieldProps) {
   return (
     <div>
       <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      {helpText && (
+        <p className="text-[11px] text-gray-400 mb-1">{helpText}</p>
+      )}
       <div className="flex items-center gap-2">
         <input
           type="number"

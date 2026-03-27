@@ -12,8 +12,6 @@ const COLOR_OPTIONS: { value: TagColor; label: string; pillClass: string }[] = [
   { value: "gray", label: "グレー", pillClass: "bg-gray-100 text-gray-600" },
 ];
 
-const COLOR_CYCLE: TagColor[] = ["green", "orange", "gray"];
-
 function getColorConfig(color: TagColor) {
   return COLOR_OPTIONS.find((c) => c.value === color) ?? COLOR_OPTIONS[2];
 }
@@ -43,9 +41,6 @@ export default function TagSettings() {
 
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState<TagColor>("green");
-
-  // Delete confirmation
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // CSV import state
   const [showCsvPanel, setShowCsvPanel] = useState(false);
@@ -80,14 +75,11 @@ export default function TagSettings() {
 
   const handleDeleteConfirm = (id: string) => {
     updateTags((prev) => prev.filter((t) => t.id !== id));
-    setDeletingId(null);
   };
 
-  const handleColorCycle = (tag: UserTag) => {
-    const currentIdx = COLOR_CYCLE.indexOf(tag.color);
-    const nextColor = COLOR_CYCLE[(currentIdx + 1) % COLOR_CYCLE.length];
+  const handleColorChange = (id: string, color: TagColor) => {
     updateTags((prev) =>
-      prev.map((t) => (t.id === tag.id ? { ...t, color: nextColor } : t))
+      prev.map((t) => (t.id === id ? { ...t, color } : t))
     );
   };
 
@@ -200,45 +192,42 @@ export default function TagSettings() {
                 <tr key={tag.id} className="border-b border-gray-100">
                   <td className="px-4 py-3 text-gray-800">{tag.label}</td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => handleColorCycle(tag)}
-                      title="クリックで色を切り替え"
-                      className="cursor-pointer"
-                    >
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${colorConf.pillClass}`}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      {(['green', 'orange', 'gray'] as const).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => handleColorChange(tag.id, c)}
+                          style={{
+                            width: 20,
+                            height: 20,
+                            background: c === 'green' ? '#16a34a' : c === 'orange' ? '#ea580c' : '#6b7280',
+                            border: tag.color === c ? '2px solid #111' : '2px solid transparent',
+                            cursor: 'pointer',
+                            outline: tag.color === c ? '2px solid #9ca3af' : 'none',
+                            outlineOffset: 1,
+                          }}
+                          title={c === 'green' ? '緑' : c === 'orange' ? 'オレンジ' : 'グレー'}
+                          aria-label={`色を${c === 'green' ? '緑' : c === 'orange' ? 'オレンジ' : 'グレー'}に変更`}
+                        />
+                      ))}
+                      <span className={`ml-1 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${colorConf.pillClass}`}>
                         {colorConf.label}
                       </span>
-                    </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    {deletingId === tag.id ? (
-                      <div className="bg-orange-50 rounded-xl p-2 flex items-center gap-2">
-                        <span className="text-xs text-gray-600">削除しますか？</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteConfirm(tag.id)}
-                          className="bg-orange-600 text-white rounded-lg text-xs px-2 py-1"
-                        >
-                          はい
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingId(null)}
-                          className="bg-gray-100 text-gray-600 rounded-lg text-xs px-2 py-1"
-                        >
-                          いいえ
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(tag.id)}
-                        className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
-                      >
-                        削除
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`「${tag.label}」を削除しますか？`)) {
+                          handleDeleteConfirm(tag.id);
+                        }
+                      }}
+                      className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
+                    >
+                      削除
+                    </button>
                   </td>
                 </tr>
               );
@@ -271,17 +260,26 @@ export default function TagSettings() {
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">カラー</label>
-            <select
-              value={newColor}
-              onChange={(e) => setNewColor(e.target.value as TagColor)}
-              className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
-            >
-              {COLOR_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 4 }}>
+              {(['green', 'orange', 'gray'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewColor(c)}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    background: c === 'green' ? '#16a34a' : c === 'orange' ? '#ea580c' : '#6b7280',
+                    border: newColor === c ? '2px solid #111' : '2px solid transparent',
+                    cursor: 'pointer',
+                    outline: newColor === c ? '2px solid #9ca3af' : 'none',
+                    outlineOffset: 1,
+                  }}
+                  title={c === 'green' ? '緑' : c === 'orange' ? 'オレンジ' : 'グレー'}
+                  aria-label={`${c === 'green' ? '緑' : c === 'orange' ? 'オレンジ' : 'グレー'}を選択`}
+                />
               ))}
-            </select>
+            </div>
           </div>
           <button
             type="button"

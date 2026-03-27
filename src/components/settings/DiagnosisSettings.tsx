@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { DiagnosisConfig, DiagnosisAxis } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -38,7 +38,20 @@ export default function DiagnosisSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newIndustry, setNewIndustry] = useState("");
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
   const { addToast } = useToast();
+
+  const checkThresholds = useCallback((thresholds: [number, number, number]) => {
+    if (thresholds[0] >= thresholds[1]) {
+      setThresholdError('Band1上限はBand2上限より小さくしてください');
+      return;
+    }
+    if (thresholds[1] >= thresholds[2]) {
+      setThresholdError('Band2上限はBand3上限より小さくしてください');
+      return;
+    }
+    setThresholdError(null);
+  }, []);
 
   // 初期ロード
   useEffect(() => {
@@ -128,6 +141,7 @@ export default function DiagnosisSettings() {
     setConfig((prev) => {
       const newThresholds: [number, number, number] = [...prev.bandThresholds];
       newThresholds[index] = num;
+      checkThresholds(newThresholds);
       return { ...prev, bandThresholds: newThresholds };
     });
   };
@@ -220,6 +234,9 @@ export default function DiagnosisSettings() {
           <p className="mt-3 text-xs text-gray-400">
             合計スコアがBand1上限以下ならBand1、Band2上限以下ならBand2...となります。Band3上限超えはBand4（{config.bandLabels[3]}）です。
           </p>
+          {thresholdError && (
+            <p className="mt-2 text-xs text-red-600">{thresholdError}</p>
+          )}
         </div>
       </div>
 
@@ -331,7 +348,7 @@ export default function DiagnosisSettings() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !!thresholdError}
           className="bg-green-600 text-white text-sm font-medium px-5 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? "保存中..." : "保存"}

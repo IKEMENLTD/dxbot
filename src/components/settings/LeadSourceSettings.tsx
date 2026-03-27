@@ -51,7 +51,13 @@ export default function LeadSourceSettings() {
 
   const handleIdChange = (value: string) => {
     setNewId(value);
-    if (value.trim() && !ID_PATTERN.test(value.trim())) {
+    // 入力中はエラーをクリア
+    setIdError("");
+  };
+
+  const handleIdBlur = () => {
+    const trimmed = newId.trim();
+    if (trimmed && !ID_PATTERN.test(trimmed)) {
       setIdError("英小文字・数字・アンダースコア・ハイフンのみ使用できます");
     } else {
       setIdError("");
@@ -62,8 +68,14 @@ export default function LeadSourceSettings() {
     const trimmedId = newId.trim();
     const trimmedLabel = newLabel.trim();
     if (!trimmedId || !trimmedLabel) return;
-    if (!ID_PATTERN.test(trimmedId)) return;
-    if (sources.some((s) => s.id === trimmedId)) return;
+    if (!ID_PATTERN.test(trimmedId)) {
+      setIdError("英小文字・数字・アンダースコア・ハイフンのみ使用できます");
+      return;
+    }
+    if (sources.some((s) => s.id === trimmedId)) {
+      setIdError("このIDはすでに存在します");
+      return;
+    }
     updateSources((prev) => [...prev, { id: trimmedId, label: trimmedLabel }]);
     setNewId("");
     setNewLabel("");
@@ -159,6 +171,7 @@ export default function LeadSourceSettings() {
               type="text"
               value={newId}
               onChange={(e) => handleIdChange(e.target.value)}
+              onBlur={handleIdBlur}
               onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
               placeholder="例: line"
               className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none transition-colors ${
@@ -185,7 +198,7 @@ export default function LeadSourceSettings() {
           <button
             type="button"
             onClick={handleAdd}
-            disabled={!newId.trim() || !newLabel.trim() || !!idError}
+            disabled={!newId.trim() || !newLabel.trim()}
             className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
             追加

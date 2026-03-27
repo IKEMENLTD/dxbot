@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ReminderConfig } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -22,7 +22,24 @@ export default function ReminderSettings() {
   const [config, setConfig] = useState<ReminderConfig>(DEFAULT_REMINDER_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dayOrderError, setDayOrderError] = useState<string | null>(null);
   const { addToast } = useToast();
+
+  const checkDayOrder = useCallback((c: ReminderConfig) => {
+    if (c.lightDays >= c.mediumDays) {
+      setDayOrderError('"軽め" は "強め" より小さい日数にしてください');
+      return;
+    }
+    if (c.mediumDays >= c.finalDays) {
+      setDayOrderError('"強め" は "最終" より小さい日数にしてください');
+      return;
+    }
+    if (c.finalDays >= c.stopDays) {
+      setDayOrderError('"最終" は "停止" より小さい日数にしてください');
+      return;
+    }
+    setDayOrderError(null);
+  }, []);
 
   // 初期ロード
   useEffect(() => {
@@ -111,7 +128,11 @@ export default function ReminderSettings() {
   const handleDaysChange = (field: "lightDays" | "mediumDays" | "finalDays" | "stopDays", value: string) => {
     const num = parseInt(value, 10);
     if (isNaN(num) || num < 1) return;
-    setConfig((prev) => ({ ...prev, [field]: num }));
+    setConfig((prev) => {
+      const next = { ...prev, [field]: num };
+      checkDayOrder(next);
+      return next;
+    });
   };
 
   // メッセージ変更ハンドラ
@@ -191,6 +212,9 @@ export default function ReminderSettings() {
           <p className="mt-3 text-xs text-gray-400">
             最終アクションからの経過日数でリマインダーレベルが決まります。配信停止日数以降は送信されません。
           </p>
+          {dayOrderError && (
+            <p className="mt-2 text-xs text-red-600">{dayOrderError}</p>
+          )}
         </div>
       </div>
 
@@ -205,7 +229,7 @@ export default function ReminderSettings() {
             <textarea
               value={config.lightMessage}
               onChange={(e) => handleMessageChange("lightMessage", e.target.value)}
-              placeholder="空欄の場合、デフォルトのメッセージが使用されます"
+              placeholder={"最近の進捗はいかがですか？「ステップ名」が待っています。\n\nお時間のあるときに、\n少しずつ進めてみてください。"}
               rows={3}
               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors resize-none"
             />
@@ -217,7 +241,7 @@ export default function ReminderSettings() {
             <textarea
               value={config.mediumMessage}
               onChange={(e) => handleMessageChange("mediumMessage", e.target.value)}
-              placeholder="空欄の場合、デフォルトのメッセージが使用されます"
+              placeholder={"「ステップ名」が待っています。\n\nDX改善は一歩ずつで大丈夫です。\nいつでも再開できます。"}
               rows={3}
               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors resize-none"
             />
@@ -229,7 +253,7 @@ export default function ReminderSettings() {
             <textarea
               value={config.finalMessage}
               onChange={(e) => handleMessageChange("finalMessage", e.target.value)}
-              placeholder="空欄の場合、デフォルトのメッセージが使用されます"
+              placeholder={"いつでも再開できます。\n\nDXの取り組みを再開したいときは、\n「ステップ」と送信してください。"}
               rows={3}
               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors resize-none"
             />
@@ -242,7 +266,7 @@ export default function ReminderSettings() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !!dayOrderError}
           className="bg-green-600 text-white text-sm font-medium px-5 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? "保存中..." : "保存"}

@@ -44,6 +44,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-1', 'tag-2', 'tag-6'],
+    tracking_link_id: null,
   },
   {
     id: 'u-002',
@@ -73,6 +74,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-7'],
+    tracking_link_id: null,
   },
   {
     id: 'u-003',
@@ -102,6 +104,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-5', 'tag-3'],
+    tracking_link_id: null,
   },
   {
     id: 'u-004',
@@ -131,6 +134,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-1', 'tag-8', 'tag-2'],
+    tracking_link_id: null,
   },
   {
     id: 'u-005',
@@ -160,6 +164,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-4', 'tag-9'],
+    tracking_link_id: null,
   },
   {
     id: 'u-006',
@@ -189,6 +194,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-3'],
+    tracking_link_id: null,
   },
   {
     id: 'u-007',
@@ -218,6 +224,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-9'],
+    tracking_link_id: null,
   },
   {
     id: 'u-008',
@@ -247,6 +254,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-5', 'tag-3'],
+    tracking_link_id: null,
   },
   {
     id: 'u-009',
@@ -276,6 +284,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-1', 'tag-6', 'tag-2', 'tag-7'],
+    tracking_link_id: null,
   },
   {
     id: 'u-010',
@@ -305,6 +314,7 @@ export const mockUsers: User[] = [
     profile_picture_url: null,
     status_message: null,
     tags: ['tag-4'],
+    tracking_link_id: null,
   },
 ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { TrackingLink, TrackingPerformance, TrackingClickDetail } from "@/lib/types";
+import type { TrackingLink, TrackingPerformance, TrackingClickDetail, TrackingLinkUser } from "@/lib/types";
 import { LEAD_SOURCE_LABELS } from "@/lib/types";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -43,6 +43,11 @@ interface PerformanceApiResponse {
 
 interface ClicksApiResponse {
   data?: TrackingClickDetail[];
+  error?: string;
+}
+
+interface UsersApiResponse {
+  data?: TrackingLinkUser[];
   error?: string;
 }
 
@@ -115,6 +120,12 @@ export default function SourcesPage() {
   const [clicksData, setClicksData] = useState<TrackingClickDetail[]>([]);
   const [clicksLoading, setClicksLoading] = useState(false);
   const [clicksLinkLabel, setClicksLinkLabel] = useState("");
+
+  // ユーザー一覧モーダル
+  const [showUsersModal, setShowUsersModal] = useState(false);
+  const [usersModalData, setUsersModalData] = useState<TrackingLinkUser[]>([]);
+  const [usersModalLoading, setUsersModalLoading] = useState(false);
+  const [usersModalLabel, setUsersModalLabel] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -220,6 +231,33 @@ export default function SourcesPage() {
       addToast("error", "クリック詳細の取得に失敗しました");
     } finally {
       setClicksLoading(false);
+    }
+  }, [addToast]);
+
+  // ユーザー一覧取得
+  const fetchLinkUsers = useCallback(async (linkId: string, label: string) => {
+    setUsersModalLabel(label);
+    setShowUsersModal(true);
+    setUsersModalLoading(true);
+    setUsersModalData([]);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(`/api/tracking-links/${linkId}/users`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = (await res.json()) as UsersApiResponse;
+        if (json.data) setUsersModalData(json.data);
+      } else {
+        addToast("error", "ユーザー一覧の取得に失敗しました");
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      addToast("error", "ユーザー一覧の取得に失敗しました");
+    } finally {
+      setUsersModalLoading(false);
     }
   }, [addToast]);
 
@@ -718,7 +756,18 @@ export default function SourcesPage() {
                       {LEAD_SOURCE_LABELS[p.leadSource] ?? p.leadSource}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-gray-700">{p.clickCount}</td>
-                    <td className="px-4 py-3 text-center font-bold text-green-600">{p.followCount}</td>
+                    <td className="px-4 py-3 text-center">
+                      {p.followCount > 0 ? (
+                        <button
+                          onClick={() => fetchLinkUsers(p.linkId, p.label)}
+                          className="font-bold text-green-600 hover:text-green-700 hover:underline cursor-pointer"
+                        >
+                          {p.followCount}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">0</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-center text-gray-700">{p.diagnosedCount}</td>
                     <td className="px-4 py-3 text-center text-gray-700">{p.ctaFiredCount}</td>
                     <td className="px-4 py-3 text-center text-gray-700">{p.convertedCount}</td>
@@ -1010,6 +1059,97 @@ export default function SourcesPage() {
               >
                 閉じる
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ユーザー一覧モーダル ===== */}
+      {showUsersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowUsersModal(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-semibold text-gray-800">
+                  友だち追加ユーザー
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">{usersModalLabel}</p>
+              </div>
+              <button
+                onClick={() => setShowUsersModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+                aria-label="閉じる"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {usersModalLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin w-6 h-6 border-2 border-gray-200 border-t-green-500 rounded-full" />
+                </div>
+              ) : usersModalData.length === 0 ? (
+                <p className="text-center text-gray-400 py-12 text-sm">
+                  友だち追加ユーザーがいません
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">氏名</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">会社名</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-500">レベル</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">ステータス</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">追加日時</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersModalData.map((u) => (
+                      <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                          <a
+                            href={`/admindashboard/users/${u.id}`}
+                            className="text-green-600 hover:text-green-700 hover:underline font-medium"
+                          >
+                            {u.preferred_name}
+                          </a>
+                        </td>
+                        <td className="px-3 py-2 text-gray-600 max-w-[140px] truncate">
+                          {u.company_name || '-'}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold text-gray-800">
+                          {u.level}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-500">
+                          {u.customer_status}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-400">
+                          {new Date(u.created_at).toLocaleDateString('ja-JP', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {usersModalData.length >= 100 && (
+                <p className="text-center text-xs text-gray-400 mt-3">
+                  最新100件を表示しています
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -171,6 +171,7 @@ export interface User {
   profile_picture_url: string | null;
   status_message: string | null;
   tags?: string[]; // UserTag IDs
+  tracking_link_id: string | null;
 }
 
 export interface Deal {
@@ -223,6 +224,16 @@ export interface TrackingLink {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface TrackingLinkUser {
+  id: string;
+  preferred_name: string;
+  company_name: string;
+  industry: string;
+  level: number;
+  customer_status: CustomerStatus;
+  created_at: string;
 }
 
 export interface TrackingPerformance {

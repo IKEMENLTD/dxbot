@@ -26,6 +26,7 @@ import type {
   CustomerStatus,
   TrackingPerformance,
   TrackingClickDetail,
+  TrackingLinkUser,
 } from './types';
 import type {
   ChatMessageRow,
@@ -1733,6 +1734,34 @@ export async function getTrackingClickDetails(
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'クリック詳細取得中にエラーが発生しました';
     console.error('[getTrackingClickDetails] エラー:', msg);
+    return [];
+  }
+}
+
+/** トラッキングリンク経由で友だち追加したユーザー一覧を取得 */
+export async function getUsersByTrackingLinkId(
+  trackingLinkId: string
+): Promise<TrackingLinkUser[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, preferred_name, company_name, industry, level, customer_status, created_at')
+      .eq('tracking_link_id', trackingLinkId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('[getUsersByTrackingLinkId] Supabase error:', error.message);
+      return [];
+    }
+
+    return (data ?? []) as TrackingLinkUser[];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'ユーザー一覧取得中にエラーが発生しました';
+    console.error('[getUsersByTrackingLinkId] エラー:', msg);
     return [];
   }
 }

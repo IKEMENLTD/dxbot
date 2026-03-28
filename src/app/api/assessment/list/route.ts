@@ -22,15 +22,9 @@ export async function GET(): Promise<NextResponse> {
       .limit(200);
 
     if (error) {
-      // テーブル未作成の場合は空データを返す（migration未適用時のフォールバック）
-      const msg = typeof error === 'object' && error !== null && 'message' in error
-        ? (error as { message: string }).message
-        : String(error);
-      if (msg.includes('does not exist') || msg.includes('schema cache')) {
-        return NextResponse.json({ data: [], total: 0 });
-      }
-      console.error('[Assessment List] DBエラー:', error);
-      return NextResponse.json({ error: 'データ取得に失敗しました' }, { status: 500 });
+      // テーブル未作成・スキーマ不一致等はログのみで空データ返却
+      console.warn('[Assessment List] DBエラー（空データで返却）:', JSON.stringify(error));
+      return NextResponse.json({ data: [], total: 0 });
     }
 
     return NextResponse.json({ data: data ?? [], total: count ?? 0 });

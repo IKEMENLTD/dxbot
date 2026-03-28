@@ -11,8 +11,9 @@ import StepSettings from "@/components/settings/StepSettings";
 import CtaSettings from "@/components/settings/CtaSettings";
 import ReminderSettings from "@/components/settings/ReminderSettings";
 import DiagnosisSettings from "@/components/settings/DiagnosisSettings";
+import GoalSettings from "@/components/settings/GoalSettings";
 
-type TabKey = "line" | "tags" | "leadSource" | "templates" | "exit" | "status" | "steps" | "cta" | "reminder" | "diagnosis";
+type TabKey = "line" | "tags" | "leadSource" | "templates" | "exit" | "status" | "steps" | "cta" | "reminder" | "diagnosis" | "goals";
 
 interface TabDef {
   key: TabKey;
@@ -30,6 +31,7 @@ const TABS: TabDef[] = [
   { key: "cta", label: "CTA設定" },
   { key: "reminder", label: "リマインダー" },
   { key: "diagnosis", label: "診断設定" },
+  { key: "goals", label: "月目標" },
 ];
 
 const TAB_HELP: Record<TabKey, string> = {
@@ -43,6 +45,7 @@ const TAB_HELP: Record<TabKey, string> = {
   cta: "自動CTA(営業提案)の発火条件と閾値を設定します。",
   reminder: "放置ユーザーへの自動リマインダーの間隔とメッセージを設定します。",
   diagnosis: "初回診断のバンド閾値・質問テキスト・業種リストを設定します。",
+  goals: "月ごとの成約件数・売上目標を設定します。ファネルKPIページに反映されます。",
 };
 
 /** タブキーに対応するコンポーネントを返すヘルパー */
@@ -68,6 +71,8 @@ function TabComponent({ tab }: { tab: TabKey }) {
       return <ReminderSettings />;
     case "diagnosis":
       return <DiagnosisSettings />;
+    case "goals":
+      return <GoalSettings />;
   }
 }
 

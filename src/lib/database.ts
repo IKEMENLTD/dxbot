@@ -523,6 +523,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      monthly_goals: {
+        Row: {
+          id: string;
+          year_month: string;
+          target_converted: number;
+          target_revenue: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          year_month: string;
+          target_converted?: number;
+          target_revenue?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          year_month?: string;
+          target_converted?: number;
+          target_revenue?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       assessment_responses: {
         Row: {
           id: string;

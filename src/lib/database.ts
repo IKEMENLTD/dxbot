@@ -34,6 +34,11 @@ export interface Database {
           tags: string[];
           profile_picture_url: string | null;
           status_message: string | null;
+          updated_at: string;
+          level_source: 'initial' | 'band_survey' | 'precision';
+          band_survey_score: number | null;
+          assessed_band: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50' | null;
+          precision_score: number | null;
         };
         Insert: {
           id?: string;
@@ -63,6 +68,11 @@ export interface Database {
           tracking_link_id?: string | null;
           profile_picture_url?: string | null;
           status_message?: string | null;
+          updated_at?: string;
+          level_source?: 'initial' | 'band_survey' | 'precision';
+          band_survey_score?: number | null;
+          assessed_band?: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50' | null;
+          precision_score?: number | null;
         };
         Update: {
           id?: string;
@@ -92,6 +102,11 @@ export interface Database {
           tracking_link_id?: string | null;
           profile_picture_url?: string | null;
           status_message?: string | null;
+          updated_at?: string;
+          level_source?: 'initial' | 'band_survey' | 'precision';
+          band_survey_score?: number | null;
+          assessed_band?: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50' | null;
+          precision_score?: number | null;
         };
         Relationships: [
           {
@@ -109,6 +124,7 @@ export interface Database {
           label: string;
           color: 'green' | 'orange' | 'gray';
           sort_order: number;
+          created_at: string;
         };
         Insert: {
           id: string;
@@ -136,6 +152,7 @@ export interface Database {
           started_at: string;
           completed_at: string | null;
           note: string | null;
+          created_at: string;
         };
         Insert: {
           id?: string;

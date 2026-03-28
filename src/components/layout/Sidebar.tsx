@@ -90,11 +90,11 @@ const navItems = [
 function LogoIcon() {
   return (
     <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="16" cy="22" rx="12" ry="4" stroke="white" strokeWidth="1.5" opacity="0.3" />
-      <ellipse cx="16" cy="22" rx="8" ry="2.8" stroke="white" strokeWidth="1.5" opacity="0.5" />
-      <ellipse cx="16" cy="22" rx="4" ry="1.6" stroke="white" strokeWidth="1.5" opacity="0.8" />
-      <path d="M16 20V6" stroke="white" strokeWidth="2" strokeLinecap="round" />
-      <path d="M11 10.5L16 6L21 10.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="2" y="20" width="5.5" height="8" fill="white" opacity="0.3" />
+      <rect x="9.5" y="14" width="5.5" height="14" fill="white" opacity="0.5" />
+      <rect x="17" y="8" width="5.5" height="20" fill="white" opacity="0.75" />
+      <rect x="24.5" y="2" width="5.5" height="26" fill="white" />
+      <path d="M27.2 0L27.7 -1.8L28.2 0L30 0.5L28.2 1L27.7 2.8L27.2 1L25.4 0.5Z" fill="white" opacity="0.65" />
     </svg>
   );
 }

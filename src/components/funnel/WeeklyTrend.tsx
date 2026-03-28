@@ -64,6 +64,14 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export default function WeeklyTrend({ data }: WeeklyTrendProps) {
+  if (data.length === 0) {
+    return (
+      <div className="h-[300px] w-full flex items-center justify-center text-sm text-gray-400">
+        週次データがありません
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="h-[300px] w-full" style={{ minWidth: 0 }}>

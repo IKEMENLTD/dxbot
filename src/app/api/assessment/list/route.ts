@@ -22,6 +22,13 @@ export async function GET(): Promise<NextResponse> {
       .limit(200);
 
     if (error) {
+      // テーブル未作成の場合は空データを返す（migration未適用時のフォールバック）
+      const msg = typeof error === 'object' && error !== null && 'message' in error
+        ? (error as { message: string }).message
+        : String(error);
+      if (msg.includes('does not exist') || msg.includes('schema cache')) {
+        return NextResponse.json({ data: [], total: 0 });
+      }
       console.error('[Assessment List] DBエラー:', error);
       return NextResponse.json({ error: 'データ取得に失敗しました' }, { status: 500 });
     }

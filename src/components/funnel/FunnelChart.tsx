@@ -49,41 +49,53 @@ export default function FunnelChart({ data, stages }: FunnelChartProps) {
   return (
     <div>
       <p className="text-xs text-gray-400 mb-4">Week {data.week}</p>
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-0">
         {resolvedStages.map((stage, index) => {
           const value = data[stage.key];
           const prevValue = index > 0 ? data[resolvedStages[index - 1].key] : 0;
           const conversionRate =
-            index > 0 && prevValue > 0
-              ? `${((value / prevValue) * 100).toFixed(0)}%`
+            index > 0
+              ? prevValue > 0
+                ? `${((value / prevValue) * 100).toFixed(0)}%`
+                : "-"
               : "";
           const widthPercent = maxValue > 0 ? (value / maxValue) * 100 : 0;
           const colorIndex = Math.min(index, STAGE_COLORS.length - 1);
 
           return (
-            <div key={stage.key} className="flex items-center w-full gap-3">
-              {/* Label */}
-              <span className="text-xs text-gray-500 w-20 text-right shrink-0">
-                {stage.label}
-              </span>
-
-              {/* Bar container */}
-              <div className="flex-1 flex justify-center">
-                <div
-                  className={`${STAGE_COLORS[colorIndex]} ${STAGE_TEXT_COLORS[colorIndex]} rounded-sm py-2 text-center text-xs font-semibold transition-all duration-700 ease-out`}
-                  style={{
-                    width: `${Math.max(widthPercent, 8)}%`,
-                    minWidth: "40px",
-                  }}
-                >
-                  {value}
+            <div key={stage.key}>
+              {/* ステージ間転換率 */}
+              {index > 0 && (
+                <div className="flex justify-center py-0.5">
+                  <span className="text-gray-400" style={{ fontSize: "11px" }}>
+                    {"\u2193"} {conversionRate}
+                  </span>
                 </div>
-              </div>
+              )}
 
-              {/* CVR */}
-              <span className="text-xs text-gray-400 w-10 shrink-0">
-                {conversionRate}
-              </span>
+              {/* ステージバー */}
+              <div className="flex items-center w-full gap-3">
+                {/* Label */}
+                <span className="text-xs text-gray-500 w-20 text-right shrink-0">
+                  {stage.label}
+                </span>
+
+                {/* Bar container */}
+                <div className="flex-1 flex justify-center">
+                  <div
+                    className={`${STAGE_COLORS[colorIndex]} ${STAGE_TEXT_COLORS[colorIndex]} rounded-sm py-2 text-center text-xs font-semibold transition-all duration-700 ease-out`}
+                    style={{
+                      width: `${Math.max(widthPercent, 8)}%`,
+                      minWidth: "40px",
+                    }}
+                  >
+                    {value}
+                  </div>
+                </div>
+
+                {/* 右側スペーサー（レイアウト揃え） */}
+                <span className="w-10 shrink-0" />
+              </div>
             </div>
           );
         })}

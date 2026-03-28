@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FunnelChart from "@/components/funnel/FunnelChart";
 import WeeklyTrend from "@/components/funnel/WeeklyTrend";
 import ExitCards from "@/components/funnel/ExitCards";
@@ -14,6 +14,7 @@ interface KpiSummaryItem {
   value: number;
   suffix: string;
   color: string;
+  pctChange: number | null; // null = 前週データなし
 }
 
 interface KpiApiResponse {
@@ -31,6 +32,14 @@ interface DealsApiResponse {
   data?: Deal[];
 }
 
+interface MonthlyGoalApiResponse {
+  data?: {
+    month: string;
+    targetConverted: number;
+    targetRevenue: number;
+  };
+}
+
 export default function FunnelPage() {
   const [funnelKpi, setFunnelKpi] = useState<FunnelKpi[]>([]);
   const [exitMetrics, setExitMetrics] = useState<ExitMetrics[]>([]);
@@ -38,7 +47,14 @@ export default function FunnelPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasData, setHasData] = useState(false);
+  const [targetConverted, setTargetConverted] = useState(3);
+  const [targetRevenue, setTargetRevenue] = useState(5000000);
   const { addToast } = useToast();
+
+  const handleGoalUpdate = useCallback((newConverted: number, newRevenue: number) => {
+    setTargetConverted(newConverted);
+    setTargetRevenue(newRevenue);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,12 +69,19 @@ export default function FunnelPage() {
       fetch("/api/deals", { signal: controller.signal })
         .then((res) => (res.ok ? res.json() as Promise<DealsApiResponse> : null))
         .catch(() => null),
-    ]).then(([kpiJson, usersJson, dealsJson]) => {
+      fetch("/api/monthly-goals", { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() as Promise<MonthlyGoalApiResponse> : null))
+        .catch(() => null),
+    ]).then(([kpiJson, usersJson, dealsJson, goalsJson]) => {
       let anyDataLoaded = false;
       if (kpiJson?.data?.funnel) { setFunnelKpi(kpiJson.data.funnel); anyDataLoaded = true; }
       if (kpiJson?.data?.exitMetrics) { setExitMetrics(kpiJson.data.exitMetrics); anyDataLoaded = true; }
       if (usersJson?.data) { setUsers(usersJson.data); anyDataLoaded = true; }
       if (dealsJson?.data) { setDeals(dealsJson.data); anyDataLoaded = true; }
+      if (goalsJson?.data) {
+        setTargetConverted(goalsJson.data.targetConverted);
+        setTargetRevenue(goalsJson.data.targetRevenue);
+      }
       setHasData(anyDataLoaded);
       if (!anyDataLoaded) {
         addToast("warning", "APIからデータを取得できませんでした。");
@@ -100,6 +123,14 @@ export default function FunnelPage() {
 
   // 最新週のデータ
   const latestWeek = funnelKpi[funnelKpi.length - 1];
+  const prevWeek = funnelKpi.length >= 2 ? funnelKpi[funnelKpi.length - 2] : null;
+
+  // 前週比を計算するヘルパー
+  const calcPctChange = (latest: number, prev: number | null): number | null => {
+    if (prev === null) return null;
+    if (prev === 0) return 0;
+    return Math.round(((latest - prev) / prev) * 100);
+  };
 
   // 現在の月を動的に取得
   const now = new Date();
@@ -122,10 +153,10 @@ export default function FunnelPage() {
   // KPIサマリ
   const kpiSummary: KpiSummaryItem[] = latestWeek
     ? [
-        { label: "今週の流入", value: latestWeek.inflow, suffix: "人", color: "text-green-600" },
-        { label: "今週の診断", value: latestWeek.diagnosed, suffix: "人", color: "text-green-700" },
-        { label: "今週のCTA", value: latestWeek.cta_fired, suffix: "件", color: "text-orange-600" },
-        { label: "今週の成約", value: latestWeek.converted, suffix: "件", color: "text-green-800" },
+        { label: "今週の流入", value: latestWeek.inflow, suffix: "人", color: "text-green-600", pctChange: calcPctChange(latestWeek.inflow, prevWeek?.inflow ?? null) },
+        { label: "今週の診断", value: latestWeek.diagnosed, suffix: "人", color: "text-green-700", pctChange: calcPctChange(latestWeek.diagnosed, prevWeek?.diagnosed ?? null) },
+        { label: "今週のCTA", value: latestWeek.cta_fired, suffix: "件", color: "text-orange-600", pctChange: calcPctChange(latestWeek.cta_fired, prevWeek?.cta_fired ?? null) },
+        { label: "今週の成約", value: latestWeek.converted, suffix: "件", color: "text-green-800", pctChange: calcPctChange(latestWeek.converted, prevWeek?.converted ?? null) },
       ]
     : [];
 
@@ -152,10 +183,29 @@ export default function FunnelPage() {
             className="bg-white rounded-2xl border border-gray-200 p-5"
           >
             <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
-            <p className={`text-2xl font-bold ${kpi.color}`}>
-              {kpi.value}
-              <span className="text-sm text-gray-400 ml-1 font-normal">{kpi.suffix}</span>
-            </p>
+            <div className="flex items-baseline gap-2">
+              <p className={`text-2xl font-bold ${kpi.color}`}>
+                {kpi.value}
+                <span className="text-sm text-gray-400 ml-1 font-normal">{kpi.suffix}</span>
+              </p>
+              {kpi.pctChange !== null && (
+                <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+                  kpi.pctChange > 0 ? "text-green-600" : kpi.pctChange < 0 ? "text-red-500" : "text-gray-400"
+                }`}>
+                  {kpi.pctChange > 0 && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M6 2L10 7H2L6 2Z" fill="currentColor"/>
+                    </svg>
+                  )}
+                  {kpi.pctChange < 0 && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M6 10L2 5H10L6 10Z" fill="currentColor"/>
+                    </svg>
+                  )}
+                  {kpi.pctChange > 0 ? `+${kpi.pctChange}%` : kpi.pctChange < 0 ? `${kpi.pctChange}%` : "\u00B10%"}
+                </span>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -205,6 +255,9 @@ export default function FunnelPage() {
           <GoalProgress
             currentMonthConverted={currentMonthConverted}
             currentMonthRevenue={currentMonthRevenue}
+            targetConverted={targetConverted}
+            targetRevenue={targetRevenue}
+            onGoalUpdate={handleGoalUpdate}
           />
         </div>
       </div>

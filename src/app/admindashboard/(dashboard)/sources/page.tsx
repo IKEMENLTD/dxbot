@@ -1024,6 +1024,8 @@ export default function SourcesPage() {
                       <th className="text-left px-3 py-2 font-medium text-gray-500">ブラウザ</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Source</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Medium</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Campaign</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-500">UTM Content</th>
                       <th className="text-left px-3 py-2 font-medium text-gray-500">リファラー</th>
                     </tr>
                   </thead>
@@ -1038,6 +1040,8 @@ export default function SourcesPage() {
                         <td className="px-3 py-2 text-gray-600">{click.browser ?? "-"}</td>
                         <td className="px-3 py-2 text-gray-600">{click.utmSource ?? "-"}</td>
                         <td className="px-3 py-2 text-gray-600">{click.utmMedium ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.utmCampaign ?? "-"}</td>
+                        <td className="px-3 py-2 text-gray-600">{click.utmContent ?? "-"}</td>
                         <td className="px-3 py-2 text-gray-500 truncate max-w-[150px]" title={click.referer ?? ""}>
                           {click.referer ?? "-"}
                         </td>

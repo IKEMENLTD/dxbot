@@ -259,6 +259,7 @@ export interface TrackingClickDetail {
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  utmContent: string | null;
   clickedAt: string;
 }
 

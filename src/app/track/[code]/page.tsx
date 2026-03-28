@@ -3,6 +3,15 @@
 import { useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
+// ===== ボット判定 =====
+
+const BOT_PATTERN =
+  /bot|crawl|spider|slurp|facebookexternalhit|twitterbot|linkedinbot|googlebot|bingbot|yandexbot|baiduspider|bytespider|semrushbot|ahrefsbot|dotbot|rogerbot|embedly|quora link preview|showyoubot|outbrain|pinterest|applebot|duckduckbot|ia_archiver|prerender/i;
+
+function isBot(ua: string): boolean {
+  return BOT_PATTERN.test(ua);
+}
+
 // ===== UA解析ヘルパー（軽量JS、ライブラリ不要） =====
 
 interface DeviceInfo {
@@ -59,6 +68,50 @@ export default function TrackPage() {
     }
 
     const ua = navigator.userAgent;
+
+    // ボットの場合はトラッキングせずリダイレクトのみ
+    if (isBot(ua)) {
+      fetch(`/api/track/${encodeURIComponent(code)}`)
+        .then((res) => {
+          // GETはリダイレクトを返すが、fetchではfollowされる
+          // フォールバックとしてAPIを叩いてリダイレクト先を取得
+          if (res.redirected) {
+            window.location.href = res.url;
+          } else {
+            window.location.href = `/api/track/${encodeURIComponent(code)}`;
+          }
+        })
+        .catch(() => {
+          window.location.href = `/api/track/${encodeURIComponent(code)}`;
+        });
+      return;
+    }
+
+    // 重複クリック制御: 同一セッション5秒以内の再クリックを防止
+    try {
+      const storageKey = `track_${code}`;
+      const lastClick = sessionStorage.getItem(storageKey);
+      const now = Date.now();
+      if (lastClick && now - parseInt(lastClick, 10) < 5000) {
+        // 5秒以内の重複 -> トラッキングせずリダイレクトのみ
+        fetch(`/api/track/${encodeURIComponent(code)}`)
+          .then((res) => {
+            if (res.redirected) {
+              window.location.href = res.url;
+            } else {
+              window.location.href = `/api/track/${encodeURIComponent(code)}`;
+            }
+          })
+          .catch(() => {
+            window.location.href = `/api/track/${encodeURIComponent(code)}`;
+          });
+        return;
+      }
+      sessionStorage.setItem(storageKey, String(now));
+    } catch {
+      // sessionStorage使用不可の場合は無視して続行
+    }
+
     const { deviceType, os, browser } = parseUserAgent(ua);
 
     const utmSource = searchParams.get("utm_source") ?? "";
@@ -148,7 +201,7 @@ export default function TrackPage() {
       <noscript>
         <meta
           httpEquiv="refresh"
-          content={`0;url=/api/track/${typeof params.code === "string" ? params.code : ""}`}
+          content={`0;url=/api/track/${typeof params.code === "string" ? params.code : ""}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
         />
       </noscript>
     </div>

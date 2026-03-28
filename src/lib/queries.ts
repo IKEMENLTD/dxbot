@@ -1698,7 +1698,7 @@ export async function getTrackingClickDetails(
   try {
     const { data, error } = await supabase
       .from('tracking_clicks')
-      .select('id, device_type, os, browser, referer, utm_source, utm_medium, utm_campaign, clicked_at')
+      .select('id, device_type, os, browser, referer, utm_source, utm_medium, utm_campaign, utm_content, clicked_at')
       .eq('tracking_link_id', trackingLinkId)
       .order('clicked_at', { ascending: false })
       .limit(100);
@@ -1717,6 +1717,7 @@ export async function getTrackingClickDetails(
       utm_source: string | null;
       utm_medium: string | null;
       utm_campaign: string | null;
+      utm_content: string | null;
       clicked_at: string;
     }>;
 
@@ -1729,6 +1730,7 @@ export async function getTrackingClickDetails(
       utmSource: row.utm_source,
       utmMedium: row.utm_medium,
       utmCampaign: row.utm_campaign,
+      utmContent: row.utm_content,
       clickedAt: row.clicked_at,
     }));
   } catch (err) {

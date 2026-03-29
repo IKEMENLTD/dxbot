@@ -91,11 +91,17 @@ function DxbotHeader() {
 // CompanyInfoStep コンポーネント
 // ---------------------------------------------------------------------------
 
-/** 診断結果の axisScores から最もスコアが低い軸を返す */
+/**
+ * 診断結果の axisScores から最もスコアが低い軸を返す。
+ * 同点の場合は優先順位 a1 > a2 > b > c > d（基礎的な軸を優先）で決定。
+ */
 function getWeakAxis(scores: { a1: number; a2: number; b: number; c: number; d: number }): string {
-  const entries = Object.entries(scores) as [string, number][];
-  entries.sort((a, b) => a[1] - b[1]);
-  return entries[0][0];
+  const priority: (keyof typeof scores)[] = ['a1', 'a2', 'b', 'c', 'd'];
+  let weakest = priority[0];
+  for (const axis of priority) {
+    if (scores[axis] < scores[weakest]) weakest = axis;
+  }
+  return weakest;
 }
 
 function CompanyInfoStep({ onNext, weakAxis }: {

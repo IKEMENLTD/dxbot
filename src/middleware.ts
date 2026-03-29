@@ -37,7 +37,9 @@ export async function middleware(
     pathname === "/api/webhook" ||
     pathname.startsWith("/api/cron/") ||
     pathname.startsWith("/api/track/") ||
-    pathname.startsWith("/track/")
+    pathname.startsWith("/track/") ||
+    pathname === "/api/assessment" ||
+    pathname === "/api/assessment/config"
   ) {
     return undefined;
   }
@@ -80,6 +82,6 @@ export async function middleware(
 
 export const config = {
   matcher: [
-    "/api/((?!auth/|webhook|cron/|track/).*)",
+    "/api/:path*",
   ],
 };

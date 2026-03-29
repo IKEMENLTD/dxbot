@@ -449,6 +449,7 @@ function SurveyStep({
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
+  const [isAdvancing, setIsAdvancing] = useState(false);
 
   // style prop is kept for API compatibility but light theme uses fixed colors
   void _style;
@@ -465,9 +466,11 @@ function SurveyStep({
   }, [currentIndex]);
 
   const handleSelect = useCallback((value: number) => {
+    if (isAdvancing) return; // 連打防止
     const next = [...answers];
     next[currentIndex] = value;
     onAnswerChange(next);
+    setIsAdvancing(true);
 
     setTimeout(() => {
       if (currentIndex < questionCount - 1) {
@@ -475,8 +478,9 @@ function SurveyStep({
       } else {
         onComplete();
       }
-    }, 600);
-  }, [answers, currentIndex, questionCount, onAnswerChange, onComplete]);
+      setIsAdvancing(false);
+    }, 400);
+  }, [answers, currentIndex, questionCount, onAnswerChange, onComplete, isAdvancing]);
 
   function handlePrev() {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
@@ -542,11 +546,13 @@ function SurveyStep({
               <button
                 key={v}
                 onClick={() => handleSelect(v)}
+                disabled={isAdvancing}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  opacity: isAdvancing ? 0.5 : 1,
                   width: 60,
                   minHeight: 56,
                   cursor: 'pointer',
@@ -599,9 +605,16 @@ function SurveyStep({
 // ResultStep コンポーネント
 // ---------------------------------------------------------------------------
 
-function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: string | null }) {
+function ResultStep({ result, lineUrl, assessmentId, onCompanyInfoSubmit }: {
+  result: AssessmentResult;
+  lineUrl: string | null;
+  assessmentId: string | null;
+  onCompanyInfoSubmit?: (data: CompanyInfo) => void;
+}) {
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
   const maxAxisScore = 30;
+  const [showCompanyForm, setShowCompanyForm] = useState(false);
+  const [companySaved, setCompanySaved] = useState(false);
 
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', padding: '40px 20px' }}>
@@ -744,6 +757,53 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
           </p>
         )}
       </div>
+
+      {/* 企業情報収集（結果を見せた後に任意で） */}
+      {!companySaved && (
+        <div style={{
+          marginTop: 32,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: '24px',
+          background: COLORS.sectionBg,
+        }}>
+          {!showCompanyForm ? (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ color: COLORS.text, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                より詳しい分析をお届けします
+              </p>
+              <p style={{ color: COLORS.textMuted, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+                会社の規模や課題を教えていただくと、業種・規模に合わせた改善提案をお伝えできます。
+              </p>
+              <button
+                onClick={() => setShowCompanyForm(true)}
+                style={{
+                  background: COLORS.white,
+                  border: `1px solid ${COLORS.accent}`,
+                  color: COLORS.accent,
+                  padding: '10px 24px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  borderRadius: 8,
+                }}
+              >
+                会社情報を入力する（任意）
+              </button>
+            </div>
+          ) : (
+            <CompanyInfoStep onNext={(data) => {
+              setCompanySaved(true);
+              onCompanyInfoSubmit?.(data);
+            }} />
+          )}
+        </div>
+      )}
+      {companySaved && (
+        <p style={{ textAlign: 'center', color: COLORS.accent, fontSize: 13, marginTop: 16 }}>
+          ご入力ありがとうございます。より詳しい分析をお届けします。
+        </p>
+      )}
     </div>
   );
 }
@@ -761,6 +821,7 @@ export default function AssessmentPage() {
   const [questions, setQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
   const [answers, setAnswers] = useState<number[]>(new Array(PRECISION_QUESTIONS.length).fill(0));
   const [lineUrl, setLineUrl] = useState<string | null>(null);
+  const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [assessmentStyle, setAssessmentStyle] = useState<AssessmentStyle>(DEFAULT_ASSESSMENT_STYLE);
   const [lineUserId, setLineUserId] = useState<string | null>(null);
   const [lineDisplayName, setLineDisplayName] = useState<string | null>(null);
@@ -826,8 +887,9 @@ export default function AssessmentPage() {
         throw new Error(json.error ?? `エラー: ${res.status}`);
       }
 
-      const json = await res.json() as { ok: boolean; result: AssessmentResult };
+      const json = await res.json() as { ok: boolean; result: AssessmentResult; id?: string };
       setResult(json.result);
+      if (json.id) setAssessmentId(json.id);
       setStep('result');
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -864,24 +926,9 @@ export default function AssessmentPage() {
           answers={answers}
           questions={questions}
           onAnswerChange={setAnswers}
-          onComplete={() => setStep('company_info')}
+          onComplete={() => setStep('profile')}
           style={assessmentStyle}
         />
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // company_info
-  // ---------------------------------------------------------------------------
-  if (step === 'company_info') {
-    return (
-      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
-        <DxbotHeader />
-        <CompanyInfoStep onNext={(data) => {
-          setCompanyInfo(data);
-          setStep('profile');
-        }} />
       </div>
     );
   }
@@ -897,7 +944,7 @@ export default function AssessmentPage() {
           defaultName={lineDisplayName ?? ''}
           onNext={(data) => {
             setProfile(data);
-            handleSubmit(answers, data, companyInfo);
+            handleSubmit(answers, data, null);
           }}
         />
       </div>
@@ -949,7 +996,21 @@ export default function AssessmentPage() {
     return (
       <div style={{ minHeight: '100vh', background: COLORS.bg }}>
         <DxbotHeader />
-        <ResultStep result={result} lineUrl={lineUrl} />
+        <ResultStep
+          result={result}
+          lineUrl={lineUrl}
+          assessmentId={assessmentId}
+          onCompanyInfoSubmit={async (data) => {
+            if (!assessmentId) return;
+            try {
+              await fetch('/api/assessment/company-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assessmentId, companyInfo: data }),
+              });
+            } catch { /* 失敗しても結果は表示済み */ }
+          }}
+        />
       </div>
     );
   }

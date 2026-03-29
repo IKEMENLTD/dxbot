@@ -58,9 +58,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // --- Supabase保存 ---
     const supabase = getSupabaseServer();
     const lineUserIdStr = typeof line_user_id === 'string' && line_user_id.length > 0 ? line_user_id : null;
+    let savedId: string | null = null;
 
     if (supabase) {
-      const { error: dbError } = await supabase
+      const { data: insertedData, error: dbError } = await supabase
         .from('assessment_responses')
         .insert({
           name: name.trim(),
@@ -73,11 +74,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           level_band: levelBand,
           line_user_id: lineUserIdStr,
           company_info: validCompanyInfo,
-        });
+        })
+        .select('id')
+        .single();
 
       if (dbError) {
         console.error('[Assessment API] DB保存エラー:', dbError);
         // DB保存失敗でも結果は返す（ユーザー体験を優先）
+      } else if (insertedData) {
+        savedId = insertedData.id;
       }
 
       // --- LINE user_id がある場合、usersテーブルとconversation_statesを更新 ---
@@ -119,6 +124,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       ok: true,
+      id: savedId,
       result: {
         exactLevel: result.exactLevel,
         axisScores: result.axisScores,

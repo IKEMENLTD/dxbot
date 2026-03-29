@@ -39,7 +39,8 @@ export async function middleware(
     pathname.startsWith("/api/track/") ||
     pathname.startsWith("/track/") ||
     pathname === "/api/assessment" ||
-    pathname === "/api/assessment/config"
+    pathname === "/api/assessment/config" ||
+    pathname === "/api/assessment/company-info"
   ) {
     return undefined;
   }

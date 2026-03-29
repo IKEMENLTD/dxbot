@@ -8,9 +8,30 @@ import { useAppSetting } from "@/hooks/useAppSetting";
 import { useToast } from "@/contexts/ToastContext";
 
 interface StatusItem {
-  id: CustomerStatus;
+  id: string;
   label: string;
   colorClass: string;
+}
+
+type StatusColorKey = "gray" | "green" | "green_dark" | "orange" | "orange_dark" | "orange_light";
+
+const STATUS_COLOR_MAP: Record<StatusColorKey, { label: string; colorClass: string }> = {
+  gray:         { label: "グレー",       colorClass: "text-gray-500" },
+  green:        { label: "緑",          colorClass: "text-green-600" },
+  green_dark:   { label: "緑（濃）",     colorClass: "text-green-700" },
+  orange:       { label: "オレンジ",     colorClass: "text-orange-600" },
+  orange_dark:  { label: "オレンジ（濃）", colorClass: "text-orange-700" },
+  orange_light: { label: "オレンジ（薄）", colorClass: "text-orange-500" },
+};
+
+function colorClassToKey(colorClass: string): StatusColorKey {
+  if (colorClass === "text-gray-500") return "gray";
+  if (colorClass === "text-green-600") return "green";
+  if (colorClass === "text-green-700") return "green_dark";
+  if (colorClass === "text-orange-600") return "orange";
+  if (colorClass === "text-orange-700") return "orange_dark";
+  if (colorClass === "text-orange-500") return "orange_light";
+  return "gray";
 }
 
 function buildInitialStatuses(): StatusItem[] {
@@ -20,6 +41,9 @@ function buildInitialStatuses(): StatusItem[] {
     colorClass: STATUS_CONFIG[key].colorClass,
   }));
 }
+
+const ID_PATTERN = /^[a-z0-9_]+$/;
+const STATUS_COLOR_KEYS = Object.keys(STATUS_COLOR_MAP) as StatusColorKey[];
 
 export default function StatusSettings() {
   const {
@@ -31,8 +55,14 @@ export default function StatusSettings() {
   } = useAppSetting<StatusItem[]>("statuses", buildInitialStatuses(), STORAGE_KEYS.STATUSES);
   const { addToast } = useToast();
 
-  const [editingId, setEditingId] = useState<CustomerStatus | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+
+  // Add form state
+  const [newId, setNewId] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newColorKey, setNewColorKey] = useState<StatusColorKey>("gray");
+  const [idError, setIdError] = useState("");
 
   // Focus management
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +113,53 @@ export default function StatusSettings() {
     }
   };
 
+  // --- Add form handlers ---
+  const handleIdChange = (value: string) => {
+    setNewId(value);
+    setIdError("");
+  };
+
+  const handleIdBlur = () => {
+    const trimmed = newId.trim();
+    if (trimmed && !ID_PATTERN.test(trimmed)) {
+      setIdError("英小文字・数字・アンダースコアのみ使用できます");
+    } else {
+      setIdError("");
+    }
+  };
+
+  const handleAdd = () => {
+    const trimmedId = newId.trim();
+    const trimmedLabel = newLabel.trim();
+    if (!trimmedId || !trimmedLabel) return;
+    if (!ID_PATTERN.test(trimmedId)) {
+      setIdError("英小文字・数字・アンダースコアのみ使用できます");
+      return;
+    }
+    if (statuses.some((s) => s.id === trimmedId)) {
+      setIdError("このIDはすでに存在します");
+      return;
+    }
+    updateStatuses((prev) => [
+      ...prev,
+      {
+        id: trimmedId,
+        label: trimmedLabel,
+        colorClass: STATUS_COLOR_MAP[newColorKey].colorClass,
+      },
+    ]);
+    setNewId("");
+    setNewLabel("");
+    setNewColorKey("gray");
+    setIdError("");
+  };
+
+  // --- Delete handler ---
+  const handleDelete = (item: StatusItem) => {
+    if (!window.confirm(`「${item.label}」を削除しますか？`)) return;
+    updateStatuses((prev) => prev.filter((s) => s.id !== item.id));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
@@ -108,7 +185,7 @@ export default function StatusSettings() {
               <th className="px-4 py-3 text-xs font-medium text-gray-500">ID</th>
               <th className="px-4 py-3 text-xs font-medium text-gray-500">表示名</th>
               <th className="px-4 py-3 text-xs font-medium text-gray-500">カラー</th>
-              <th className="px-4 py-3 text-xs font-medium text-gray-500 w-24">操作</th>
+              <th className="px-4 py-3 text-xs font-medium text-gray-500 w-32">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -131,7 +208,7 @@ export default function StatusSettings() {
                 </td>
                 <td className="px-4 py-3">
                   <span className={`text-sm font-medium ${item.colorClass}`}>
-                    {item.colorClass.includes("green") ? "緑系" : item.colorClass.includes("orange") ? "オレンジ系" : "グレー系"}
+                    {STATUS_COLOR_MAP[colorClassToKey(item.colorClass)]?.label ?? "不明"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -153,25 +230,95 @@ export default function StatusSettings() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleEditStart(item)}
-                      className="text-gray-400 hover:text-gray-700 transition-colors text-xs"
-                    >
-                      編集
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleEditStart(item)}
+                        className="text-gray-400 hover:text-gray-700 transition-colors text-xs"
+                      >
+                        編集
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item)}
+                        className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
+                      >
+                        削除
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
             ))}
+            {statuses.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">
+                  ステータスがありません
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* 注記 */}
-      <p className="mt-4 text-xs text-gray-400 italic">
-        ステータスの追加/削除にはシステム変更が必要です
-      </p>
+      {/* 追加フォーム */}
+      <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">ステータスを追加</h3>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">ID（英小文字・数字・_）</label>
+            <input
+              type="text"
+              value={newId}
+              onChange={(e) => handleIdChange(e.target.value)}
+              onBlur={handleIdBlur}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="例: trial"
+              className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none transition-colors ${
+                idError
+                  ? "border-orange-400 focus:border-orange-400 focus:ring-1 focus:ring-orange-200"
+                  : "border-gray-200 focus:border-green-400 focus:ring-1 focus:ring-green-200"
+              }`}
+            />
+            {idError && (
+              <p className="mt-1 text-xs text-orange-600">{idError}</p>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">表示名</label>
+            <input
+              type="text"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="例: トライアル中"
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">カラー</label>
+            <select
+              value={newColorKey}
+              onChange={(e) => setNewColorKey(e.target.value as StatusColorKey)}
+              className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-green-400 transition-colors"
+            >
+              {STATUS_COLOR_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {STATUS_COLOR_MAP[key].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={!newId.trim() || !newLabel.trim()}
+            className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            追加
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

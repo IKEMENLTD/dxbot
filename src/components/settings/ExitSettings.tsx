@@ -8,7 +8,7 @@ import { useAppSetting } from "@/hooks/useAppSetting";
 import { useToast } from "@/contexts/ToastContext";
 
 interface ExitItem {
-  id: ExitType;
+  id: string;
   label: string;
   colorType: "green" | "orange";
   colorClass: string;
@@ -37,6 +37,8 @@ const COLOR_MAP: Record<"green" | "orange", { colorClass: string; bgClass: strin
   orange: { colorClass: "text-orange-600", bgClass: "bg-orange-50" },
 };
 
+const ID_PATTERN = /^[a-z0-9_]+$/;
+
 export default function ExitSettings() {
   const {
     value: exits,
@@ -47,8 +49,14 @@ export default function ExitSettings() {
   } = useAppSetting<ExitItem[]>("exits", buildInitialExits(), STORAGE_KEYS.EXITS);
   const { addToast } = useToast();
 
-  const [editingId, setEditingId] = useState<ExitType | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+
+  // Add form state
+  const [newId, setNewId] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState<"green" | "orange">("green");
+  const [idError, setIdError] = useState("");
 
   // Focus management
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +107,7 @@ export default function ExitSettings() {
     }
   };
 
-  const handleColorChange = (id: ExitType, colorType: "green" | "orange") => {
+  const handleColorChange = (id: string, colorType: "green" | "orange") => {
     const mapped = COLOR_MAP[colorType];
     updateExits((prev) =>
       prev.map((e) =>
@@ -108,6 +116,56 @@ export default function ExitSettings() {
           : e
       )
     );
+  };
+
+  // --- Add form handlers ---
+  const handleIdChange = (value: string) => {
+    setNewId(value);
+    setIdError("");
+  };
+
+  const handleIdBlur = () => {
+    const trimmed = newId.trim();
+    if (trimmed && !ID_PATTERN.test(trimmed)) {
+      setIdError("英小文字・数字・アンダースコアのみ使用できます");
+    } else {
+      setIdError("");
+    }
+  };
+
+  const handleAdd = () => {
+    const trimmedId = newId.trim();
+    const trimmedLabel = newLabel.trim();
+    if (!trimmedId || !trimmedLabel) return;
+    if (!ID_PATTERN.test(trimmedId)) {
+      setIdError("英小文字・数字・アンダースコアのみ使用できます");
+      return;
+    }
+    if (exits.some((e) => e.id === trimmedId)) {
+      setIdError("このIDはすでに存在します");
+      return;
+    }
+    const mapped = COLOR_MAP[newColor];
+    updateExits((prev) => [
+      ...prev,
+      {
+        id: trimmedId,
+        label: trimmedLabel,
+        colorType: newColor,
+        colorClass: mapped.colorClass,
+        bgClass: mapped.bgClass,
+      },
+    ]);
+    setNewId("");
+    setNewLabel("");
+    setNewColor("green");
+    setIdError("");
+  };
+
+  // --- Delete handler ---
+  const handleDelete = (item: ExitItem) => {
+    if (!window.confirm(`「${item.label}」を削除しますか？`)) return;
+    updateExits((prev) => prev.filter((e) => e.id !== item.id));
   };
 
   if (loading) {
@@ -136,7 +194,7 @@ export default function ExitSettings() {
               <th className="px-4 py-3 text-xs font-medium text-gray-500">表示名</th>
               <th className="px-4 py-3 text-xs font-medium text-gray-500">カラー</th>
               <th className="px-4 py-3 text-xs font-medium text-gray-500">プレビュー</th>
-              <th className="px-4 py-3 text-xs font-medium text-gray-500 w-24">操作</th>
+              <th className="px-4 py-3 text-xs font-medium text-gray-500 w-32">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -193,25 +251,108 @@ export default function ExitSettings() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleEditStart(item)}
-                      className="text-gray-400 hover:text-gray-700 transition-colors text-xs"
-                    >
-                      編集
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleEditStart(item)}
+                        className="text-gray-400 hover:text-gray-700 transition-colors text-xs"
+                      >
+                        編集
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item)}
+                        className="text-gray-400 hover:text-orange-600 transition-colors text-xs"
+                      >
+                        削除
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
             ))}
+            {exits.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">
+                  出口がありません
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* 注記 */}
-      <p className="mt-4 text-xs text-gray-400 italic">
-        出口の追加/削除にはシステム変更が必要です
-      </p>
+      {/* 追加フォーム */}
+      <div className="mt-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">出口を追加</h3>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">ID（英小文字・数字・_）</label>
+            <input
+              type="text"
+              value={newId}
+              onChange={(e) => handleIdChange(e.target.value)}
+              onBlur={handleIdBlur}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="例: consulting"
+              className={`w-full bg-white border rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none transition-colors ${
+                idError
+                  ? "border-orange-400 focus:border-orange-400 focus:ring-1 focus:ring-orange-200"
+                  : "border-gray-200 focus:border-green-400 focus:ring-1 focus:ring-green-200"
+              }`}
+            />
+            {idError && (
+              <p className="mt-1 text-xs text-orange-600">{idError}</p>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">表示名</label>
+            <input
+              type="text"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              placeholder="例: コンサルティング"
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">カラー</label>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setNewColor("green")}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  newColor === "green"
+                    ? "bg-green-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-green-400"
+                }`}
+              >
+                緑
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewColor("orange")}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                  newColor === "orange"
+                    ? "bg-orange-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-orange-400"
+                }`}
+              >
+                オレンジ
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={!newId.trim() || !newLabel.trim()}
+            className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            追加
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

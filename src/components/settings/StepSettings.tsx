@@ -5,6 +5,7 @@ import { useToast } from "@/contexts/ToastContext";
 import type { AxisScores } from "@/lib/types";
 import type { StepDefinition } from "@/lib/step-master";
 import StepDetailModal from "./StepDetailModal";
+import StepCsvImport from "./StepCsvImport";
 
 // ===== 定数 =====
 
@@ -228,6 +229,15 @@ export default function StepSettings() {
             </button>
           </div>
         </div>
+
+        {/* CSVインポート */}
+        <StepCsvImport
+          currentSteps={steps}
+          onImport={(imported) => {
+            setSteps(imported);
+            setHasChanges(true);
+          }}
+        />
 
         {/* 変更通知 */}
         {hasChanges && (

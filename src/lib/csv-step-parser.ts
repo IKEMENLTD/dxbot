@@ -347,7 +347,7 @@ export function mergeSteps(
   mode: "merge" | "replace"
 ): StepDefinition[] {
   if (mode === "replace") {
-    return [...imported].sort((a, b) => a.id.localeCompare(b.id));
+    return [...imported].sort(compareStepIds);
   }
 
   // merge: existing をベースに、importedのIDで上書き/追加
@@ -373,7 +373,15 @@ export function mergeSteps(
     }
   }
 
-  return result.sort((a, b) => a.id.localeCompare(b.id));
+  return result.sort(compareStepIds);
+}
+
+/** ステップIDの数値ソート（S02 < S10 < S100） */
+function compareStepIds(a: StepDefinition, b: StepDefinition): number {
+  const numA = parseInt(a.id.slice(1), 10);
+  const numB = parseInt(b.id.slice(1), 10);
+  if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+  return a.id.localeCompare(b.id);
 }
 
 // ---------------------------------------------------------------------------

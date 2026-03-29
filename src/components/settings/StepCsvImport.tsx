@@ -91,6 +91,9 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
       } else {
         setDiff(null);
         setShowPreview(false);
+        if (result.errors.length === 0) {
+          addToast("warning", "ステップデータが0件です。ヘッダー行のみの可能性があります。");
+        }
       }
     };
     // M2: FileReaderのonerror
@@ -359,7 +362,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                   <span className="text-orange-600">
                     変更: {diff.modified.length}件
                   </span>
-                  {diff.removed.length > 0 && (
+                  {importMode === 'replace' && diff.removed.length > 0 && (
                     <span className="text-red-600">
                       削除: {diff.removed.length}件
                     </span>
@@ -370,7 +373,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                 </div>
 
                 {/* テーブル */}
-                {(diff.added.length > 0 || diff.modified.length > 0 || diff.removed.length > 0) && (
+                {(diff.added.length > 0 || diff.modified.length > 0 || (importMode === 'replace' && diff.removed.length > 0)) && (
                   <div className="overflow-x-auto max-h-60 overflow-y-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -419,8 +422,8 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                             </td>
                           </tr>
                         ))}
-                        {/* M5: removedのUI表示（replaceモード時） */}
-                        {diff.removed.map((s) => (
+                        {/* M5: removedのUI表示（replaceモードのみ。mergeモードでは削除されないため非表示） */}
+                        {importMode === 'replace' && diff.removed.map((s) => (
                           <tr key={s.id} className="border-b border-gray-100 bg-red-50">
                             <td className="px-2 py-1.5 font-mono text-gray-600">
                               {s.id}
@@ -478,7 +481,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                   disabled={
                     diff.added.length === 0 &&
                     diff.modified.length === 0 &&
-                    diff.removed.length === 0
+                    (importMode === 'replace' ? diff.removed.length === 0 : true)
                   }
                   className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >

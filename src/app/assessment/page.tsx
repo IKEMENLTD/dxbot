@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
+import type { PrecisionQuestion } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG } from '@/lib/types';
 import { INDUSTRIES } from '@/lib/assessment-constants';
 import type { LevelBand } from '@/lib/types';
@@ -45,6 +46,18 @@ const COLORS = {
   textMuted: '#9ca3af',
   textDim: '#6b7280',
 };
+
+// ---------------------------------------------------------------------------
+// スケールカラーマップ（1-5 グラデーション）
+// ---------------------------------------------------------------------------
+
+const SCALE_COLORS = [
+  { bg: '#1a0a0a', border: '#4a2020', text: '#ef4444' },  // 1: 暗い赤
+  { bg: '#1a1008', border: '#4a3520', text: '#f59e0b' },  // 2: 暗いオレンジ
+  { bg: '#0d0d0d', border: '#333',    text: '#9ca3af' },  // 3: ニュートラル
+  { bg: '#081018', border: '#204060', text: '#60a5fa' },  // 4: 暗い青
+  { bg: '#0a1628', border: '#1d4ed8', text: '#3b82f6' },  // 5: 青（アクセント）
+];
 
 // ---------------------------------------------------------------------------
 // ProfileStep コンポーネント
@@ -203,33 +216,44 @@ function ProfileStep({
 
 function SurveyStep({
   answers,
+  questions,
   onAnswerChange,
   onComplete,
 }: {
   answers: number[];
+  questions: PrecisionQuestion[];
   onAnswerChange: (answers: number[]) => void;
   onComplete: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [fadeIn, setFadeIn] = useState(true);
 
-  const question = PRECISION_QUESTIONS[currentIndex];
-  const progress = ((currentIndex + 1) / 30) * 100;
+  const questionCount = questions.length;
+  const question = questions[currentIndex];
+  const progress = ((currentIndex + 1) / questionCount) * 100;
   const selected = answers[currentIndex];
 
-  function handleSelect(value: number) {
+  // 設問遷移フェードインアニメーション
+  useEffect(() => {
+    setFadeIn(false);
+    const frameId = requestAnimationFrame(() => setFadeIn(true));
+    return () => cancelAnimationFrame(frameId);
+  }, [currentIndex]);
+
+  const handleSelect = useCallback((value: number) => {
     const next = [...answers];
     next[currentIndex] = value;
     onAnswerChange(next);
 
-    // auto-advance: 300ms後に次の設問へ
+    // auto-advance: 600msでアニメーション遷移を体感させる
     setTimeout(() => {
-      if (currentIndex < 29) {
+      if (currentIndex < questionCount - 1) {
         setCurrentIndex((prev) => prev + 1);
       } else {
         onComplete();
       }
-    }, 300);
-  }
+    }, 600);
+  }, [answers, currentIndex, questionCount, onAnswerChange, onComplete]);
 
   function handlePrev() {
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
@@ -241,7 +265,7 @@ function SurveyStep({
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ color: COLORS.textMuted, fontSize: 12, letterSpacing: '0.1em' }}>
-            質問 {currentIndex + 1} / 30
+            質問 {currentIndex + 1} / {questionCount}
           </span>
           <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 600 }}>
             {Math.round(progress)}%
@@ -259,63 +283,92 @@ function SurveyStep({
         </div>
       </div>
 
-      {/* 軸ラベル */}
-      <div style={{ marginBottom: 16 }}>
-        <span
-          style={{
-            display: 'inline-block',
-            background: '#0a1628',
-            border: `1px solid ${COLORS.accentDim}`,
-            color: COLORS.accent,
-            fontSize: 11,
-            padding: '3px 10px',
-            letterSpacing: '0.08em',
-          }}
-        >
-          {AXIS_LABELS[question.axis]}
-        </span>
-      </div>
-
-      {/* 設問 */}
-      <p style={{ fontSize: 16, lineHeight: 1.8, color: '#fff', marginBottom: 28, fontWeight: 400 }}>
-        {question.question}
-      </p>
-
-      {/* 横並び5択スケール */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <span style={{ color: COLORS.textDim, fontSize: 11, minWidth: 48, textAlign: 'right' }}>
-            全くない
+      {/* フェードイン対象エリア */}
+      <div style={{ opacity: fadeIn ? 1 : 0, transition: 'opacity 0.2s ease' }}>
+        {/* 軸ラベル */}
+        <div style={{ marginBottom: 16 }}>
+          <span
+            style={{
+              display: 'inline-block',
+              background: '#0a1628',
+              border: `1px solid ${COLORS.accentDim}`,
+              color: COLORS.accent,
+              fontSize: 11,
+              padding: '3px 10px',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {AXIS_LABELS[question.axis]}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button
-                key={v}
-                onClick={() => handleSelect(v)}
-                style={{
-                  width: 48,
-                  height: 48,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  border: selected === v
-                    ? `2px solid ${COLORS.accent}`
-                    : '1px solid #333',
-                  background: selected === v ? '#0a1628' : '#111',
-                  color: selected === v ? COLORS.accent : COLORS.text,
-                }}
-              >
-                {v}
-              </button>
-            ))}
+        </div>
+
+        {/* 設問 */}
+        <p style={{ fontSize: 16, lineHeight: 1.8, color: '#fff', marginBottom: 28, fontWeight: 400 }}>
+          {question.question}
+        </p>
+
+        {/* 横並び5択スケール */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <div style={{ textAlign: 'right', minWidth: 48 }}>
+              <span style={{ color: COLORS.textDim, fontSize: 12, display: 'block' }}>
+                全くない
+              </span>
+              <span style={{ color: COLORS.textDim, fontSize: 10, display: 'block', marginTop: 2 }}>
+                1
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[1, 2, 3, 4, 5].map((v) => {
+                const isSelected = selected === v;
+                const scaleColor = SCALE_COLORS[v - 1];
+                return (
+                  <div key={v} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <button
+                      onClick={() => handleSelect(v)}
+                      style={{
+                        width: 52,
+                        height: 52,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 18,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                        border: isSelected
+                          ? `2px solid ${scaleColor.border}`
+                          : '1px solid #222',
+                        background: isSelected ? scaleColor.bg : '#111',
+                        color: isSelected ? scaleColor.text : '#6b7280',
+                      }}
+                    >
+                      {v}
+                    </button>
+                    {/* インジケーターバー */}
+                    <div
+                      style={{
+                        width: 52,
+                        height: 4,
+                        marginTop: 4,
+                        background: isSelected ? scaleColor.text : 'transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ textAlign: 'left', minWidth: 48 }}>
+              <span style={{ color: COLORS.textDim, fontSize: 12, display: 'block' }}>
+                完璧
+              </span>
+              <span style={{ color: COLORS.textDim, fontSize: 10, display: 'block', marginTop: 2 }}>
+                5
+              </span>
+            </div>
           </div>
-          <span style={{ color: COLORS.textDim, fontSize: 11, minWidth: 48 }}>
-            完璧
-          </span>
         </div>
       </div>
 
@@ -337,6 +390,14 @@ function SurveyStep({
           </button>
         )}
       </div>
+
+      {/* モバイル対応CSS */}
+      <style>{`
+        @media (max-width: 480px) {
+          .scale-gap { gap: 6px !important; }
+          .scale-label { font-size: 10px !important; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -347,7 +408,7 @@ function SurveyStep({
 
 function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: string | null }) {
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
-  const maxAxisScore = 30; // 6問 × 5点
+  const maxAxisScore = 30; // 6問 * 5点
 
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', padding: '60px 20px' }}>
@@ -500,21 +561,34 @@ export default function AssessmentPage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const [answers, setAnswers] = useState<number[]>(new Array(30).fill(0));
+  const [questions, setQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
+  const [answers, setAnswers] = useState<number[]>(new Array(PRECISION_QUESTIONS.length).fill(0));
   const [lineUrl, setLineUrl] = useState<string | null>(null);
 
-  // 管理画面のLINE設定から友だち追加URLを取得
+  // 管理画面のLINE設定 + カスタム設問を取得
   useEffect(() => {
     const controller = new AbortController();
     fetch('/api/assessment/config', { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null }> : null))
-      .then((data) => { if (data) setLineUrl(data.lineUrl); })
-      .catch(() => { /* フォールバック: null のまま */ });
+      .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null; questions?: PrecisionQuestion[] }> : null))
+      .then((data) => {
+        if (data) {
+          if (data.lineUrl) setLineUrl(data.lineUrl);
+          if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
+            setQuestions(data.questions);
+            setAnswers(new Array(data.questions.length).fill(0));
+          }
+        }
+      })
+      .catch(() => { /* フォールバック: デフォルト値のまま */ });
     return () => controller.abort();
   }, []);
 
+  // profile は handleSurveyComplete で使われるがlinterの警告回避
+  void profile;
+
   async function handleSurveyComplete(completedAnswers: number[], profileData: ProfileData) {
     setStep('submitting');
+    setProfile(profileData);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -549,6 +623,7 @@ export default function AssessmentPage() {
     return (
       <SurveyStep
         answers={answers}
+        questions={questions}
         onAnswerChange={setAnswers}
         onComplete={() => setStep('profile')}
       />

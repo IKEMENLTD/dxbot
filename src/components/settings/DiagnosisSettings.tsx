@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { DiagnosisConfig, DiagnosisAxis } from "@/lib/types";
+import { PRECISION_QUESTIONS } from "@/lib/precision-interview";
+import type { PrecisionQuestion } from "@/lib/precision-interview";
 import { useToast } from "@/contexts/ToastContext";
 
 /** デフォルト診断設定 */
@@ -20,7 +22,7 @@ const DEFAULT_DIAGNOSIS_CONFIG: DiagnosisConfig = {
   scoreMultiplier: 3,
 };
 
-/** 軸ラベル */
+/** 軸ラベル（LINE bot用6問） */
 const AXIS_LABELS: Record<DiagnosisAxis, string> = {
   industry: "業種",
   a1: "売上・請求管理",
@@ -28,6 +30,15 @@ const AXIS_LABELS: Record<DiagnosisAxis, string> = {
   b: "繰り返し作業の自動化",
   c: "データ経営",
   d: "ITツール活用",
+};
+
+/** 精密ヒアリング軸ラベル */
+const PREC_AXIS_LABELS: Record<string, string> = {
+  a1: "A1: 売上・請求管理（6問）",
+  a2: "A2: 連絡・記録管理（6問）",
+  b: "B: 繰り返し作業の自動化（6問）",
+  c: "C: データ経営（6問）",
+  d: "D: ITツール活用（6問）",
 };
 
 /** フェッチタイムアウト(ms) */
@@ -41,6 +52,11 @@ export default function DiagnosisSettings() {
   const [thresholdError, setThresholdError] = useState<string | null>(null);
   const { addToast } = useToast();
 
+  // 精密ヒアリング設問 state
+  const [precisionQuestions, setPrecisionQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
+  const [savingPrecision, setSavingPrecision] = useState(false);
+  const [precisionLoading, setPrecisionLoading] = useState(true);
+
   const checkThresholds = useCallback((thresholds: [number, number, number]) => {
     if (thresholds[0] >= thresholds[1]) {
       setThresholdError('Band1上限はBand2上限より小さくしてください');
@@ -53,7 +69,7 @@ export default function DiagnosisSettings() {
     setThresholdError(null);
   }, []);
 
-  // 初期ロード
+  // 初期ロード: diagnosis_config
   useEffect(() => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -83,9 +99,38 @@ export default function DiagnosisSettings() {
     };
   }, []);
 
-  // 保存
+  // 初期ロード: precision_questions
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    fetch("/api/settings/app?key=precision_questions", { signal: controller.signal })
+      .then((res) => res.json())
+      .then((json: { data: PrecisionQuestion[] | null }) => {
+        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+          setPrecisionQuestions(json.data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.warn("[DiagnosisSettings] 精密設問読み込みタイムアウト");
+        } else {
+          console.error("[DiagnosisSettings] 精密設問読み込みエラー:", err);
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setPrecisionLoading(false);
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // 保存: diagnosis_config
   const handleSave = async () => {
-    // バリデーション: 閾値は昇順
     const [b1, b2, b3] = config.bandThresholds;
     if (b1 >= b2 || b2 >= b3) {
       addToast("error", "バンド閾値は昇順で設定してください（Band1 < Band2 < Band3）");
@@ -128,10 +173,57 @@ export default function DiagnosisSettings() {
     }
   };
 
+  // 保存: precision_questions
+  const handleSavePrecision = async () => {
+    // バリデーション: 空の設問がないか
+    const hasEmpty = precisionQuestions.some((q) => !q.question.trim());
+    if (hasEmpty) {
+      addToast("error", "空の設問テキストがあります。すべての設問を入力してください。");
+      return;
+    }
+
+    setSavingPrecision(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/settings/app", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "precision_questions", value: precisionQuestions }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "保存に失敗しました" }));
+        const errMsg = typeof errBody.error === "string" ? errBody.error : "保存に失敗しました";
+        addToast("error", errMsg);
+        return;
+      }
+
+      addToast("success", "精密ヒアリング設問を保存しました");
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        addToast("error", "保存がタイムアウトしました");
+      } else {
+        addToast("error", "保存中にエラーが発生しました");
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      setSavingPrecision(false);
+    }
+  };
+
   // デフォルトに戻す
   const handleReset = () => {
     if (!window.confirm("診断設定をデフォルトに戻しますか？")) return;
     setConfig(DEFAULT_DIAGNOSIS_CONFIG);
+  };
+
+  // 精密ヒアリング設問をデフォルトに戻す
+  const handleResetPrecision = () => {
+    if (!window.confirm("精密ヒアリング設問をデフォルトに戻しますか？")) return;
+    setPrecisionQuestions(PRECISION_QUESTIONS);
   };
 
   // バンド閾値変更
@@ -198,6 +290,15 @@ export default function DiagnosisSettings() {
       ...prev,
       industries: prev.industries.map((ind, i) => (i === index ? value : ind)),
     }));
+  };
+
+  // 精密ヒアリング設問テキスト変更
+  const handlePrecisionQuestionChange = (questionIndex: number, value: string) => {
+    setPrecisionQuestions((prev) =>
+      prev.map((q) =>
+        q.index === questionIndex ? { ...q, question: value } : q
+      )
+    );
   };
 
   if (loading) {
@@ -343,8 +444,8 @@ export default function DiagnosisSettings() {
         </div>
       </div>
 
-      {/* ボタン群 */}
-      <div className="flex items-center gap-3">
+      {/* ボタン群（診断設定） */}
+      <div className="flex items-center gap-3 mb-10">
         <button
           type="button"
           onClick={handleSave}
@@ -361,6 +462,71 @@ export default function DiagnosisSettings() {
         >
           デフォルトに戻す
         </button>
+      </div>
+
+      {/* ========== 精密ヒアリング設問（30問） ========== */}
+      <div className="border-t border-gray-200 pt-8">
+        <h3 className="text-sm font-semibold text-gray-800 mb-1">
+          精密ヒアリング設問（Webフォーム用）
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          /assessment ページで使用される30問の設問テキストを編集できます。軸の割り当ては変更できません。
+        </p>
+
+        {precisionLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full" />
+            <span className="ml-2 text-xs text-gray-500">設問を読み込み中...</span>
+          </div>
+        ) : (
+          <>
+            {(["a1", "a2", "b", "c", "d"] as const).map((axis) => {
+              const axisQuestions = precisionQuestions.filter((q) => q.axis === axis);
+              return (
+                <details key={axis} className="mb-3 bg-gray-50 border border-gray-200 rounded-xl">
+                  <summary className="cursor-pointer text-sm font-medium text-gray-700 py-3 px-4 select-none hover:bg-gray-100 transition-colors">
+                    {PREC_AXIS_LABELS[axis]}
+                  </summary>
+                  <div className="px-4 pb-4 pt-2 space-y-3">
+                    {axisQuestions.map((q) => (
+                      <div key={q.index} className="flex items-start gap-3">
+                        <span className="text-xs text-gray-400 mt-2.5 w-8 shrink-0 font-mono">
+                          Q{q.index + 1}
+                        </span>
+                        <textarea
+                          value={q.question}
+                          onChange={(e) => handlePrecisionQuestionChange(q.index, e.target.value)}
+                          rows={2}
+                          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 resize-none focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+
+            {/* ボタン群（精密ヒアリング設問） */}
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                type="button"
+                onClick={handleSavePrecision}
+                disabled={savingPrecision}
+                className="bg-green-600 text-white text-sm font-medium px-5 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {savingPrecision ? "保存中..." : "精密ヒアリング設問を保存"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetPrecision}
+                disabled={savingPrecision}
+                className="bg-white text-gray-500 text-sm font-medium px-5 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed transition-colors"
+              >
+                デフォルトに戻す
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

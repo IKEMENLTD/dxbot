@@ -4,7 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
 import type { PrecisionQuestion } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG, DEFAULT_ASSESSMENT_STYLE } from '@/lib/types';
-import { INDUSTRIES, EMPLOYEE_COUNTS, ROLES, CHALLENGES } from '@/lib/assessment-constants';
+import {
+  INDUSTRIES,
+  EMPLOYEE_COUNTS,
+  ROLES,
+  PAIN_POINTS,
+  AXIS_DEEP_QUESTIONS,
+  BUDGET_OPTIONS,
+  DECISION_OPTIONS,
+} from '@/lib/assessment-constants';
 import { initLiff } from '@/lib/liff';
 import type { LevelBand, AssessmentStyle, CompanyInfo } from '@/lib/types';
 
@@ -83,12 +91,29 @@ function DxbotHeader() {
 // CompanyInfoStep コンポーネント
 // ---------------------------------------------------------------------------
 
-function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
+/** 診断結果の axisScores から最もスコアが低い軸を返す */
+function getWeakAxis(scores: { a1: number; a2: number; b: number; c: number; d: number }): string {
+  const entries = Object.entries(scores) as [string, number][];
+  entries.sort((a, b) => a[1] - b[1]);
+  return entries[0][0];
+}
+
+function CompanyInfoStep({ onNext, weakAxis }: {
+  onNext: (data: CompanyInfo) => void;
+  weakAxis: string;
+}) {
+  // STEP1
+  const [challenges, setChallenges] = useState<string[]>([]);
+  // STEP2
+  const [painDetail, setPainDetail] = useState('');
+  // STEP3
+  const [budget, setBudget] = useState('');
+  const [decisionAuthority, setDecisionAuthority] = useState('');
+  // STEP4
   const [employeeCount, setEmployeeCount] = useState('');
   const [role, setRole] = useState('');
-  const [challenges, setChallenges] = useState<string[]>([]);
   const [email, setEmail] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [freeText, setFreeText] = useState('');
 
   function toggleChallenge(c: string) {
     setChallenges((prev) =>
@@ -96,23 +121,22 @@ function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
     );
   }
 
-  function validate(): boolean {
-    const errs: Record<string, string> = {};
-    if (!employeeCount) errs.employeeCount = '従業員数を選択してください';
-    if (!role) errs.role = '役職を選択してください';
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errs.email = '正しいメールアドレスを入力してください';
-    }
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (validate()) {
-      onNext({ employeeCount, role, challenges, email: email.trim() });
-    }
+    onNext({
+      employeeCount,
+      role,
+      challenges,
+      painDetail,
+      painAxis: weakAxis,
+      budget,
+      decisionAuthority,
+      email: email.trim(),
+      freeText: freeText.trim(),
+    });
   }
+
+  const deepQ = AXIS_DEEP_QUESTIONS[weakAxis] ?? AXIS_DEEP_QUESTIONS['a1'];
 
   const pillStyle = (selected: boolean): React.CSSProperties => ({
     display: 'inline-flex',
@@ -130,7 +154,7 @@ function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
   });
 
   const checkStyle = (selected: boolean): React.CSSProperties => ({
-    display: 'inline-flex',
+    display: 'flex',
     alignItems: 'center',
     gap: 8,
     padding: '10px 16px',
@@ -142,7 +166,17 @@ function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
     background: selected ? COLORS.accentLight : COLORS.white,
     color: selected ? COLORS.accent : COLORS.textMuted,
     borderRadius: 8,
+    width: '100%',
+    boxSizing: 'border-box' as const,
   });
+
+  const sectionTitle: React.CSSProperties = {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 6,
+    letterSpacing: '0.02em',
+  };
 
   const sectionLabel: React.CSSProperties = {
     display: 'block',
@@ -153,115 +187,218 @@ function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 20px' }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, margin: 0, lineHeight: 1.3 }}>
-          あなたの会社について教えてください
-        </h1>
-        <p style={{ color: COLORS.textMuted, marginTop: 8, fontSize: 14, lineHeight: 1.7 }}>
-          より正確な診断結果をお届けするために、いくつかの情報をお聞かせください。
-        </p>
-      </div>
-
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 20px' }}>
       <form onSubmit={handleSubmit} noValidate>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-          {/* 従業員数 */}
-          <div>
-            <label style={sectionLabel}>従業員数</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {EMPLOYEE_COUNTS.map((ec) => (
-                <button
-                  key={ec}
-                  type="button"
-                  onClick={() => setEmployeeCount(ec)}
-                  style={pillStyle(employeeCount === ec)}
-                >
-                  {ec}
-                </button>
-              ))}
-            </div>
-            {errors.employeeCount && (
-              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.employeeCount}</p>
-            )}
-          </div>
 
-          {/* 役職 */}
+          {/* ===== STEP 1: 困りごと選択 ===== */}
           <div>
-            <label style={sectionLabel}>役職</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {ROLES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r)}
-                  style={pillStyle(role === r)}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-            {errors.role && (
-              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.role}</p>
-            )}
-          </div>
-
-          {/* 主な課題 */}
-          <div>
-            <label style={sectionLabel}>主な課題（複数選択可）</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CHALLENGES.map((c) => {
-                const selected = challenges.includes(c);
+            <div style={sectionTitle}>STEP 1</div>
+            <label style={sectionLabel}>今、困っていることはありますか？（複数選択可）</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {PAIN_POINTS.map((p) => {
+                const selected = challenges.includes(p);
                 return (
                   <button
-                    key={c}
+                    key={p}
                     type="button"
-                    onClick={() => toggleChallenge(c)}
+                    onClick={() => toggleChallenge(p)}
                     style={checkStyle(selected)}
                   >
-                    {selected && (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M3 7l3 3 5-6" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    {selected ? (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                        <rect x="1" y="1" width="14" height="14" rx="3" fill={COLORS.accent} />
+                        <path d="M4 8l3 3 5-6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                        <rect x="1" y="1" width="14" height="14" rx="3" stroke={COLORS.border} strokeWidth="1.5" fill="none"/>
                       </svg>
                     )}
-                    {c}
+                    <span>{p}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* メール */}
+          {/* ===== STEP 2: 弱軸深掘り ===== */}
           <div>
-            <label style={sectionLabel}>
-              メールアドレス <span style={{ color: COLORS.textDim, fontWeight: 400, fontSize: 12 }}>（任意）</span>
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@company.co.jp"
-              style={{
-                width: '100%',
-                background: COLORS.white,
-                border: `1px solid ${errors.email ? COLORS.error : COLORS.border}`,
-                color: COLORS.text,
-                padding: '12px 14px',
-                fontSize: 15,
-                outline: 'none',
-                boxSizing: 'border-box',
-                borderRadius: 8,
-              }}
-            />
-            {errors.email && (
-              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.email}</p>
-            )}
+            <div style={sectionTitle}>STEP 2</div>
+            <label style={sectionLabel}>{deepQ.question}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {deepQ.options.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setPainDetail(opt)}
+                  style={checkStyle(painDetail === opt)}
+                >
+                  {painDetail === opt ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.accent} strokeWidth="1.5" fill="none"/>
+                      <circle cx="8" cy="8" r="4" fill={COLORS.accent}/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.border} strokeWidth="1.5" fill="none"/>
+                    </svg>
+                  )}
+                  <span>{opt}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== STEP 3: 導入意向 ===== */}
+          <div>
+            <div style={sectionTitle}>STEP 3</div>
+
+            {/* Q1: 予算感 */}
+            <label style={sectionLabel}>DXツールに月額いくらまで検討できますか？</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {BUDGET_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setBudget(opt)}
+                  style={checkStyle(budget === opt)}
+                >
+                  {budget === opt ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.accent} strokeWidth="1.5" fill="none"/>
+                      <circle cx="8" cy="8" r="4" fill={COLORS.accent}/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.border} strokeWidth="1.5" fill="none"/>
+                    </svg>
+                  )}
+                  <span>{opt}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Q2: 決裁権 */}
+            <label style={sectionLabel}>ITツールの導入を自分で決められますか？</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {DECISION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setDecisionAuthority(opt)}
+                  style={checkStyle(decisionAuthority === opt)}
+                >
+                  {decisionAuthority === opt ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.accent} strokeWidth="1.5" fill="none"/>
+                      <circle cx="8" cy="8" r="4" fill={COLORS.accent}/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <circle cx="8" cy="8" r="7" stroke={COLORS.border} strokeWidth="1.5" fill="none"/>
+                    </svg>
+                  )}
+                  <span>{opt}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== STEP 4: 基本情報 + 自由記述 ===== */}
+          <div>
+            <div style={sectionTitle}>STEP 4</div>
+            <label style={sectionLabel}>基本情報</label>
+
+            {/* 従業員数 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}>従業員数</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {EMPLOYEE_COUNTS.map((ec) => (
+                  <button
+                    key={ec}
+                    type="button"
+                    onClick={() => setEmployeeCount(ec)}
+                    style={pillStyle(employeeCount === ec)}
+                  >
+                    {ec}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 役職 */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}>役職</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {ROLES.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRole(r)}
+                    style={pillStyle(role === r)}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* メール */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
+                メールアドレス <span style={{ fontWeight: 400 }}>（任意）</span>
+              </div>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@company.co.jp"
+                style={{
+                  width: '100%',
+                  background: COLORS.white,
+                  border: `1px solid ${COLORS.border}`,
+                  color: COLORS.text,
+                  padding: '12px 14px',
+                  fontSize: 15,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  borderRadius: 8,
+                }}
+              />
+            </div>
+
+            {/* 自由記述 */}
+            <div>
+              <div style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
+                その他 <span style={{ fontWeight: 400 }}>（任意）</span>
+              </div>
+              <input
+                type="text"
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                placeholder="その他、お困りのことがあれば"
+                maxLength={200}
+                style={{
+                  width: '100%',
+                  background: COLORS.white,
+                  border: `1px solid ${COLORS.border}`,
+                  color: COLORS.text,
+                  padding: '12px 14px',
+                  fontSize: 15,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  borderRadius: 8,
+                }}
+              />
+            </div>
           </div>
         </div>
 
         <button
           type="submit"
           style={{
-            marginTop: 36,
+            marginTop: 32,
             width: '100%',
             background: COLORS.accent,
             color: COLORS.white,
@@ -273,7 +410,7 @@ function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
             borderRadius: 8,
           }}
         >
-          次へ
+          送信する
         </button>
       </form>
     </div>
@@ -611,6 +748,7 @@ function ResultStep({ result, lineUrl, assessmentId, onCompanyInfoSubmit }: {
   assessmentId: string | null;
   onCompanyInfoSubmit?: (data: CompanyInfo) => void;
 }) {
+  const weakAxis = getWeakAxis(result.axisScores);
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
   const maxAxisScore = 30;
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -792,10 +930,13 @@ function ResultStep({ result, lineUrl, assessmentId, onCompanyInfoSubmit }: {
               </button>
             </div>
           ) : (
-            <CompanyInfoStep onNext={(data) => {
-              setCompanySaved(true);
-              onCompanyInfoSubmit?.(data);
-            }} />
+            <CompanyInfoStep
+              weakAxis={weakAxis}
+              onNext={(data) => {
+                setCompanySaved(true);
+                onCompanyInfoSubmit?.(data);
+              }}
+            />
           )}
         </div>
       )}

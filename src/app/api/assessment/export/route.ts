@@ -14,7 +14,12 @@ interface CompanyInfo {
   employeeCount: string;
   role: string;
   challenges: string[];
+  painDetail?: string;
+  painAxis?: string;
+  budget?: string;
+  decisionAuthority?: string;
   email: string;
+  freeText?: string;
 }
 
 function escapeCsv(v: string | number | null | undefined): string {
@@ -85,7 +90,7 @@ export async function GET(): Promise<NextResponse> {
     'DXレベル', 'バンド', '合計スコア',
     'A1:売上管理', 'A2:連絡管理', 'B:自動化', 'C:データ経営', 'D:ITツール活用',
     'LINE ID',
-    '従業員数', '役職', '課題', 'メール',
+    '従業員数', '役職', '困りごと', '弱軸', '弱軸深掘り回答', '予算感', '決裁権', 'メール', '自由記述',
     'ユーザーレベル(現在)', 'ユーザーステータス',
   ].join(',');
 
@@ -100,8 +105,13 @@ export async function GET(): Promise<NextResponse> {
     const ci = r.company_info as CompanyInfo | null;
     const employeeCount = ci?.employeeCount ?? '';
     const role = ci?.role ?? '';
-    const challenges = (ci?.challenges ?? []).join(', ');
+    const challenges = (ci?.challenges ?? []).join('; ');
+    const painAxis = ci?.painAxis ?? '';
+    const painDetail = ci?.painDetail ?? '';
+    const budget = ci?.budget ?? '';
+    const decisionAuthority = ci?.decisionAuthority ?? '';
     const email = ci?.email ?? '';
+    const freeText = ci?.freeText ?? '';
 
     // users テーブルからの情報
     const userInfo = r.line_user_id ? usersMap.get(r.line_user_id) : undefined;
@@ -126,7 +136,12 @@ export async function GET(): Promise<NextResponse> {
       escapeCsv(employeeCount),
       escapeCsv(role),
       escapeCsv(challenges),
+      escapeCsv(painAxis),
+      escapeCsv(painDetail),
+      escapeCsv(budget),
+      escapeCsv(decisionAuthority),
       escapeCsv(email),
+      escapeCsv(freeText),
       escapeCsv(userLevel),
       escapeCsv(userStatus),
     ].join(',');

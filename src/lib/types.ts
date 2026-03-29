@@ -122,10 +122,15 @@ export const LEVEL_STAGE_CONFIG: Record<LevelStage, {
 
 /** 企業情報（診断フォームで収集） */
 export interface CompanyInfo {
-  employeeCount: string;  // '1-5名' | '6-20名' | '21-50名' | '51-100名' | '101名以上'
-  role: string;           // '経営者・役員' | '管理職' | '一般社員' | 'IT担当' | 'その他'
-  challenges: string[];   // ['売上管理', '顧客管理', ...]
-  email: string;          // 任意
+  employeeCount: string;      // '1-5名' | '6-20名' | '21-50名' | '51-100名' | '101名以上'
+  role: string;               // '経営者・役員' | '管理職' | '一般社員' | 'IT担当' | 'その他'
+  challenges: string[];       // STEP1: 困りごと選択
+  painDetail: string;         // STEP2: 弱軸深掘り回答
+  painAxis: string;           // STEP2: 対象軸 ('a1' | 'a2' | 'b' | 'c' | 'd')
+  budget: string;             // STEP3: 予算感
+  decisionAuthority: string;  // STEP3: 決裁権
+  email: string;              // 任意
+  freeText: string;           // STEP4: 自由記述
 }
 
 export type ExitType = 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';

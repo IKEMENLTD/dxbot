@@ -28,7 +28,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     await supabase
       .from('assessment_responses')
-      .update({ company_info: companyInfo as { employeeCount: string; role: string; challenges: string[]; email: string } })
+      .update({ company_info: companyInfo as { employeeCount: string; role: string; challenges: string[]; painDetail?: string; painAxis?: string; budget?: string; decisionAuthority?: string; email: string; freeText?: string } })
       .eq('id', assessmentId);
 
     return NextResponse.json({ ok: true });

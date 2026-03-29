@@ -314,7 +314,182 @@ Stage 3: 精密ヒアリング（30問・5択・約15分）
 
 ---
 
-## 14. 最終更新
+## 14. LINE Webhook 会話フェーズ
+
+### 状態遷移図
+
+```
+友だち追加
+  → idle → welcome_sent → source_question → consent_pending → industry_select
+  → diagnosis (6問) → diagnosis_complete
+  → band_survey (15問) → precision_interview (30問)
+  → step_ready ⇄ step_active (ステップ配信ループ)
+```
+
+### 全11フェーズ
+
+| フェーズ | 状態データ | 説明 |
+|---------|-----------|------|
+| `idle` | - | 初期状態 |
+| `welcome_sent` | - | ウェルカムメッセージ送信済み |
+| `source_question` | - | 流入元を質問中 |
+| `consent_pending` | - | 同意待ち |
+| `industry_select` | - | 業種選択中 |
+| `diagnosis` | questionIndex, scores | Stage1 初回診断（6問）実施中 |
+| `diagnosis_complete` | scores | Stage1 完了 |
+| `band_survey` | questionIndex, answers | Stage2 バンドサーベイ（15問）実施中 |
+| `precision_interview` | questionIndex, answers, targetBand | Stage3 精密ヒアリング（30問）実施中 |
+| `step_ready` | weakAxis, completedStepIds, stumbleCount, stumbleHowCount | 次ステップ提案待ち |
+| `step_active` | currentStepId, weakAxis, completedStepIds, stumbleCount, stumbleHowCount | ステップ実行中 |
+
+---
+
+## 15. 公開ページ一覧
+
+| パス | 機能 |
+|------|------|
+| `/` | ランディングページ（DXBOTサービス紹介、FAQ）|
+| `/login` | ユーザーログイン |
+| `/register` | ユーザー登録 |
+| `/assessment` | DXレベル診断フォーム（30問5択）|
+| `/track/[code]` | トラッキングリンク追跡・リダイレクト |
+| `/admindashboard/login` | 管理画面ログイン |
+
+---
+
+## 16. app_settings キー一覧
+
+| キー | 値の型 | 用途 |
+|------|--------|------|
+| `line_config` | `{ encryptedAccessToken, encryptedSecret, webhookUrl, botName, botBasicId, verified }` | LINE Bot接続設定（暗号化） |
+| `tags` | `[{ id, label, color }]` | ユーザータグマスター |
+| `lead_sources` | `[{ id, label }]` | 流入元マスター |
+| `templates` | `[{ id, text }]` | チャット定型文 |
+| `exits` | `[{ id, label, colorType, colorClass, bgClass }]` | 出口タイプ設定 |
+| `statuses` | `[{ id, label, colorClass }]` | 顧客ステータス設定 |
+| `steps` | `StepDefinition[]` | 30ステップ配信内容 |
+| `cta_config` | `CtaConfig` | CTA 6トリガーのパラメータ |
+| `reminder_config` | `ReminderConfig` | リマインダー間隔・メッセージ |
+| `diagnosis_config` | `DiagnosisConfig` | 初回診断設定（閾値・質問・業種）|
+| `precision_questions` | `PrecisionQuestion[]` | 精密ヒアリング30問（カスタム）|
+| `assessment_style` | `AssessmentStyle` | 診断フォーム外観設定（形状・色・サイズ）|
+| `recommend_weights` | `Record<ExitType, AxisWeights>` | 推奨出口の軸重み付け |
+
+---
+
+## 17. ステップ配信システム
+
+### 概要
+- LINE Botが1日1ステップずつ配信
+- ユーザーの弱軸（weakAxis）に基づいてステップを選択
+- 完了/スタンブル（つまずき）を記録
+
+### ステップ構造
+```typescript
+interface StepDefinition {
+  id: string;           // "S01" ~ "S30"
+  name: string;         // ステップ名
+  description: string;  // 説明文
+  axis: keyof AxisScores; // 対応軸 (a1/a2/b/c/d)
+  difficulty: 1 | 2 | 3;  // 難易度
+  estimatedMinutes: number; // 所要時間
+  actionItems: string[];    // アクションアイテム
+  recommendedTools: string[]; // 推奨ツール
+}
+```
+
+### スタンブル（つまずき）
+
+| タイプ | 意味 | カウント対象 |
+|--------|------|------------|
+| `how` | やり方がわからない | stumbleHowCount |
+| `motivation` | やる気が出ない | stumbleCount |
+| `time` | 時間がない | stumbleCount |
+
+### バッジシステム
+
+| バッジ | 条件 |
+|--------|------|
+| `cta_fired` | CTA発火済み |
+| `action_boost` | 行動加速達成 |
+| `inactive_30d` | 30日非アクティブ |
+| `new_this_week` | 今週の新規ユーザー |
+| `techstars_grad` | TECHSTARS修了 |
+
+---
+
+## 18. コンポーネント一覧
+
+### チャット (4)
+| コンポーネント | 用途 |
+|---------------|------|
+| ContactList | ユーザー一覧（未読バッジ、検索、ソート）|
+| MessageList | メッセージ表示（既読/未読トグル、画像プレビュー）|
+| ChatInput | メッセージ入力（定型文、メディア添付）|
+| UserInfoPanel | 選択ユーザー情報パネル（タグ、メモ、ステータス変更）|
+
+### ダッシュボード (4)
+| コンポーネント | 用途 |
+|---------------|------|
+| FilterBar | フィルター（出口、ステータス、流入元、検索）|
+| HotUsersTable | アクティブユーザーテーブル |
+| StatsCards | 統計サマリカード |
+| TodayActions | 本日のアクション一覧 |
+
+### ファネル (5)
+| コンポーネント | 用途 |
+|---------------|------|
+| FunnelChart | ファネルバーチャート（ステージ間CVR表示）|
+| WeeklyTrend | 週次トレンド折れ線グラフ（Recharts）|
+| ExitCards | 出口別成約・収益カード |
+| LtvTracker | TECHSTARS修了者LTV追跡 |
+| GoalProgress | 月間目標進捗（インライン編集対応）|
+
+### 設定 (12)
+| コンポーネント | 用途 |
+|---------------|------|
+| LineSettings | LINE Bot接続設定（5ステップウィザード）|
+| TagSettings | タグ管理（追加/削除/CSV import）|
+| LeadSourceSettings | 流入元管理（追加/削除）|
+| TemplateSettings | 定型文管理（インライン編集）|
+| ExitSettings | 出口タイプ管理（追加/削除/色選択）|
+| StatusSettings | 顧客ステータス管理（追加/削除/色選択）|
+| StepSettings | ステップ配信設定（モーダル編集）|
+| StepDetailModal | ステップ詳細編集モーダル |
+| CtaSettings | CTA 6トリガー設定（アコーディオン）|
+| ReminderSettings | リマインダー設定（リアルタイム昇順検証）|
+| DiagnosisSettings | 診断設定（設問/業種/外観カスタマイズ）|
+| GoalSettings | 月間目標設定（6か月テーブル）|
+
+### ユーザー詳細 (6)
+| コンポーネント | 用途 |
+|---------------|------|
+| UserHeader | ユーザーヘッダー（名前/レベル/ステータス）|
+| RadarChart | 5軸レーダーチャート |
+| Timeline | タイムラインイベント |
+| StumbleHistory | つまずき履歴 |
+| LtvHistory | LTV推移グラフ |
+| NotesActions | ノート/アクション管理 |
+
+### UI共通 (4)
+| コンポーネント | 用途 |
+|---------------|------|
+| Badge | 汎用バッジ |
+| ExitBadge | 出口タイプバッジ |
+| Toast | トースト通知 |
+| UserAvatar | ユーザーアバター |
+
+### レイアウト (4)
+| コンポーネント | 用途 |
+|---------------|------|
+| DashboardLayout | ダッシュボードレイアウト（サイドバー+メイン）|
+| Header | ページヘッダー |
+| Sidebar | サイドバーナビ（6項目+KPI+ログアウト）|
+| SidebarContext | サイドバー状態管理（幅/折りたたみ）|
+
+---
+
+## 19. 最終更新
 
 - **日付**: 2026-03-28
 - **最新Migration**: 015

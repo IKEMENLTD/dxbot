@@ -376,6 +376,39 @@ export interface DiagnosisConfig {
   scoreMultiplier: number; // デフォルト: 3
 }
 
+// ===== 診断フォーム外観設定型定義 =====
+
+/** 診断フォームのボタン形状プリセット */
+export type AssessmentButtonShape = 'square' | 'pill' | 'bar' | 'minimal' | 'circle';
+
+/** 診断フォームの外観カスタマイズ設定 */
+export interface AssessmentStyle {
+  buttonShape: AssessmentButtonShape;
+  buttonSize: number;           // px (40-64)
+  accentColor: string;          // hex: アクセントカラー
+  bgColor: string;              // hex: ページ背景色
+  questionTextColor: string;    // hex: 設問テキスト色
+  labelTextColor: string;       // hex: 端ラベル色
+  scaleColors: [string, string, string, string, string]; // 1-5のボタン色
+  labelLeft: string;            // 左端ラベル（デフォルト「全くない」）
+  labelRight: string;           // 右端ラベル（デフォルト「完璧」）
+  progressBarColor: string;     // hex: プログレスバー色
+}
+
+/** デフォルトの診断フォーム外観設定 */
+export const DEFAULT_ASSESSMENT_STYLE: AssessmentStyle = {
+  buttonShape: 'square',
+  buttonSize: 52,
+  accentColor: '#3b82f6',
+  bgColor: '#050505',
+  questionTextColor: '#ffffff',
+  labelTextColor: '#6b7280',
+  scaleColors: ['#ef4444', '#f59e0b', '#9ca3af', '#60a5fa', '#3b82f6'],
+  labelLeft: '全くない',
+  labelRight: '完璧',
+  progressBarColor: '#3b82f6',
+};
+
 export const LEAD_SOURCE_LABELS: Record<string, string> = {
   apo: "APO",
   threads: "Threads",

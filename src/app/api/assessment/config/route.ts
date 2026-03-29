@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server';
 import { getAppSetting } from '@/lib/queries';
 import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
 import type { PrecisionQuestion } from '@/lib/precision-interview';
+import type { AssessmentStyle } from '@/lib/types';
+import { DEFAULT_ASSESSMENT_STYLE } from '@/lib/types';
 
 interface EncryptedLineConfig {
   botBasicId?: string | null;
@@ -16,6 +18,7 @@ interface EncryptedLineConfig {
 interface AssessmentConfigResponse {
   lineUrl: string | null;
   questions: PrecisionQuestion[];
+  style: AssessmentStyle;
 }
 
 function buildFriendUrl(botBasicId: string | null | undefined): string | null {
@@ -44,15 +47,24 @@ export async function GET(): Promise<NextResponse<AssessmentConfigResponse>> {
         ? customQuestions
         : PRECISION_QUESTIONS;
 
+    // 外観設定の取得
+    const savedStyle = await getAppSetting<AssessmentStyle>('assessment_style');
+    const style: AssessmentStyle =
+      savedStyle !== null && typeof savedStyle === 'object' && !Array.isArray(savedStyle)
+        ? { ...DEFAULT_ASSESSMENT_STYLE, ...savedStyle }
+        : DEFAULT_ASSESSMENT_STYLE;
+
     return NextResponse.json({
       lineUrl: buildFriendUrl(botBasicId),
       questions,
+      style,
     });
   } catch (err) {
     console.error('[Assessment Config] エラー:', err);
     return NextResponse.json({
       lineUrl: null,
       questions: PRECISION_QUESTIONS,
+      style: DEFAULT_ASSESSMENT_STYLE,
     });
   }
 }

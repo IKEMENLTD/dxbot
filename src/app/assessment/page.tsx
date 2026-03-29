@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
 import type { PrecisionQuestion } from '@/lib/precision-interview';
-import { LEVEL_BAND_CONFIG } from '@/lib/types';
+import { LEVEL_BAND_CONFIG, DEFAULT_ASSESSMENT_STYLE } from '@/lib/types';
 import { INDUSTRIES } from '@/lib/assessment-constants';
-import type { LevelBand } from '@/lib/types';
+import type { LevelBand, AssessmentStyle, AssessmentButtonShape } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -58,6 +58,61 @@ const SCALE_COLORS = [
   { bg: '#081018', border: '#204060', text: '#60a5fa' },  // 4: 暗い青
   { bg: '#0a1628', border: '#1d4ed8', text: '#3b82f6' },  // 5: 青（アクセント）
 ];
+
+// ---------------------------------------------------------------------------
+// ボタン形状スタイル生成
+// ---------------------------------------------------------------------------
+
+function getButtonStyle(
+  shape: AssessmentButtonShape,
+  size: number,
+  color: string,
+  isSelected: boolean,
+): React.CSSProperties {
+  const base: React.CSSProperties = {
+    width: shape === 'bar' ? size * 1.5 : size,
+    height: shape === 'bar' ? size * 0.6 : size,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: size * 0.35,
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  };
+
+  switch (shape) {
+    case 'pill':
+      return { ...base, borderRadius: 999 };
+    case 'circle':
+      return { ...base, borderRadius: '50%' };
+    case 'bar':
+      return { ...base, borderRadius: 0 };
+    case 'minimal':
+      return {
+        ...base,
+        border: 'none',
+        background: 'transparent',
+        borderBottom: isSelected ? `3px solid ${color}` : '3px solid transparent',
+        color: isSelected ? color : '#6b7280',
+      };
+    case 'square':
+    default:
+      return { ...base, borderRadius: 0 };
+  }
+}
+
+/**
+ * スケールカラーからボタン用の明暗色を生成
+ * アクセント色をベースに背景・ボーダー・テキスト色を算出
+ */
+function scaleColorSet(hex: string): { bg: string; border: string; text: string } {
+  return {
+    bg: hex + '1a',      // 10% opacity (hex背景)
+    border: hex + '66',  // 40% opacity
+    text: hex,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // ProfileStep コンポーネント
@@ -219,11 +274,13 @@ function SurveyStep({
   questions,
   onAnswerChange,
   onComplete,
+  style,
 }: {
   answers: number[];
   questions: PrecisionQuestion[];
   onAnswerChange: (answers: number[]) => void;
   onComplete: () => void;
+  style: AssessmentStyle;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
@@ -267,14 +324,14 @@ function SurveyStep({
           <span style={{ color: COLORS.textMuted, fontSize: 12, letterSpacing: '0.1em' }}>
             質問 {currentIndex + 1} / {questionCount}
           </span>
-          <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 600 }}>
+          <span style={{ color: style.progressBarColor, fontSize: 12, fontWeight: 600 }}>
             {Math.round(progress)}%
           </span>
         </div>
         <div style={{ background: '#1a1a1a', height: 3, width: '100%' }}>
           <div
             style={{
-              background: COLORS.accent,
+              background: style.progressBarColor,
               height: '100%',
               width: `${progress}%`,
               transition: 'width 0.3s ease',
@@ -290,9 +347,9 @@ function SurveyStep({
           <span
             style={{
               display: 'inline-block',
-              background: '#0a1628',
-              border: `1px solid ${COLORS.accentDim}`,
-              color: COLORS.accent,
+              background: style.accentColor + '1a',
+              border: `1px solid ${style.accentColor}66`,
+              color: style.accentColor,
               fontSize: 11,
               padding: '3px 10px',
               letterSpacing: '0.08em',
@@ -303,7 +360,7 @@ function SurveyStep({
         </div>
 
         {/* 設問 */}
-        <p style={{ fontSize: 16, lineHeight: 1.8, color: '#fff', marginBottom: 28, fontWeight: 400 }}>
+        <p style={{ fontSize: 16, lineHeight: 1.8, color: style.questionTextColor, marginBottom: 28, fontWeight: 400 }}>
           {question.question}
         </p>
 
@@ -311,37 +368,32 @@ function SurveyStep({
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
             <div style={{ textAlign: 'right', minWidth: 48 }}>
-              <span style={{ color: COLORS.textDim, fontSize: 12, display: 'block' }}>
-                全くない
+              <span style={{ color: style.labelTextColor, fontSize: 12, display: 'block' }}>
+                {style.labelLeft}
               </span>
-              <span style={{ color: COLORS.textDim, fontSize: 10, display: 'block', marginTop: 2 }}>
+              <span style={{ color: style.labelTextColor, fontSize: 10, display: 'block', marginTop: 2 }}>
                 1
               </span>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               {[1, 2, 3, 4, 5].map((v) => {
                 const isSelected = selected === v;
-                const scaleColor = SCALE_COLORS[v - 1];
+                const sc = scaleColorSet(style.scaleColors[v - 1]);
+                const btnStyle = getButtonStyle(style.buttonShape, style.buttonSize, style.scaleColors[v - 1], isSelected);
                 return (
                   <div key={v} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <button
                       onClick={() => handleSelect(v)}
                       style={{
-                        width: 52,
-                        height: 52,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 18,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
+                        ...btnStyle,
                         transform: isSelected ? 'scale(1.1)' : 'scale(1)',
-                        border: isSelected
-                          ? `2px solid ${scaleColor.border}`
-                          : '1px solid #222',
-                        background: isSelected ? scaleColor.bg : '#111',
-                        color: isSelected ? scaleColor.text : '#6b7280',
+                        ...(style.buttonShape !== 'minimal' ? {
+                          border: isSelected
+                            ? `2px solid ${sc.border}`
+                            : '1px solid #222',
+                          background: isSelected ? sc.bg : '#111',
+                          color: isSelected ? sc.text : '#6b7280',
+                        } : {}),
                       }}
                     >
                       {v}
@@ -349,10 +401,10 @@ function SurveyStep({
                     {/* インジケーターバー */}
                     <div
                       style={{
-                        width: 52,
+                        width: style.buttonShape === 'bar' ? style.buttonSize * 1.5 : style.buttonSize,
                         height: 4,
                         marginTop: 4,
-                        background: isSelected ? scaleColor.text : 'transparent',
+                        background: isSelected ? sc.text : 'transparent',
                         transition: 'background 0.15s',
                       }}
                     />
@@ -361,10 +413,10 @@ function SurveyStep({
               })}
             </div>
             <div style={{ textAlign: 'left', minWidth: 48 }}>
-              <span style={{ color: COLORS.textDim, fontSize: 12, display: 'block' }}>
-                完璧
+              <span style={{ color: style.labelTextColor, fontSize: 12, display: 'block' }}>
+                {style.labelRight}
               </span>
-              <span style={{ color: COLORS.textDim, fontSize: 10, display: 'block', marginTop: 2 }}>
+              <span style={{ color: style.labelTextColor, fontSize: 10, display: 'block', marginTop: 2 }}>
                 5
               </span>
             </div>
@@ -564,12 +616,13 @@ export default function AssessmentPage() {
   const [questions, setQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
   const [answers, setAnswers] = useState<number[]>(new Array(PRECISION_QUESTIONS.length).fill(0));
   const [lineUrl, setLineUrl] = useState<string | null>(null);
+  const [assessmentStyle, setAssessmentStyle] = useState<AssessmentStyle>(DEFAULT_ASSESSMENT_STYLE);
 
   // 管理画面のLINE設定 + カスタム設問を取得
   useEffect(() => {
     const controller = new AbortController();
     fetch('/api/assessment/config', { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null; questions?: PrecisionQuestion[] }> : null))
+      .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null; questions?: PrecisionQuestion[]; style?: AssessmentStyle }> : null))
       .then((data) => {
         if (data) {
           if (data.lineUrl) setLineUrl(data.lineUrl);
@@ -577,6 +630,7 @@ export default function AssessmentPage() {
             setQuestions(data.questions);
             setAnswers(new Array(data.questions.length).fill(0));
           }
+          if (data.style) setAssessmentStyle({ ...DEFAULT_ASSESSMENT_STYLE, ...data.style });
         }
       })
       .catch(() => { /* フォールバック: デフォルト値のまま */ });
@@ -621,12 +675,15 @@ export default function AssessmentPage() {
   // survey → profile → submitting → result
   if (step === 'survey') {
     return (
-      <SurveyStep
-        answers={answers}
-        questions={questions}
-        onAnswerChange={setAnswers}
-        onComplete={() => setStep('profile')}
-      />
+      <div style={{ minHeight: '100vh', background: assessmentStyle.bgColor }}>
+        <SurveyStep
+          answers={answers}
+          questions={questions}
+          onAnswerChange={setAnswers}
+          onComplete={() => setStep('profile')}
+          style={assessmentStyle}
+        />
+      </div>
     );
   }
 

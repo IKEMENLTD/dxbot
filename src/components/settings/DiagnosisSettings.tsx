@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { DiagnosisConfig, DiagnosisAxis } from "@/lib/types";
+import type { DiagnosisConfig, DiagnosisAxis, AssessmentStyle, AssessmentButtonShape } from "@/lib/types";
+import { DEFAULT_ASSESSMENT_STYLE } from "@/lib/types";
 import { PRECISION_QUESTIONS } from "@/lib/precision-interview";
 import type { PrecisionQuestion } from "@/lib/precision-interview";
 import { useToast } from "@/contexts/ToastContext";
@@ -56,6 +57,11 @@ export default function DiagnosisSettings() {
   const [precisionQuestions, setPrecisionQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
   const [savingPrecision, setSavingPrecision] = useState(false);
   const [precisionLoading, setPrecisionLoading] = useState(true);
+
+  // 外観設定 state
+  const [assessmentStyle, setAssessmentStyle] = useState<AssessmentStyle>(DEFAULT_ASSESSMENT_STYLE);
+  const [savingStyle, setSavingStyle] = useState(false);
+  const [styleLoading, setStyleLoading] = useState(true);
 
   const checkThresholds = useCallback((thresholds: [number, number, number]) => {
     if (thresholds[0] >= thresholds[1]) {
@@ -128,6 +134,125 @@ export default function DiagnosisSettings() {
       clearTimeout(timeoutId);
     };
   }, []);
+
+  // 初期ロード: assessment_style
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    fetch("/api/settings/app?key=assessment_style", { signal: controller.signal })
+      .then((res) => res.json())
+      .then((json: { data: AssessmentStyle | null }) => {
+        if (json.data && typeof json.data === "object") {
+          setAssessmentStyle({ ...DEFAULT_ASSESSMENT_STYLE, ...json.data });
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.warn("[DiagnosisSettings] 外観設定読み込みタイムアウト");
+        } else {
+          console.error("[DiagnosisSettings] 外観設定読み込みエラー:", err);
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setStyleLoading(false);
+      });
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // 保存: assessment_style
+  const handleSaveStyle = async () => {
+    setSavingStyle(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const res = await fetch("/api/settings/app", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "assessment_style", value: assessmentStyle }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "保存に失敗しました" }));
+        const errMsg = typeof errBody.error === "string" ? errBody.error : "保存に失敗しました";
+        addToast("error", errMsg);
+        return;
+      }
+
+      addToast("success", "フォーム外観設定を保存しました");
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        addToast("error", "保存がタイムアウトしました");
+      } else {
+        addToast("error", "保存中にエラーが発生しました");
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      setSavingStyle(false);
+    }
+  };
+
+  // 外観設定をデフォルトに戻す
+  const handleResetStyle = () => {
+    if (!window.confirm("フォーム外観設定をデフォルトに戻しますか？")) return;
+    setAssessmentStyle(DEFAULT_ASSESSMENT_STYLE);
+  };
+
+  // スケールカラー変更
+  const handleScaleColorChange = (index: 0 | 1 | 2 | 3 | 4, value: string) => {
+    setAssessmentStyle((prev) => {
+      const newColors: [string, string, string, string, string] = [...prev.scaleColors];
+      newColors[index] = value;
+      return { ...prev, scaleColors: newColors };
+    });
+  };
+
+  // ボタン形状プレビュー用スタイル生成
+  const getPreviewButtonStyle = (
+    shape: AssessmentButtonShape,
+    size: number,
+    color: string,
+    isSelected: boolean,
+  ): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      width: shape === "bar" ? size * 1.5 : size,
+      height: shape === "bar" ? size * 0.6 : size,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: size * 0.35,
+      fontWeight: 700,
+      cursor: "pointer",
+      transition: "all 0.15s",
+    };
+
+    switch (shape) {
+      case "pill":
+        return { ...base, borderRadius: 999 };
+      case "circle":
+        return { ...base, borderRadius: "50%" };
+      case "bar":
+        return { ...base, borderRadius: 0 };
+      case "minimal":
+        return {
+          ...base,
+          border: "none",
+          background: "transparent",
+          borderBottom: isSelected ? `3px solid ${color}` : "3px solid transparent",
+          color: isSelected ? color : "#6b7280",
+        };
+      case "square":
+      default:
+        return { ...base, borderRadius: 0 };
+    }
+  };
 
   // 保存: diagnosis_config
   const handleSave = async () => {
@@ -310,8 +435,251 @@ export default function DiagnosisSettings() {
     );
   }
 
+  const SHAPE_OPTIONS: { value: AssessmentButtonShape; label: string }[] = [
+    { value: "square", label: "四角" },
+    { value: "pill", label: "カプセル" },
+    { value: "bar", label: "バー" },
+    { value: "minimal", label: "ミニマル" },
+    { value: "circle", label: "丸" },
+  ];
+
   return (
     <div>
+      {/* ========== フォーム外観設定 ========== */}
+      <div className="mb-10 border-b border-gray-200 pb-8">
+        <h3 className="text-sm font-semibold text-gray-800 mb-1">
+          フォーム外観設定
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          /assessment ページの診断フォームの見た目をカスタマイズできます。
+        </p>
+
+        {styleLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin h-5 w-5 border-2 border-green-600 border-t-transparent rounded-full" />
+            <span className="ml-2 text-xs text-gray-500">外観設定を読み込み中...</span>
+          </div>
+        ) : (
+          <>
+            {/* ボタン形状 */}
+            <div className="mb-5">
+              <label className="block text-xs text-gray-500 mb-2">ボタン形状</label>
+              <div className="flex gap-3">
+                {SHAPE_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setAssessmentStyle((prev) => ({ ...prev, buttonShape: value }))}
+                    className={`p-3 border transition-colors flex flex-col items-center gap-1 ${
+                      assessmentStyle.buttonShape === value
+                        ? "border-green-500 bg-green-50"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div
+                      style={{
+                        width: value === "bar" ? 36 : 24,
+                        height: value === "bar" ? 14 : 24,
+                        background: value === "minimal" ? "transparent" : "#3b82f6",
+                        borderRadius:
+                          value === "pill" ? 999 :
+                          value === "circle" ? "50%" : 0,
+                        ...(value === "minimal" ? { borderBottom: "2px solid #3b82f6" } : {}),
+                      }}
+                    />
+                    <span className="text-[10px] text-gray-500">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ボタンサイズ */}
+            <div className="mb-5">
+              <label className="block text-xs text-gray-500 mb-2">
+                ボタンサイズ: {assessmentStyle.buttonSize}px
+              </label>
+              <input
+                type="range"
+                min={40}
+                max={64}
+                value={assessmentStyle.buttonSize}
+                onChange={(e) =>
+                  setAssessmentStyle((prev) => ({ ...prev, buttonSize: parseInt(e.target.value, 10) }))
+                }
+                className="w-full max-w-xs"
+              />
+            </div>
+
+            {/* カラー設定 */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-5">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">アクセントカラー</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={assessmentStyle.accentColor}
+                    onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, accentColor: e.target.value }))}
+                    className="w-8 h-8 border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">{assessmentStyle.accentColor}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">背景色</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={assessmentStyle.bgColor}
+                    onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, bgColor: e.target.value }))}
+                    className="w-8 h-8 border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">{assessmentStyle.bgColor}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">設問テキスト色</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={assessmentStyle.questionTextColor}
+                    onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, questionTextColor: e.target.value }))}
+                    className="w-8 h-8 border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">{assessmentStyle.questionTextColor}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">端ラベル色</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={assessmentStyle.labelTextColor}
+                    onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, labelTextColor: e.target.value }))}
+                    className="w-8 h-8 border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">{assessmentStyle.labelTextColor}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">プログレスバー色</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={assessmentStyle.progressBarColor}
+                    onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, progressBarColor: e.target.value }))}
+                    className="w-8 h-8 border border-gray-200 cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-400 font-mono">{assessmentStyle.progressBarColor}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* スケールカラー（1-5） */}
+            <div className="mb-5">
+              <label className="block text-xs text-gray-500 mb-2">スケールカラー（1-5）</label>
+              <div className="flex gap-3">
+                {([0, 1, 2, 3, 4] as const).map((idx) => (
+                  <div key={idx} className="flex flex-col items-center gap-1">
+                    <input
+                      type="color"
+                      value={assessmentStyle.scaleColors[idx]}
+                      onChange={(e) => handleScaleColorChange(idx, e.target.value)}
+                      className="w-8 h-8 border border-gray-200 cursor-pointer"
+                    />
+                    <span className="text-[10px] text-gray-400">{idx + 1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 端ラベルテキスト */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">左端ラベル</label>
+                <input
+                  type="text"
+                  value={assessmentStyle.labelLeft}
+                  onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, labelLeft: e.target.value }))}
+                  placeholder="全くない"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">右端ラベル</label>
+                <input
+                  type="text"
+                  value={assessmentStyle.labelRight}
+                  onChange={(e) => setAssessmentStyle((prev) => ({ ...prev, labelRight: e.target.value }))}
+                  placeholder="完璧"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-green-400 focus:ring-1 focus:ring-green-200 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* ライブプレビュー */}
+            <div className="rounded-xl p-6 mt-4" style={{ background: assessmentStyle.bgColor }}>
+              <p className="text-xs text-gray-500 mb-3">プレビュー</p>
+              {/* プログレスバー プレビュー */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ background: '#1a1a1a', height: 3, width: '100%' }}>
+                  <div style={{ background: assessmentStyle.progressBarColor, height: '100%', width: '60%' }} />
+                </div>
+              </div>
+              {/* 設問プレビュー */}
+              <p style={{ color: assessmentStyle.questionTextColor, fontSize: 14, marginBottom: 12 }}>
+                売上管理はどの程度デジタル化されていますか？
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: assessmentStyle.labelTextColor, fontSize: 12 }}>{assessmentStyle.labelLeft}</span>
+                {[1, 2, 3, 4, 5].map((v) => {
+                  const isSelected = v === 3;
+                  const color = assessmentStyle.scaleColors[v - 1];
+                  const btnStyle = getPreviewButtonStyle(assessmentStyle.buttonShape, assessmentStyle.buttonSize, color, isSelected);
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      style={{
+                        ...btnStyle,
+                        transform: isSelected ? "scale(1.1)" : "scale(1)",
+                        ...(assessmentStyle.buttonShape !== "minimal" ? {
+                          border: isSelected ? `2px solid ${color}66` : "1px solid #222",
+                          background: isSelected ? `${color}1a` : "#111",
+                          color: isSelected ? color : "#6b7280",
+                        } : {}),
+                      }}
+                    >
+                      {v}
+                    </button>
+                  );
+                })}
+                <span style={{ color: assessmentStyle.labelTextColor, fontSize: 12 }}>{assessmentStyle.labelRight}</span>
+              </div>
+            </div>
+
+            {/* ボタン群（外観設定） */}
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                type="button"
+                onClick={handleSaveStyle}
+                disabled={savingStyle}
+                className="bg-green-600 text-white text-sm font-medium px-5 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {savingStyle ? "保存中..." : "外観設定を保存"}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetStyle}
+                disabled={savingStyle}
+                className="bg-white text-gray-500 text-sm font-medium px-5 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed transition-colors"
+              >
+                デフォルトに戻す
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* バンド閾値設定 */}
       <div className="mb-6">
         <h3 className="text-sm font-medium text-gray-700 mb-3">バンド閾値設定</h3>

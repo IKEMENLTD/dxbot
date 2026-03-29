@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PRECISION_QUESTIONS, PRECISION_OPTIONS } from '@/lib/precision-interview';
+import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG } from '@/lib/types';
 import { INDUSTRIES } from '@/lib/assessment-constants';
 import type { LevelBand } from '@/lib/types';
@@ -10,7 +10,7 @@ import type { LevelBand } from '@/lib/types';
 // 型定義
 // ---------------------------------------------------------------------------
 
-type FormStep = 'profile' | 'survey' | 'submitting' | 'result' | 'error';
+type FormStep = 'survey' | 'profile' | 'submitting' | 'result' | 'error';
 
 interface ProfileData {
   name: string;
@@ -103,14 +103,13 @@ function ProfileStep({
       {/* ヘッダー */}
       <div style={{ marginBottom: 48 }}>
         <div style={{ color: COLORS.accent, fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>
-          DX LEVEL ASSESSMENT
+          ALMOST DONE
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#fff', margin: 0, lineHeight: 1.3 }}>
-          DXレベル無料診断
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#fff', margin: 0, lineHeight: 1.3 }}>
+          あと少しで結果が見られます
         </h1>
-        <p style={{ color: COLORS.textMuted, marginTop: 16, fontSize: 14, lineHeight: 1.7 }}>
-          30問の設問（約15分）であなたの会社のDX推進レベルをLv.1〜50で測定します。
-          回答後すぐに5軸のDXスコアとレベルを表示します。
+        <p style={{ color: COLORS.textMuted, marginTop: 12, fontSize: 14, lineHeight: 1.7 }}>
+          診断結果の作成に以下の情報が必要です。
         </p>
       </div>
 
@@ -187,7 +186,7 @@ function ProfileStep({
             letterSpacing: '0.05em',
           }}
         >
-          診断を開始する
+          結果を見る
         </button>
 
         <p style={{ color: COLORS.textDim, fontSize: 12, textAlign: 'center', marginTop: 16 }}>
@@ -209,10 +208,9 @@ function SurveyStep({
 }: {
   answers: number[];
   onAnswerChange: (answers: number[]) => void;
-  onComplete: (answers: number[]) => void;
+  onComplete: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [error, setError] = useState('');
 
   const question = PRECISION_QUESTIONS[currentIndex];
   const progress = ((currentIndex + 1) / 30) * 100;
@@ -222,19 +220,15 @@ function SurveyStep({
     const next = [...answers];
     next[currentIndex] = value;
     onAnswerChange(next);
-    setError('');
-  }
 
-  function handleNext() {
-    if (selected === 0) {
-      setError('選択肢を選んでください');
-      return;
-    }
-    if (currentIndex < 29) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      onComplete(answers);
-    }
+    // auto-advance: 300ms後に次の設問へ
+    setTimeout(() => {
+      if (currentIndex < 29) {
+        setCurrentIndex((prev) => prev + 1);
+      } else {
+        onComplete();
+      }
+    }, 300);
   }
 
   function handlePrev() {
@@ -283,72 +277,65 @@ function SurveyStep({
       </div>
 
       {/* 設問 */}
-      <p style={{ fontSize: 18, lineHeight: 1.7, color: '#fff', marginBottom: 32, fontWeight: 500 }}>
+      <p style={{ fontSize: 16, lineHeight: 1.8, color: '#fff', marginBottom: 28, fontWeight: 400 }}>
         {question.question}
       </p>
 
-      {/* 5択ボタン */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {PRECISION_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => handleSelect(opt.value)}
-            style={{
-              background: selected === opt.value ? '#0a1628' : '#111',
-              border: `${selected === opt.value ? '2px' : '1px'} solid ${
-                selected === opt.value ? COLORS.accent : COLORS.border
-              }`,
-              color: selected === opt.value ? COLORS.accent : COLORS.text,
-              padding: '14px 18px',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 14,
-              lineHeight: 1.4,
-              transition: 'all 0.1s',
-            }}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* 横並び5択スケール */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <span style={{ color: COLORS.textDim, fontSize: 11, minWidth: 48, textAlign: 'right' }}>
+            全くない
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[1, 2, 3, 4, 5].map((v) => (
+              <button
+                key={v}
+                onClick={() => handleSelect(v)}
+                style={{
+                  width: 48,
+                  height: 48,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  border: selected === v
+                    ? `2px solid ${COLORS.accent}`
+                    : '1px solid #333',
+                  background: selected === v ? '#0a1628' : '#111',
+                  color: selected === v ? COLORS.accent : COLORS.text,
+                }}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <span style={{ color: COLORS.textDim, fontSize: 11, minWidth: 48 }}>
+            完璧
+          </span>
+        </div>
       </div>
 
-      {error && (
-        <p style={{ color: '#ef4444', fontSize: 13, marginTop: 12 }}>{error}</p>
-      )}
-
-      {/* ナビゲーション */}
-      <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
+      {/* ナビゲーション: 戻るボタンのみ */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 24 }}>
         {currentIndex > 0 && (
           <button
             onClick={handlePrev}
             style={{
               background: 'transparent',
-              border: `1px solid ${COLORS.border}`,
-              color: COLORS.textMuted,
-              padding: '12px 24px',
+              border: 'none',
+              color: COLORS.textDim,
+              padding: '8px 0',
               cursor: 'pointer',
-              fontSize: 14,
+              fontSize: 13,
             }}
           >
-            戻る
+            ← 前の質問に戻る
           </button>
         )}
-        <button
-          onClick={handleNext}
-          style={{
-            flex: 1,
-            background: COLORS.accent,
-            border: 'none',
-            color: '#fff',
-            padding: '14px',
-            cursor: 'pointer',
-            fontSize: 15,
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-          }}
-        >
-          {currentIndex < 29 ? '次へ' : '診断結果を見る'}
-        </button>
       </div>
     </div>
   );
@@ -509,7 +496,7 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
 // ---------------------------------------------------------------------------
 
 export default function AssessmentPage() {
-  const [step, setStep] = useState<FormStep>('profile');
+  const [step, setStep] = useState<FormStep>('survey');
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -526,8 +513,7 @@ export default function AssessmentPage() {
     return () => controller.abort();
   }, []);
 
-  async function handleSurveyComplete(completedAnswers: number[]) {
-    if (!profile) return;
+  async function handleSurveyComplete(completedAnswers: number[], profileData: ProfileData) {
     setStep('submitting');
 
     const controller = new AbortController();
@@ -537,7 +523,7 @@ export default function AssessmentPage() {
       const res = await fetch('/api/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, answers: completedAnswers }),
+        body: JSON.stringify({ ...profileData, answers: completedAnswers }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -558,23 +544,24 @@ export default function AssessmentPage() {
     }
   }
 
-  if (step === 'profile') {
-    return (
-      <ProfileStep
-        onNext={(data) => {
-          setProfile(data);
-          setStep('survey');
-        }}
-      />
-    );
-  }
-
+  // survey → profile → submitting → result
   if (step === 'survey') {
     return (
       <SurveyStep
         answers={answers}
         onAnswerChange={setAnswers}
-        onComplete={handleSurveyComplete}
+        onComplete={() => setStep('profile')}
+      />
+    );
+  }
+
+  if (step === 'profile') {
+    return (
+      <ProfileStep
+        onNext={(data) => {
+          setProfile(data);
+          handleSurveyComplete(answers, data);
+        }}
       />
     );
   }

@@ -9,7 +9,6 @@ import {
   getMessagesSince,
   getAllMessagesSince,
   saveMessage,
-  markAsRead,
   getLineUserIdByUserId,
 } from '@/lib/queries';
 import { pushMessage } from '@/lib/line-client';
@@ -76,9 +75,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // 通常のメッセージ取得
     const messages = await getMessages(userId, limit);
-
-    // 取得時に未読を既読にする
-    await markAsRead(userId);
 
     return NextResponse.json({ messages });
   } catch (error: unknown) {

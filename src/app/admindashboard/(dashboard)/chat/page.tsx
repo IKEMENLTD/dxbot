@@ -218,22 +218,6 @@ export default function ChatPage() {
     []
   );
 
-  // ----- 既読マーク -----
-  const markAsReadApi = useCallback(async (userId: string, signal: AbortSignal) => {
-    try {
-      await fetch("/api/chat/mark-read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-        signal,
-      });
-    } catch (err) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('[Chat] 既読マークエラー:', err);
-      }
-    }
-  }, []);
-
   // ----- 初回ロード -----
   useEffect(() => {
     const controller = new AbortController();
@@ -268,7 +252,7 @@ export default function ChatPage() {
     }
   }, [isInitialLoading, selectedUserId, users, screenSize]);
 
-  // ----- selectedUser変更時にメッセージ取得 + markAsRead -----
+  // ----- selectedUser変更時にメッセージ取得（自動既読は行わない） -----
   useEffect(() => {
     if (!selectedUserId) return;
 
@@ -278,21 +262,6 @@ export default function ChatPage() {
     async function loadMessages() {
       if (!selectedUserId) return;
       await fetchMessagesForUser(selectedUserId, controller.signal);
-      await markAsReadApi(selectedUserId, controller.signal);
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.userId === selectedUserId && m.sender === "user" && !m.read
-            ? { ...m, read: true }
-            : m
-        )
-      );
-
-      setContactPreviews((prev) =>
-        prev.map((c) =>
-          c.userId === selectedUserId ? { ...c, unreadCount: 0 } : c
-        )
-      );
     }
 
     loadMessages();
@@ -301,7 +270,75 @@ export default function ChatPage() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [selectedUserId, fetchMessagesForUser, markAsReadApi]);
+  }, [selectedUserId, fetchMessagesForUser]);
+
+  // ----- 個別メッセージの既読/未読トグル -----
+  const handleToggleRead = useCallback(async (messageId: string, currentRead: boolean) => {
+    const action = currentRead ? 'unread' : 'read';
+
+    // 楽観的更新: messages
+    setMessages(prev => prev.map(m =>
+      m.id === messageId ? { ...m, read: !currentRead } : m
+    ));
+
+    // 楽観的更新: contactPreviews のunreadCount
+    if (selectedUserId) {
+      setContactPreviews(prev => prev.map(c => {
+        if (c.userId !== selectedUserId) return c;
+        return {
+          ...c,
+          unreadCount: currentRead ? c.unreadCount + 1 : Math.max(0, c.unreadCount - 1),
+        };
+      }));
+    }
+
+    try {
+      const res = await fetch('/api/chat/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIds: [messageId], action }),
+      });
+      if (!res.ok) throw new Error('既読更新に失敗しました');
+    } catch {
+      // ロールバック
+      setMessages(prev => prev.map(m =>
+        m.id === messageId ? { ...m, read: currentRead } : m
+      ));
+      if (selectedUserId) {
+        setContactPreviews(prev => prev.map(c => {
+          if (c.userId !== selectedUserId) return c;
+          return {
+            ...c,
+            unreadCount: currentRead ? c.unreadCount : c.unreadCount + 1,
+          };
+        }));
+      }
+    }
+  }, [selectedUserId]);
+
+  // ----- すべて既読 -----
+  const handleMarkAllRead = useCallback(async () => {
+    if (!selectedUserId) return;
+
+    // 楽観的更新
+    setMessages(prev => prev.map(m =>
+      m.userId === selectedUserId && m.sender === 'user' ? { ...m, read: true } : m
+    ));
+    setContactPreviews(prev => prev.map(c =>
+      c.userId === selectedUserId ? { ...c, unreadCount: 0 } : c
+    ));
+
+    try {
+      const res = await fetch('/api/chat/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+      if (!res.ok) throw new Error('全既読に失敗しました');
+    } catch {
+      // ロールバック: 次回ポーリングで正しい状態に戻る
+    }
+  }, [selectedUserId]);
 
   // ----- ポーリング -----
   useEffect(() => {
@@ -704,19 +741,35 @@ export default function ChatPage() {
           </span>
         </div>
 
-        {/* ユーザー情報ボタン（モバイル・タブレット） */}
-        {(isMobile || isTablet) && (
-          <button
-            onClick={handleOpenUserInfo}
-            className="w-10 h-10 flex items-center justify-center flex-shrink-0"
-            aria-label="ユーザー情報を表示"
-          >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="7" r="3" stroke="#6B7280" strokeWidth="1.5" />
-              <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="square" />
-            </svg>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* すべて既読ボタン */}
+          {selectedMessages.some(m => m.sender === 'user' && !m.read) && (
+            <button
+              onClick={handleMarkAllRead}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs text-green-600 hover:bg-green-50 border border-green-200 transition-colors"
+              style={{ borderRadius: "8px" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 7L5.5 10.5L12 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              すべて既読
+            </button>
+          )}
+
+          {/* ユーザー情報ボタン（モバイル・タブレット） */}
+          {(isMobile || isTablet) && (
+            <button
+              onClick={handleOpenUserInfo}
+              className="w-10 h-10 flex items-center justify-center flex-shrink-0"
+              aria-label="ユーザー情報を表示"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <circle cx="10" cy="7" r="3" stroke="#6B7280" strokeWidth="1.5" />
+                <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="square" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -748,6 +801,7 @@ export default function ChatPage() {
           <MessageList
             messages={selectedMessages}
             isLoading={isLoadingMessages}
+            onToggleRead={handleToggleRead}
           />
 
           {/* Input */}

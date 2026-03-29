@@ -765,6 +765,53 @@ export async function markAsRead(
   }
 }
 
+/** 個別メッセージを既読にする */
+export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
+  const supabase = getSupabaseServer();
+  if (!supabase || messageIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ read_at: new Date().toISOString() })
+    .in('id', messageIds)
+    .is('read_at', null);
+
+  if (error) {
+    console.error('[markMessagesAsRead] Supabase error:', error.message);
+  }
+}
+
+/** 個別メッセージを未読に戻す */
+export async function markMessagesAsUnread(messageIds: string[]): Promise<void> {
+  const supabase = getSupabaseServer();
+  if (!supabase || messageIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ read_at: null })
+    .in('id', messageIds);
+
+  if (error) {
+    console.error('[markMessagesAsUnread] Supabase error:', error.message);
+  }
+}
+
+/** ユーザーの全メッセージを未読に戻す */
+export async function markAllAsUnread(userId: string): Promise<void> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return;
+
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ read_at: null })
+    .eq('user_id', userId)
+    .eq('sender', 'user');
+
+  if (error) {
+    console.error('[markAllAsUnread] Supabase error:', error.message);
+  }
+}
+
 /** 全ユーザー横断で since 以降の新着メッセージを取得（ポーリング用） */
 export async function getAllMessagesSince(
   since: string,

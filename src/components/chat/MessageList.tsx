@@ -6,6 +6,7 @@ import type { ChatMessage, MediaAttachment } from "@/lib/chat-types";
 interface MessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
+  onToggleRead?: (messageId: string, currentRead: boolean) => void;
 }
 
 function formatTime(timestamp: string): string {
@@ -145,7 +146,7 @@ function isRecentMessage(timestamp: string): boolean {
   return diff >= 0 && diff < RECENT_MESSAGE_THRESHOLD_MS;
 }
 
-export default function MessageList({ messages, isLoading = false }: MessageListProps) {
+export default function MessageList({ messages, isLoading = false, onToggleRead }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -237,11 +238,17 @@ export default function MessageList({ messages, isLoading = false }: MessageList
                   className={`px-4 py-2.5 text-sm leading-relaxed ${
                     isAdmin
                       ? "bg-green-50 text-gray-800"
-                      : "bg-white border border-gray-200 text-gray-800"
+                      : !msg.read
+                        ? "bg-green-50 border-l-[3px] border-l-green-500 border border-green-200 text-gray-800 cursor-pointer"
+                        : "bg-white border border-gray-200 text-gray-800 cursor-pointer"
                   }`}
                   style={{
                     borderRadius: isAdmin ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
                   }}
+                  onClick={!isAdmin ? () => onToggleRead?.(msg.id, msg.read) : undefined}
+                  role={!isAdmin ? "button" : undefined}
+                  tabIndex={!isAdmin ? 0 : undefined}
+                  title={!isAdmin ? (msg.read ? "クリックで未読にする" : "クリックで既読にする") : undefined}
                 >
                   {formatPostbackDisplay(msg.content)}
                 </div>
@@ -260,6 +267,11 @@ export default function MessageList({ messages, isLoading = false }: MessageList
               >
                 {isAdmin && msg.read && (
                   <span className="text-[10px] text-gray-400">既読</span>
+                )}
+                {!isAdmin && (
+                  <span className={`text-[10px] ${msg.read ? 'text-gray-400' : 'text-green-500 font-medium'}`}>
+                    {msg.read ? '既読' : '未読'}
+                  </span>
                 )}
                 <span className="text-[10px] text-gray-400">
                   {formatTime(msg.timestamp)}

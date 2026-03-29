@@ -120,6 +120,14 @@ export const LEVEL_STAGE_CONFIG: Record<LevelStage, {
   },
 };
 
+/** 企業情報（診断フォームで収集） */
+export interface CompanyInfo {
+  employeeCount: string;  // '1-5名' | '6-20名' | '21-50名' | '51-100名' | '101名以上'
+  role: string;           // '経営者・役員' | '管理職' | '一般社員' | 'IT担当' | 'その他'
+  challenges: string[];   // ['売上管理', '顧客管理', ...]
+  email: string;          // 任意
+}
+
 export type ExitType = 'techstars' | 'taskmate' | 'veteran_ai' | 'custom_dev';
 export type CustomerStatus = 'prospect' | 'contacted' | 'meeting' | 'customer' | 'churned' | 'techstars_active' | 'techstars_grad';
 export type LeadSource = 'apo' | 'threads' | 'x' | 'instagram' | 'referral' | 'other';

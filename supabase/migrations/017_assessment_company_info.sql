@@ -1,0 +1,1 @@
+ALTER TABLE assessment_responses ADD COLUMN IF NOT EXISTS company_info JSONB DEFAULT NULL;

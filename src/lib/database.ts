@@ -580,6 +580,7 @@ export interface Database {
           exact_level: number;
           level_band: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
           line_user_id: string | null;
+          company_info: { employeeCount: string; role: string; challenges: string[]; email: string } | null;
         };
         Insert: {
           id?: string;
@@ -593,6 +594,7 @@ export interface Database {
           exact_level: number;
           level_band: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
           line_user_id?: string | null;
+          company_info?: { employeeCount: string; role: string; challenges: string[]; email: string } | null;
         };
         Update: {
           id?: string;
@@ -606,6 +608,7 @@ export interface Database {
           exact_level?: number;
           level_band?: 'lv_01_10' | 'lv_11_20' | 'lv_21_30' | 'lv_31_40' | 'lv_41_50';
           line_user_id?: string | null;
+          company_info?: { employeeCount: string; role: string; challenges: string[]; email: string } | null;
         };
         Relationships: [];
       };

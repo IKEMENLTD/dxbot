@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function AssessmentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: '100vh', background: '#050505', color: '#e5e7eb' }}>
+    <div style={{ minHeight: '100vh', background: '#FFFFFF', color: '#111827' }}>
       {children}
     </div>
   );

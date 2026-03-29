@@ -15,9 +15,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       industry?: unknown;
       answers?: unknown;
       line_user_id?: unknown;
+      company_info?: unknown;
     };
 
-    const { name, company_name, industry, answers, line_user_id } = body;
+    const { name, company_name, industry, answers, line_user_id, company_info } = body;
 
     // --- バリデーション ---
     if (typeof name !== 'string' || name.trim().length === 0 || name.length > 50) {
@@ -38,12 +39,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
     }
 
+    // company_info の軽いバリデーション（objectであればOK）
+    let validCompanyInfo: { employeeCount: string; role: string; challenges: string[]; email: string } | null = null;
+    if (company_info !== null && typeof company_info === 'object' && !Array.isArray(company_info)) {
+      const ci = company_info as Record<string, unknown>;
+      validCompanyInfo = {
+        employeeCount: typeof ci.employeeCount === 'string' ? ci.employeeCount : '',
+        role: typeof ci.role === 'string' ? ci.role : '',
+        challenges: Array.isArray(ci.challenges) ? (ci.challenges as unknown[]).filter((c): c is string => typeof c === 'string') : [],
+        email: typeof ci.email === 'string' ? ci.email : '',
+      };
+    }
+
     // --- サーバーサイドでスコア計算（クライアント値は使用しない） ---
     const result = computePrecisionResult(answers as number[]);
     const levelBand = getLevelBand(result.exactLevel);
 
     // --- Supabase保存 ---
     const supabase = getSupabaseServer();
+    const lineUserIdStr = typeof line_user_id === 'string' && line_user_id.length > 0 ? line_user_id : null;
+
     if (supabase) {
       const { error: dbError } = await supabase
         .from('assessment_responses')
@@ -56,12 +71,49 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           precision_score: result.totalScore,
           exact_level: result.exactLevel,
           level_band: levelBand,
-          line_user_id: typeof line_user_id === 'string' ? line_user_id : null,
+          line_user_id: lineUserIdStr,
+          company_info: validCompanyInfo,
         });
 
       if (dbError) {
         console.error('[Assessment API] DB保存エラー:', dbError);
         // DB保存失敗でも結果は返す（ユーザー体験を優先）
+      }
+
+      // --- LINE user_id がある場合、usersテーブルとconversation_statesを更新 ---
+      if (lineUserIdStr) {
+        try {
+          // usersテーブルを検索・更新
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('line_user_id', lineUserIdStr)
+            .maybeSingle();
+
+          if (existingUser) {
+            await supabase
+              .from('users')
+              .update({
+                level: result.exactLevel,
+                score: result.totalScore,
+                precision_score: result.totalScore,
+                level_source: 'precision' as const,
+                axis_scores: result.axisScores,
+              })
+              .eq('id', existingUser.id);
+          }
+
+          // conversation_statesのstateをstep_readyに更新
+          await supabase
+            .from('conversation_states')
+            .update({
+              state: { step: 'step_ready' },
+            })
+            .eq('line_user_id', lineUserIdStr);
+        } catch (linkErr) {
+          console.error('[Assessment API] LINE連携更新エラー:', linkErr);
+          // 連携失敗でも結果は返す
+        }
       }
     }
 

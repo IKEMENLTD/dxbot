@@ -4,14 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { PRECISION_QUESTIONS } from '@/lib/precision-interview';
 import type { PrecisionQuestion } from '@/lib/precision-interview';
 import { LEVEL_BAND_CONFIG, DEFAULT_ASSESSMENT_STYLE } from '@/lib/types';
-import { INDUSTRIES } from '@/lib/assessment-constants';
-import type { LevelBand, AssessmentStyle, AssessmentButtonShape } from '@/lib/types';
+import { INDUSTRIES, EMPLOYEE_COUNTS, ROLES, CHALLENGES } from '@/lib/assessment-constants';
+import { initLiff } from '@/lib/liff';
+import type { LevelBand, AssessmentStyle, CompanyInfo } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // 型定義
 // ---------------------------------------------------------------------------
 
-type FormStep = 'survey' | 'profile' | 'submitting' | 'result' | 'error';
+type FormStep = 'loading' | 'survey' | 'company_info' | 'profile' | 'submitting' | 'result' | 'error';
 
 interface ProfileData {
   name: string;
@@ -35,83 +36,248 @@ const AXIS_LABELS: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// スタイル定数
+// ライトテーマ スタイル定数
 // ---------------------------------------------------------------------------
 
 const COLORS = {
-  border: '#222',
-  accent: '#3b82f6',
-  accentDim: '#1d4ed8',
-  text: '#e5e7eb',
-  textMuted: '#9ca3af',
-  textDim: '#6b7280',
+  bg: '#FFFFFF',
+  sectionBg: '#F9FAFB',
+  border: '#E5E7EB',
+  accent: '#06C755',
+  accentHover: '#05B04C',
+  accentLight: '#DCFCE7',
+  text: '#111827',
+  textMuted: '#6B7280',
+  textDim: '#9CA3AF',
+  error: '#EF4444',
+  white: '#FFFFFF',
 };
 
 // ---------------------------------------------------------------------------
-// スケールカラーマップ（1-5 グラデーション）
+// dxbot ヘッダー
 // ---------------------------------------------------------------------------
 
-const SCALE_COLORS = [
-  { bg: '#1a0a0a', border: '#4a2020', text: '#ef4444' },  // 1: 暗い赤
-  { bg: '#1a1008', border: '#4a3520', text: '#f59e0b' },  // 2: 暗いオレンジ
-  { bg: '#0d0d0d', border: '#333',    text: '#9ca3af' },  // 3: ニュートラル
-  { bg: '#081018', border: '#204060', text: '#60a5fa' },  // 4: 暗い青
-  { bg: '#0a1628', border: '#1d4ed8', text: '#3b82f6' },  // 5: 青（アクセント）
-];
-
-// ---------------------------------------------------------------------------
-// ボタン形状スタイル生成
-// ---------------------------------------------------------------------------
-
-function getButtonStyle(
-  shape: AssessmentButtonShape,
-  size: number,
-  color: string,
-  isSelected: boolean,
-): React.CSSProperties {
-  const base: React.CSSProperties = {
-    width: shape === 'bar' ? size * 1.5 : size,
-    height: shape === 'bar' ? size * 0.6 : size,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: size * 0.35,
-    fontWeight: 700,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  };
-
-  switch (shape) {
-    case 'pill':
-      return { ...base, borderRadius: 999 };
-    case 'circle':
-      return { ...base, borderRadius: '50%' };
-    case 'bar':
-      return { ...base, borderRadius: 0 };
-    case 'minimal':
-      return {
-        ...base,
-        border: 'none',
-        background: 'transparent',
-        borderBottom: isSelected ? `3px solid ${color}` : '3px solid transparent',
-        color: isSelected ? color : '#6b7280',
-      };
-    case 'square':
-    default:
-      return { ...base, borderRadius: 0 };
-  }
+function DxbotHeader() {
+  return (
+    <header style={{
+      padding: '12px 20px',
+      borderBottom: `1px solid ${COLORS.border}`,
+      background: COLORS.white,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+    }}>
+      <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+        <rect x="5" y="20" width="4.5" height="6" fill="#06C755" opacity="0.3"/>
+        <rect x="11" y="15" width="4.5" height="11" fill="#06C755" opacity="0.5"/>
+        <rect x="17" y="10" width="4.5" height="16" fill="#06C755" opacity="0.75"/>
+        <rect x="23" y="5" width="4.5" height="21" fill="#06C755"/>
+      </svg>
+      <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>dxbot</span>
+      <span style={{ fontSize: 11, color: COLORS.textDim, marginLeft: 8 }}>DXレベル無料診断</span>
+    </header>
+  );
 }
 
-/**
- * スケールカラーからボタン用の明暗色を生成
- * アクセント色をベースに背景・ボーダー・テキスト色を算出
- */
-function scaleColorSet(hex: string): { bg: string; border: string; text: string } {
-  return {
-    bg: hex + '1a',      // 10% opacity (hex背景)
-    border: hex + '66',  // 40% opacity
-    text: hex,
+// ---------------------------------------------------------------------------
+// CompanyInfoStep コンポーネント
+// ---------------------------------------------------------------------------
+
+function CompanyInfoStep({ onNext }: { onNext: (data: CompanyInfo) => void }) {
+  const [employeeCount, setEmployeeCount] = useState('');
+  const [role, setRole] = useState('');
+  const [challenges, setChallenges] = useState<string[]>([]);
+  const [email, setEmail] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function toggleChallenge(c: string) {
+    setChallenges((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+    );
+  }
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    if (!employeeCount) errs.employeeCount = '従業員数を選択してください';
+    if (!role) errs.role = '役職を選択してください';
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errs.email = '正しいメールアドレスを入力してください';
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (validate()) {
+      onNext({ employeeCount, role, challenges, email: email.trim() });
+    }
+  }
+
+  const pillStyle = (selected: boolean): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '8px 16px',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    border: selected ? `2px solid ${COLORS.accent}` : `1px solid ${COLORS.border}`,
+    background: selected ? COLORS.accentLight : COLORS.white,
+    color: selected ? COLORS.accent : COLORS.textMuted,
+    borderRadius: 8,
+  });
+
+  const checkStyle = (selected: boolean): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 16px',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    border: selected ? `2px solid ${COLORS.accent}` : `1px solid ${COLORS.border}`,
+    background: selected ? COLORS.accentLight : COLORS.white,
+    color: selected ? COLORS.accent : COLORS.textMuted,
+    borderRadius: 8,
+  });
+
+  const sectionLabel: React.CSSProperties = {
+    display: 'block',
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: 600,
+    marginBottom: 10,
   };
+
+  return (
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 20px' }}>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, margin: 0, lineHeight: 1.3 }}>
+          あなたの会社について教えてください
+        </h1>
+        <p style={{ color: COLORS.textMuted, marginTop: 8, fontSize: 14, lineHeight: 1.7 }}>
+          より正確な診断結果をお届けするために、いくつかの情報をお聞かせください。
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} noValidate>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          {/* 従業員数 */}
+          <div>
+            <label style={sectionLabel}>従業員数</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {EMPLOYEE_COUNTS.map((ec) => (
+                <button
+                  key={ec}
+                  type="button"
+                  onClick={() => setEmployeeCount(ec)}
+                  style={pillStyle(employeeCount === ec)}
+                >
+                  {ec}
+                </button>
+              ))}
+            </div>
+            {errors.employeeCount && (
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.employeeCount}</p>
+            )}
+          </div>
+
+          {/* 役職 */}
+          <div>
+            <label style={sectionLabel}>役職</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {ROLES.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  style={pillStyle(role === r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {errors.role && (
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.role}</p>
+            )}
+          </div>
+
+          {/* 主な課題 */}
+          <div>
+            <label style={sectionLabel}>主な課題（複数選択可）</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {CHALLENGES.map((c) => {
+                const selected = challenges.includes(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleChallenge(c)}
+                    style={checkStyle(selected)}
+                  >
+                    {selected && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M3 7l3 3 5-6" stroke={COLORS.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* メール */}
+          <div>
+            <label style={sectionLabel}>
+              メールアドレス <span style={{ color: COLORS.textDim, fontWeight: 400, fontSize: 12 }}>（任意）</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="example@company.co.jp"
+              style={{
+                width: '100%',
+                background: COLORS.white,
+                border: `1px solid ${errors.email ? COLORS.error : COLORS.border}`,
+                color: COLORS.text,
+                padding: '12px 14px',
+                fontSize: 15,
+                outline: 'none',
+                boxSizing: 'border-box',
+                borderRadius: 8,
+              }}
+            />
+            {errors.email && (
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.email}</p>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          style={{
+            marginTop: 36,
+            width: '100%',
+            background: COLORS.accent,
+            color: COLORS.white,
+            border: 'none',
+            padding: '16px',
+            fontSize: 16,
+            fontWeight: 600,
+            cursor: 'pointer',
+            borderRadius: 8,
+          }}
+        >
+          次へ
+        </button>
+      </form>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -120,10 +286,12 @@ function scaleColorSet(hex: string): { bg: string; border: string; text: string 
 
 function ProfileStep({
   onNext,
+  defaultName,
 }: {
   onNext: (data: ProfileData) => void;
+  defaultName: string;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(defaultName);
   const [company, setCompany] = useState('');
   const [industry, setIndustry] = useState('');
   const [errors, setErrors] = useState<Partial<ProfileData>>({});
@@ -148,35 +316,32 @@ function ProfileStep({
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: '#111',
+    background: COLORS.white,
     border: `1px solid ${COLORS.border}`,
     color: COLORS.text,
     padding: '12px 14px',
     fontSize: 15,
     outline: 'none',
     boxSizing: 'border-box',
+    borderRadius: 8,
   };
 
   const labelStyle: React.CSSProperties = {
     display: 'block',
-    color: COLORS.textMuted,
-    fontSize: 13,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: 600,
     marginBottom: 6,
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase' as const,
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', padding: '60px 20px' }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', padding: '40px 20px' }}>
       {/* ヘッダー */}
-      <div style={{ marginBottom: 48 }}>
-        <div style={{ color: COLORS.accent, fontSize: 12, letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>
-          ALMOST DONE
-        </div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#fff', margin: 0, lineHeight: 1.3 }}>
+      <div style={{ marginBottom: 40 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, margin: 0, lineHeight: 1.3 }}>
           あと少しで結果が見られます
         </h1>
-        <p style={{ color: COLORS.textMuted, marginTop: 12, fontSize: 14, lineHeight: 1.7 }}>
+        <p style={{ color: COLORS.textMuted, marginTop: 10, fontSize: 14, lineHeight: 1.7 }}>
           診断結果の作成に以下の情報が必要です。
         </p>
       </div>
@@ -192,11 +357,11 @@ function ProfileStep({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="山田 太郎"
-              style={{ ...inputStyle, borderColor: errors.name ? '#ef4444' : COLORS.border }}
+              style={{ ...inputStyle, borderColor: errors.name ? COLORS.error : COLORS.border }}
               maxLength={50}
             />
             {errors.name && (
-              <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.name}</p>
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.name}</p>
             )}
           </div>
 
@@ -208,11 +373,11 @@ function ProfileStep({
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="株式会社 〇〇"
-              style={{ ...inputStyle, borderColor: errors.company_name ? '#ef4444' : COLORS.border }}
+              style={{ ...inputStyle, borderColor: errors.company_name ? COLORS.error : COLORS.border }}
               maxLength={100}
             />
             {errors.company_name && (
-              <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.company_name}</p>
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.company_name}</p>
             )}
           </div>
 
@@ -224,7 +389,7 @@ function ProfileStep({
               onChange={(e) => setIndustry(e.target.value)}
               style={{
                 ...inputStyle,
-                borderColor: errors.industry ? '#ef4444' : COLORS.border,
+                borderColor: errors.industry ? COLORS.error : COLORS.border,
                 cursor: 'pointer',
               }}
             >
@@ -234,7 +399,7 @@ function ProfileStep({
               ))}
             </select>
             {errors.industry && (
-              <p style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{errors.industry}</p>
+              <p style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{errors.industry}</p>
             )}
           </div>
         </div>
@@ -242,16 +407,16 @@ function ProfileStep({
         <button
           type="submit"
           style={{
-            marginTop: 40,
+            marginTop: 36,
             width: '100%',
             background: COLORS.accent,
-            color: '#fff',
+            color: COLORS.white,
             border: 'none',
             padding: '16px',
             fontSize: 16,
             fontWeight: 600,
             cursor: 'pointer',
-            letterSpacing: '0.05em',
+            borderRadius: 8,
           }}
         >
           結果を見る
@@ -274,7 +439,7 @@ function SurveyStep({
   questions,
   onAnswerChange,
   onComplete,
-  style,
+  style: _style,
 }: {
   answers: number[];
   questions: PrecisionQuestion[];
@@ -285,12 +450,14 @@ function SurveyStep({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fadeIn, setFadeIn] = useState(true);
 
+  // style prop is kept for API compatibility but light theme uses fixed colors
+  void _style;
+
   const questionCount = questions.length;
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / questionCount) * 100;
   const selected = answers[currentIndex];
 
-  // 設問遷移フェードインアニメーション
   useEffect(() => {
     setFadeIn(false);
     const frameId = requestAnimationFrame(() => setFadeIn(true));
@@ -302,7 +469,6 @@ function SurveyStep({
     next[currentIndex] = value;
     onAnswerChange(next);
 
-    // auto-advance: 600msでアニメーション遷移を体感させる
     setTimeout(() => {
       if (currentIndex < questionCount - 1) {
         setCurrentIndex((prev) => prev + 1);
@@ -316,43 +482,47 @@ function SurveyStep({
     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
   }
 
+  const scaleLabels = ['全くない', 'あまりない', 'どちらとも', 'ほぼできる', '十分できている'];
+
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 20px' }}>
       {/* プログレスバー */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ color: COLORS.textMuted, fontSize: 12, letterSpacing: '0.1em' }}>
+          <span style={{ color: COLORS.textMuted, fontSize: 12 }}>
             質問 {currentIndex + 1} / {questionCount}
           </span>
-          <span style={{ color: style.progressBarColor, fontSize: 12, fontWeight: 600 }}>
+          <span style={{ color: COLORS.accent, fontSize: 12, fontWeight: 600 }}>
             {Math.round(progress)}%
           </span>
         </div>
-        <div style={{ background: '#1a1a1a', height: 3, width: '100%' }}>
+        <div style={{ background: COLORS.border, height: 3, width: '100%', borderRadius: 2 }}>
           <div
             style={{
-              background: style.progressBarColor,
+              background: COLORS.accent,
               height: '100%',
               width: `${progress}%`,
               transition: 'width 0.3s ease',
+              borderRadius: 2,
             }}
           />
         </div>
       </div>
 
-      {/* フェードイン対象エリア */}
+      {/* フェードイン */}
       <div style={{ opacity: fadeIn ? 1 : 0, transition: 'opacity 0.2s ease' }}>
         {/* 軸ラベル */}
         <div style={{ marginBottom: 16 }}>
           <span
             style={{
               display: 'inline-block',
-              background: style.accentColor + '1a',
-              border: `1px solid ${style.accentColor}66`,
-              color: style.accentColor,
+              background: '#ECFDF5',
+              border: `1px solid ${COLORS.accent}`,
+              color: COLORS.accent,
               fontSize: 11,
               padding: '3px 10px',
-              letterSpacing: '0.08em',
+              borderRadius: 4,
+              fontWeight: 600,
             }}
           >
             {AXIS_LABELS[question.axis]}
@@ -360,71 +530,43 @@ function SurveyStep({
         </div>
 
         {/* 設問 */}
-        <p style={{ fontSize: 16, lineHeight: 1.8, color: style.questionTextColor, marginBottom: 28, fontWeight: 400 }}>
+        <p style={{ fontSize: 16, lineHeight: 1.8, color: COLORS.text, marginBottom: 28, fontWeight: 400 }}>
           {question.question}
         </p>
 
-        {/* 横並び5択スケール */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <div style={{ textAlign: 'right', minWidth: 48 }}>
-              <span style={{ color: style.labelTextColor, fontSize: 12, display: 'block' }}>
-                {style.labelLeft}
-              </span>
-              <span style={{ color: style.labelTextColor, fontSize: 10, display: 'block', marginTop: 2 }}>
-                1
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[1, 2, 3, 4, 5].map((v) => {
-                const isSelected = selected === v;
-                const sc = scaleColorSet(style.scaleColors[v - 1]);
-                const btnStyle = getButtonStyle(style.buttonShape, style.buttonSize, style.scaleColors[v - 1], isSelected);
-                return (
-                  <div key={v} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <button
-                      onClick={() => handleSelect(v)}
-                      style={{
-                        ...btnStyle,
-                        transform: isSelected ? 'scale(1.1)' : 'scale(1)',
-                        ...(style.buttonShape !== 'minimal' ? {
-                          border: isSelected
-                            ? `2px solid ${sc.border}`
-                            : '1px solid #222',
-                          background: isSelected ? sc.bg : '#111',
-                          color: isSelected ? sc.text : '#6b7280',
-                        } : {}),
-                      }}
-                    >
-                      {v}
-                    </button>
-                    {/* インジケーターバー */}
-                    <div
-                      style={{
-                        width: style.buttonShape === 'bar' ? style.buttonSize * 1.5 : style.buttonSize,
-                        height: 4,
-                        marginTop: 4,
-                        background: isSelected ? sc.text : 'transparent',
-                        transition: 'background 0.15s',
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ textAlign: 'left', minWidth: 48 }}>
-              <span style={{ color: style.labelTextColor, fontSize: 12, display: 'block' }}>
-                {style.labelRight}
-              </span>
-              <span style={{ color: style.labelTextColor, fontSize: 10, display: 'block', marginTop: 2 }}>
-                5
-              </span>
-            </div>
-          </div>
+        {/* 5択ボタン */}
+        <div style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'center', gap: 10 }}>
+          {[1, 2, 3, 4, 5].map((v) => {
+            const isSelected = selected === v;
+            return (
+              <button
+                key={v}
+                onClick={() => handleSelect(v)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 60,
+                  minHeight: 56,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  border: isSelected ? `2px solid ${COLORS.accent}` : `1px solid ${COLORS.border}`,
+                  background: isSelected ? COLORS.accentLight : COLORS.white,
+                  color: isSelected ? COLORS.accent : COLORS.textMuted,
+                  borderRadius: 8,
+                  padding: '6px 2px',
+                }}
+              >
+                <span style={{ fontSize: 18, fontWeight: 700 }}>{v}</span>
+                <span style={{ fontSize: 9, lineHeight: 1.2, textAlign: 'center', marginTop: 2 }}>{scaleLabels[v - 1]}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ナビゲーション: 戻るボタンのみ */}
+      {/* 戻るボタン */}
       <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 24 }}>
         {currentIndex > 0 && (
           <button
@@ -438,7 +580,7 @@ function SurveyStep({
               fontSize: 13,
             }}
           >
-            ← 前の質問に戻る
+            &#8592; 前の質問に戻る
           </button>
         )}
       </div>
@@ -447,7 +589,6 @@ function SurveyStep({
       <style>{`
         @media (max-width: 480px) {
           .scale-gap { gap: 6px !important; }
-          .scale-label { font-size: 10px !important; }
         }
       `}</style>
     </div>
@@ -460,24 +601,25 @@ function SurveyStep({
 
 function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: string | null }) {
   const bandConfig = LEVEL_BAND_CONFIG[result.levelBand];
-  const maxAxisScore = 30; // 6問 * 5点
+  const maxAxisScore = 30;
 
   return (
-    <div style={{ maxWidth: 620, margin: '0 auto', padding: '60px 20px' }}>
+    <div style={{ maxWidth: 620, margin: '0 auto', padding: '40px 20px' }}>
       {/* レベル表示 */}
       <div
         style={{
           border: `1px solid ${COLORS.border}`,
-          background: '#0d0d0d',
+          background: COLORS.sectionBg,
           padding: '40px 32px',
           textAlign: 'center',
           marginBottom: 32,
+          borderRadius: 12,
         }}
       >
-        <div style={{ color: COLORS.accent, fontSize: 12, letterSpacing: '0.15em', marginBottom: 8 }}>
-          YOUR DX LEVEL
+        <div style={{ color: COLORS.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 8 }}>
+          あなたのDXレベル
         </div>
-        <div style={{ fontSize: 72, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+        <div style={{ fontSize: 64, fontWeight: 800, color: COLORS.text, lineHeight: 1 }}>
           {result.exactLevel}
         </div>
         <div style={{ color: COLORS.textMuted, fontSize: 14, marginTop: 8 }}>
@@ -486,13 +628,13 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
         <div
           style={{
             display: 'inline-block',
-            background: '#0a1628',
-            border: `1px solid ${COLORS.accentDim}`,
+            background: '#ECFDF5',
             color: COLORS.accent,
             fontSize: 13,
+            fontWeight: 600,
             padding: '6px 16px',
             marginTop: 20,
-            letterSpacing: '0.05em',
+            borderRadius: 8,
           }}
         >
           {bandConfig.label} &nbsp;|&nbsp; {bandConfig.axisLabel}
@@ -506,10 +648,9 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
       <div style={{ marginBottom: 32 }}>
         <h2
           style={{
-            fontSize: 12,
-            letterSpacing: '0.15em',
-            color: COLORS.textMuted,
-            textTransform: 'uppercase',
+            fontSize: 14,
+            fontWeight: 600,
+            color: COLORS.text,
             marginBottom: 20,
           }}
         >
@@ -525,13 +666,14 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
                 {score} / {maxAxisScore}
               </span>
             </div>
-            <div style={{ background: '#1a1a1a', height: 6 }}>
+            <div style={{ background: COLORS.border, height: 6, borderRadius: 3 }}>
               <div
                 style={{
                   background: COLORS.accent,
                   height: '100%',
                   width: `${(score / maxAxisScore) * 100}%`,
                   transition: 'width 0.5s ease',
+                  borderRadius: 3,
                 }}
               />
             </div>
@@ -542,8 +684,9 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
       {/* 合計スコア */}
       <div
         style={{
-          background: '#0d0d0d',
+          background: COLORS.sectionBg,
           border: `1px solid ${COLORS.border}`,
+          borderRadius: 8,
           padding: '16px 20px',
           display: 'flex',
           justifyContent: 'space-between',
@@ -552,7 +695,7 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
         }}
       >
         <span style={{ color: COLORS.textMuted, fontSize: 13 }}>合計スコア</span>
-        <span style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
+        <span style={{ color: COLORS.text, fontSize: 20, fontWeight: 700 }}>
           {result.totalScore} <span style={{ color: COLORS.textDim, fontSize: 14 }}>/ 150</span>
         </span>
       </div>
@@ -560,16 +703,17 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
       {/* LINE誘導CTA */}
       <div
         style={{
-          background: '#0a1628',
-          border: `1px solid ${COLORS.accentDim}`,
+          background: COLORS.sectionBg,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
           padding: '28px 24px',
           textAlign: 'center',
         }}
       >
-        <div style={{ color: COLORS.accent, fontSize: 12, letterSpacing: '0.1em', marginBottom: 10 }}>
-          NEXT STEP
+        <div style={{ color: COLORS.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 10 }}>
+          次のステップ
         </div>
-        <h3 style={{ color: '#fff', fontSize: 18, fontWeight: 700, margin: '0 0 12px' }}>
+        <h3 style={{ color: COLORS.text, fontSize: 18, fontWeight: 700, margin: '0 0 12px' }}>
           あなたのDXレベルに合わせた改善ステップを受け取る
         </h3>
         <p style={{ color: COLORS.textMuted, fontSize: 13, lineHeight: 1.7, marginBottom: 20 }}>
@@ -583,13 +727,13 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
             rel="noopener noreferrer"
             style={{
               display: 'inline-block',
-              background: '#06c755',
-              color: '#fff',
+              background: COLORS.accent,
+              color: COLORS.white,
               padding: '14px 32px',
               fontSize: 15,
               fontWeight: 700,
               textDecoration: 'none',
-              letterSpacing: '0.05em',
+              borderRadius: 8,
             }}
           >
             LINE で改善ステップを受け取る
@@ -609,18 +753,33 @@ function ResultStep({ result, lineUrl }: { result: AssessmentResult; lineUrl: st
 // ---------------------------------------------------------------------------
 
 export default function AssessmentPage() {
-  const [step, setStep] = useState<FormStep>('survey');
+  const [step, setStep] = useState<FormStep>('loading');
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [questions, setQuestions] = useState<PrecisionQuestion[]>(PRECISION_QUESTIONS);
   const [answers, setAnswers] = useState<number[]>(new Array(PRECISION_QUESTIONS.length).fill(0));
   const [lineUrl, setLineUrl] = useState<string | null>(null);
   const [assessmentStyle, setAssessmentStyle] = useState<AssessmentStyle>(DEFAULT_ASSESSMENT_STYLE);
+  const [lineUserId, setLineUserId] = useState<string | null>(null);
+  const [lineDisplayName, setLineDisplayName] = useState<string | null>(null);
 
-  // 管理画面のLINE設定 + カスタム設問を取得
   useEffect(() => {
     const controller = new AbortController();
+
+    // LIFF初期化
+    initLiff().then((liffProfile) => {
+      if (liffProfile) {
+        setLineUserId(liffProfile.userId);
+        setLineDisplayName(liffProfile.displayName);
+      }
+      setStep('survey');
+    }).catch(() => {
+      setStep('survey');
+    });
+
+    // config取得
     fetch('/api/assessment/config', { signal: controller.signal })
       .then((res) => (res.ok ? res.json() as Promise<{ lineUrl: string | null; questions?: PrecisionQuestion[]; style?: AssessmentStyle }> : null))
       .then((data) => {
@@ -633,14 +792,15 @@ export default function AssessmentPage() {
           if (data.style) setAssessmentStyle({ ...DEFAULT_ASSESSMENT_STYLE, ...data.style });
         }
       })
-      .catch(() => { /* フォールバック: デフォルト値のまま */ });
+      .catch(() => { /* フォールバック */ });
+
     return () => controller.abort();
   }, []);
 
-  // profile は handleSurveyComplete で使われるがlinterの警告回避
+  // lint警告回避
   void profile;
 
-  async function handleSurveyComplete(completedAnswers: number[], profileData: ProfileData) {
+  async function handleSubmit(completedAnswers: number[], profileData: ProfileData, ci: CompanyInfo | null) {
     setStep('submitting');
     setProfile(profileData);
 
@@ -651,7 +811,12 @@ export default function AssessmentPage() {
       const res = await fetch('/api/assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profileData, answers: completedAnswers }),
+        body: JSON.stringify({
+          ...profileData,
+          answers: completedAnswers,
+          line_user_id: lineUserId,
+          company_info: ci,
+        }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -672,94 +837,156 @@ export default function AssessmentPage() {
     }
   }
 
-  // survey → profile → submitting → result
+  // ---------------------------------------------------------------------------
+  // loading
+  // ---------------------------------------------------------------------------
+  if (step === 'loading') {
+    return (
+      <div>
+        <DxbotHeader />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 16 }}>
+          <div style={{ width: 32, height: 32, border: `3px solid ${COLORS.border}`, borderTopColor: COLORS.accent, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <p style={{ color: COLORS.textMuted, fontSize: 14 }}>読み込み中...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // survey
+  // ---------------------------------------------------------------------------
   if (step === 'survey') {
     return (
-      <div style={{ minHeight: '100vh', background: assessmentStyle.bgColor }}>
+      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+        <DxbotHeader />
         <SurveyStep
           answers={answers}
           questions={questions}
           onAnswerChange={setAnswers}
-          onComplete={() => setStep('profile')}
+          onComplete={() => setStep('company_info')}
           style={assessmentStyle}
         />
       </div>
     );
   }
 
-  if (step === 'profile') {
+  // ---------------------------------------------------------------------------
+  // company_info
+  // ---------------------------------------------------------------------------
+  if (step === 'company_info') {
     return (
-      <ProfileStep
-        onNext={(data) => {
-          setProfile(data);
-          handleSurveyComplete(answers, data);
-        }}
-      />
-    );
-  }
-
-  if (step === 'submitting') {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: 20,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                width: 10,
-                height: 10,
-                background: COLORS.accent,
-                animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-        <p style={{ color: COLORS.textMuted, fontSize: 14 }}>スコアを計算中...</p>
-        <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
+      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+        <DxbotHeader />
+        <CompanyInfoStep onNext={(data) => {
+          setCompanyInfo(data);
+          setStep('profile');
+        }} />
       </div>
     );
   }
 
-  if (step === 'result' && result) {
-    return <ResultStep result={result} lineUrl={lineUrl} />;
+  // ---------------------------------------------------------------------------
+  // profile
+  // ---------------------------------------------------------------------------
+  if (step === 'profile') {
+    return (
+      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+        <DxbotHeader />
+        <ProfileStep
+          defaultName={lineDisplayName ?? ''}
+          onNext={(data) => {
+            setProfile(data);
+            handleSubmit(answers, data, companyInfo);
+          }}
+        />
+      </div>
+    );
   }
 
+  // ---------------------------------------------------------------------------
+  // submitting
+  // ---------------------------------------------------------------------------
+  if (step === 'submitting') {
+    return (
+      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+        <DxbotHeader />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            flexDirection: 'column',
+            gap: 20,
+          }}
+        >
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: 10,
+                  height: 10,
+                  background: COLORS.accent,
+                  borderRadius: '50%',
+                  animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+          <p style={{ color: COLORS.textMuted, fontSize: 14 }}>スコアを計算中...</p>
+          <style>{`@keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }`}</style>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // result
+  // ---------------------------------------------------------------------------
+  if (step === 'result' && result) {
+    return (
+      <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+        <DxbotHeader />
+        <ResultStep result={result} lineUrl={lineUrl} />
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // error
+  // ---------------------------------------------------------------------------
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 20,
-        padding: '0 20px',
-      }}
-    >
-      <p style={{ color: '#ef4444', fontSize: 16 }}>{errorMessage || '送信に失敗しました'}</p>
-      <button
-        onClick={() => setStep('survey')}
+    <div style={{ minHeight: '100vh', background: COLORS.bg }}>
+      <DxbotHeader />
+      <div
         style={{
-          background: COLORS.accent,
-          border: 'none',
-          color: '#fff',
-          padding: '12px 24px',
-          cursor: 'pointer',
-          fontSize: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '60vh',
+          flexDirection: 'column',
+          gap: 20,
+          padding: '0 20px',
         }}
       >
-        もう一度試す
-      </button>
+        <p style={{ color: COLORS.error, fontSize: 16 }}>{errorMessage || '送信に失敗しました'}</p>
+        <button
+          onClick={() => setStep('survey')}
+          style={{
+            background: COLORS.accent,
+            border: 'none',
+            color: COLORS.white,
+            padding: '12px 24px',
+            cursor: 'pointer',
+            fontSize: 14,
+            borderRadius: 8,
+          }}
+        >
+          もう一度試す
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useToast } from "@/contexts/ToastContext";
 import type { StepDefinition } from "@/lib/step-master";
 import type { AxisScores } from "@/lib/types";
@@ -50,7 +50,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const [showPreview, setShowPreview] = useState(false);
 
-  // ----- テンプレートダウンロード -----
+  // ----- M3: テンプレートダウンロード -----
   function handleDownloadTemplate() {
     const csv = generateStepCsvTemplate(currentSteps);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -59,7 +59,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
     a.href = url;
     a.download = "step_template.csv";
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   // ----- ファイル選択 -----
@@ -93,6 +93,10 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
         setShowPreview(false);
       }
     };
+    // M2: FileReaderのonerror
+    reader.onerror = () => {
+      addToast("error", "ファイルの読み取りに失敗しました");
+    };
     reader.readAsText(file, "utf-8");
 
     // Reset file input
@@ -101,17 +105,28 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
     }
   }
 
-  // ----- インポート確定 -----
+  // ----- M4: importMode変更時にdiffを再計算 -----
+  const handleModeChange = useCallback(
+    (mode: "merge" | "replace") => {
+      setImportMode(mode);
+      if (csvResult && csvResult.steps.length > 0) {
+        const d = calculateStepDiff(currentSteps, csvResult.steps);
+        setDiff(d);
+      }
+    },
+    [csvResult, currentSteps]
+  );
+
+  // ----- H4: インポート確定（確認メッセージ改善） -----
   function handleConfirmImport() {
     if (!csvResult || !diff) return;
 
-    const addedCount = diff.added.length;
-    const modifiedCount = diff.modified.length;
+    const msg =
+      importMode === "replace"
+        ? `全置換: 既存${currentSteps.length}件を${csvResult.steps.length}件に置き換えます。${diff.removed.length > 0 ? `${diff.removed.length}件のステップが削除されます。` : ""}よろしいですか？`
+        : `新規 ${diff.added.length}件、変更 ${diff.modified.length}件を反映します。よろしいですか？`;
 
-    const modeLabel = importMode === "replace" ? "全置換" : "追加・更新";
-    const confirmed = window.confirm(
-      `[${modeLabel}] 新規 ${addedCount}件、変更 ${modifiedCount}件を反映します。よろしいですか？`
-    );
+    const confirmed = window.confirm(msg);
     if (!confirmed) return;
 
     const merged = mergeSteps(currentSteps, csvResult.steps, importMode);
@@ -121,7 +136,10 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
     setCsvResult(null);
     setDiff(null);
     setShowPreview(false);
-    addToast("success", `${addedCount + modifiedCount}件のステップをインポートしました`);
+    addToast(
+      "success",
+      `${diff.added.length + diff.modified.length}件のステップをインポートしました`
+    );
   }
 
   // ----- リセット -----
@@ -131,20 +149,19 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
     setShowPreview(false);
   }
 
-  // ----- 軸別サマリ計算 -----
-  function getAxisSummary(
-    current: StepDefinition[],
-    imported: StepDefinition[]
-  ): { axis: keyof AxisScores; before: number; after: number }[] {
-    const axes: (keyof AxisScores)[] = ["a1", "a2", "b", "c", "d"];
-
-    return axes.map((axis) => {
-      const before = current.filter((s) => s.axis === axis).length;
-      // mergeモードの場合: 既存 + 新規追加分（同一IDは上書き）
-      const merged = mergeSteps(current, imported, importMode);
-      const after = merged.filter((s) => s.axis === axis).length;
-      return { axis, before, after };
-    });
+  // ----- H3: 軸別サマリ計算（mergeStepsを1回に） -----
+  function getAxisSummary(): {
+    axis: keyof AxisScores;
+    before: number;
+    after: number;
+  }[] {
+    if (!csvResult) return [];
+    const merged = mergeSteps(currentSteps, csvResult.steps, importMode);
+    return (["a1", "a2", "b", "c", "d"] as const).map((axis) => ({
+      axis,
+      before: currentSteps.filter((s) => s.axis === axis).length,
+      after: merged.filter((s) => s.axis === axis).length,
+    }));
   }
 
   return (
@@ -312,7 +329,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                     name="importMode"
                     value="merge"
                     checked={importMode === "merge"}
-                    onChange={() => setImportMode("merge")}
+                    onChange={() => handleModeChange("merge")}
                     className="accent-green-600"
                   />
                   追加・更新
@@ -323,7 +340,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                     name="importMode"
                     value="replace"
                     checked={importMode === "replace"}
-                    onChange={() => setImportMode("replace")}
+                    onChange={() => handleModeChange("replace")}
                     className="accent-green-600"
                   />
                   全置換
@@ -342,13 +359,18 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                   <span className="text-orange-600">
                     変更: {diff.modified.length}件
                   </span>
+                  {diff.removed.length > 0 && (
+                    <span className="text-red-600">
+                      削除: {diff.removed.length}件
+                    </span>
+                  )}
                   <span className="text-gray-400">
                     変更なし: {diff.unchanged.length}件
                   </span>
                 </div>
 
                 {/* テーブル */}
-                {(diff.added.length > 0 || diff.modified.length > 0) && (
+                {(diff.added.length > 0 || diff.modified.length > 0 || diff.removed.length > 0) && (
                   <div className="overflow-x-auto max-h-60 overflow-y-auto">
                     <table className="w-full text-xs">
                       <thead>
@@ -397,6 +419,23 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                             </td>
                           </tr>
                         ))}
+                        {/* M5: removedのUI表示（replaceモード時） */}
+                        {diff.removed.map((s) => (
+                          <tr key={s.id} className="border-b border-gray-100 bg-red-50">
+                            <td className="px-2 py-1.5 font-mono text-gray-600">
+                              {s.id}
+                            </td>
+                            <td className="px-2 py-1.5 text-gray-800">{s.name}</td>
+                            <td className="px-2 py-1.5 text-gray-600">
+                              {AXIS_LABELS[s.axis]}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <span className="inline-block px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">
+                                削除
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -404,7 +443,7 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
 
                 {/* 軸別サマリ */}
                 <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                  {getAxisSummary(currentSteps, csvResult.steps).map(
+                  {getAxisSummary().map(
                     ({ axis, before, after }) => (
                       <span key={axis}>
                         {AXIS_LABELS[axis]}:{" "}
@@ -437,7 +476,9 @@ export default function StepCsvImport({ currentSteps, onImport }: StepCsvImportP
                   type="button"
                   onClick={handleConfirmImport}
                   disabled={
-                    diff.added.length === 0 && diff.modified.length === 0
+                    diff.added.length === 0 &&
+                    diff.modified.length === 0 &&
+                    diff.removed.length === 0
                   }
                   className="bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-xl hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >

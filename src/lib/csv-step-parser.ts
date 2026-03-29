@@ -29,34 +29,45 @@ export interface StepDiff {
   added: StepDefinition[];
   modified: StepModified[];
   unchanged: StepDefinition[];
+  removed: StepDefinition[];
 }
 
 // ---------------------------------------------------------------------------
-// CSV行パーサー（ダブルクォート対応）
+// C1: CSV全文パーサー（ダブルクォート内改行対応）
 // ---------------------------------------------------------------------------
 
-function parseCsvLine(line: string): string[] {
-  const result: string[] = [];
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
   let current = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  let fields: string[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
+      if (inQuotes && text[i + 1] === '"') {
         current += '"';
         i++;
       } else {
         inQuotes = !inQuotes;
       }
     } else if (ch === "," && !inQuotes) {
-      result.push(current.trim());
+      fields.push(current);
+      current = "";
+    } else if ((ch === "\r" || ch === "\n") && !inQuotes) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      fields.push(current);
+      if (fields.some((f) => f.trim() !== "")) rows.push(fields);
+      fields = [];
       current = "";
     } else {
       current += ch;
     }
   }
-  result.push(current.trim());
-  return result;
+  // 最終行
+  fields.push(current);
+  if (fields.some((f) => f.trim() !== "")) rows.push(fields);
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,83 +92,132 @@ export function parseCsvToSteps(csvText: string): CsvParseResult {
   const warnings: string[] = [];
 
   // BOM除去
-  let text = csvText;
-  if (text.charCodeAt(0) === 0xfeff) {
-    text = text.slice(1);
+  let cleanText = csvText;
+  if (cleanText.charCodeAt(0) === 0xfeff) {
+    cleanText = cleanText.slice(1);
   }
 
-  // 改行で分割、空行除去
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
-  if (lines.length === 0) {
+  // C1: 全文パース（ダブルクォート内改行に対応）
+  const rows = parseCsvRows(cleanText);
+  if (rows.length === 0) {
     errors.push({ row: 0, message: "CSVにデータがありません" });
     return { steps, errors, warnings };
   }
 
-  // ヘッダー行判定
-  let startIndex = 0;
-  const firstLine = lines[0].trim().toLowerCase();
-  if (firstLine.startsWith("ステップid") || firstLine.startsWith("id")) {
-    startIndex = 1;
-  }
+  // H1: ヘッダー判定 - 最初のフィールドがSTEP_ID_PATTERNにマッチしなければヘッダー
+  const firstRow = rows[0];
+  const startIndex =
+    firstRow && firstRow[0] && !STEP_ID_PATTERN.test(firstRow[0].trim())
+      ? 1
+      : 0;
 
-  for (let i = startIndex; i < lines.length; i++) {
+  // C2: CSV内ID重複チェック用
+  const seenIds = new Set<string>();
+
+  for (let i = startIndex; i < rows.length; i++) {
     const rowNum = i + 1;
-    const fields = parseCsvLine(lines[i]);
+    const fields = rows[i];
+
+    // H5: 12列超の行にwarning
+    if (fields.length > 12) {
+      warnings.push(
+        `${rowNum}行目: ${fields.length}列あります（12列想定）。余分な列は無視されます`
+      );
+    }
 
     if (fields.length < 6) {
-      errors.push({ row: rowNum, message: `列数が不足しています（${fields.length}列、最低6列必要）` });
+      errors.push({
+        row: rowNum,
+        message: `列数が不足しています（${fields.length}列、最低6列必要）`,
+      });
       continue;
     }
 
-    // [0] id
-    const id = fields[0];
+    // [0] id (H2: フィールド取得時にtrim)
+    const id = fields[0].trim();
     if (!id || !STEP_ID_PATTERN.test(id)) {
-      errors.push({ row: rowNum, column: "id", message: `ステップIDが不正です: "${id}"（例: S01, S30）` });
+      errors.push({
+        row: rowNum,
+        column: "id",
+        message: `ステップIDが不正です: "${id}"（例: S01, S30）`,
+      });
       continue;
     }
 
-    // [1] axis
-    const axisRaw = fields[1];
+    // C2: CSV内ID重複チェック
+    if (seenIds.has(id)) {
+      errors.push({
+        row: rowNum,
+        column: "id",
+        message: `ステップID "${id}" がCSV内で重複しています`,
+      });
+      continue;
+    }
+    seenIds.add(id);
+
+    // [1] axis (M1: 大文字小文字対応)
+    const axisRaw = fields[1].trim().toLowerCase();
     if (!VALID_AXES.has(axisRaw)) {
-      errors.push({ row: rowNum, column: "axis", message: `軸が不正です: "${axisRaw}"（a1/a2/b/c/d）` });
+      errors.push({
+        row: rowNum,
+        column: "axis",
+        message: `軸が不正です: "${axisRaw}"（a1/a2/b/c/d）`,
+      });
       continue;
     }
     const axis = axisRaw as keyof AxisScores;
 
     // [2] name
-    const name = fields[2];
+    const name = fields[2].trim();
     if (!name) {
       errors.push({ row: rowNum, column: "name", message: "ステップ名が空です" });
       continue;
     }
     if (name.length > MAX_NAME_LENGTH) {
-      errors.push({ row: rowNum, column: "name", message: `ステップ名が長すぎます（${name.length}文字、上限${MAX_NAME_LENGTH}文字）` });
+      errors.push({
+        row: rowNum,
+        column: "name",
+        message: `ステップ名が長すぎます（${name.length}文字、上限${MAX_NAME_LENGTH}文字）`,
+      });
       continue;
     }
 
-    // [3] description
-    const description = fields[3] ?? "";
+    // [3] description (先頭末尾の改行は除去、意図的な空白は保持)
+    const description = (fields[3] ?? "").replace(/^[\r\n]+|[\r\n]+$/g, "");
     if (!description) {
       errors.push({ row: rowNum, column: "description", message: "説明が空です" });
       continue;
     }
     if (description.length > MAX_DESCRIPTION_LENGTH) {
-      errors.push({ row: rowNum, column: "description", message: `説明が長すぎます（${description.length}文字、上限${MAX_DESCRIPTION_LENGTH}文字）` });
+      errors.push({
+        row: rowNum,
+        column: "description",
+        message: `説明が長すぎます（${description.length}文字、上限${MAX_DESCRIPTION_LENGTH}文字）`,
+      });
       continue;
     }
 
     // [4] difficulty
-    const difficultyNum = Number(fields[4]);
+    const difficultyNum = Number(fields[4].trim());
     if (!VALID_DIFFICULTIES.has(difficultyNum)) {
-      errors.push({ row: rowNum, column: "difficulty", message: `難易度が不正です: "${fields[4]}"（1/2/3）` });
+      errors.push({
+        row: rowNum,
+        column: "difficulty",
+        message: `難易度が不正です: "${fields[4].trim()}"（1/2/3）`,
+      });
       continue;
     }
     const difficulty = difficultyNum as 1 | 2 | 3;
 
     // [5] estimatedMinutes
-    const minutes = Number(fields[5]);
+    const minutesRaw = fields[5].trim();
+    const minutes = Number(minutesRaw);
     if (!Number.isInteger(minutes) || minutes < MIN_MINUTES || minutes > MAX_MINUTES) {
-      errors.push({ row: rowNum, column: "estimatedMinutes", message: `所要時間が不正です: "${fields[5]}"（${MIN_MINUTES}-${MAX_MINUTES}の整数）` });
+      errors.push({
+        row: rowNum,
+        column: "estimatedMinutes",
+        message: `所要時間が不正です: "${minutesRaw}"（${MIN_MINUTES}-${MAX_MINUTES}の整数）`,
+      });
       continue;
     }
 
@@ -206,7 +266,7 @@ export function parseCsvToSteps(csvText: string): CsvParseResult {
 }
 
 // ---------------------------------------------------------------------------
-// calculateStepDiff
+// calculateStepDiff (C3: removedを追加)
 // ---------------------------------------------------------------------------
 
 function compareHints(a: StepHints, b: StepHints): boolean {
@@ -230,12 +290,15 @@ export function calculateStepDiff(
     existingMap.set(step.id, step);
   }
 
-  const importedIds = new Set<string>();
+  const importedMap = new Map<string, StepDefinition>();
+  for (const step of imported) {
+    importedMap.set(step.id, step);
+  }
+
   const added: StepDefinition[] = [];
   const modified: StepModified[] = [];
 
   for (const imp of imported) {
-    importedIds.add(imp.id);
     const ex = existingMap.get(imp.id);
 
     if (!ex) {
@@ -260,12 +323,18 @@ export function calculateStepDiff(
     }
   }
 
-  // existingにあってimportedにないもの
-  const unchanged: StepDefinition[] = existing.filter(
-    (s) => !importedIds.has(s.id) || (importedIds.has(s.id) && modified.every((m) => m.before.id !== s.id))
-  ).filter((s) => !added.some((a) => a.id === s.id));
+  // C3: removed - existingにあってimportedにないもの
+  const removed = existing.filter((s) => !importedMap.has(s.id));
 
-  return { added, modified, unchanged };
+  // unchanged - existingにもimportedにもあり、かつ内容が同一
+  const unchanged = existing.filter((s) => {
+    const imp = importedMap.get(s.id);
+    if (!imp) return false; // removed
+    // modifiedに含まれていなければunchanged
+    return !modified.some((m) => m.before.id === s.id);
+  });
+
+  return { added, modified, unchanged, removed };
 }
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ export async function GET(): Promise<NextResponse> {
   try {
     const { data, error, count } = await supabase
       .from('assessment_responses')
-      .select('id, created_at, name, company_name, industry, exact_level, level_band, precision_score, axis_scores, line_user_id', { count: 'exact' })
+      .select('id, created_at, name, company_name, industry, exact_level, level_band, precision_score, axis_scores, line_user_id, company_info', { count: 'exact' })
       .order('created_at', { ascending: false })
       .limit(200);
 

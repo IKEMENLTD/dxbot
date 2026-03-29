@@ -10,6 +10,13 @@ interface AxisScores {
   d: number;
 }
 
+interface CompanyInfo {
+  employeeCount: string;
+  role: string;
+  challenges: string[];
+  email: string;
+}
+
 interface AssessmentResponse {
   id: string;
   created_at: string;
@@ -21,6 +28,7 @@ interface AssessmentResponse {
   precision_score: number;
   axis_scores: AxisScores;
   line_user_id: string | null;
+  company_info: CompanyInfo | null;
 }
 
 interface ApiResponse {
@@ -129,17 +137,19 @@ export default function AssessmentsPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">氏名</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">会社名</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">業種</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">従業員数</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">役職</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">DXレベル</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">バンド</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">スコア</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">軸別スコア</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">LINE ID</th>
+                  <th className="text-center px-4 py-3 font-medium text-gray-600 whitespace-nowrap">LINE連携</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-gray-400 py-12">
+                    <td colSpan={11} className="text-center text-gray-400 py-12">
                       診断回答がまだありません
                     </td>
                   </tr>
@@ -163,6 +173,12 @@ export default function AssessmentsPage() {
                       </td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
                         {row.industry}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                        {row.company_info?.employeeCount ?? '-'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                        {row.company_info?.role ?? '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="text-2xl font-bold text-gray-900">{row.exact_level}</span>
@@ -189,8 +205,14 @@ export default function AssessmentsPage() {
                           <span title="ITツール">D:{row.axis_scores?.d ?? '-'}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-400 text-xs font-mono max-w-[120px] truncate">
-                        {row.line_user_id ?? '-'}
+                      <td className="px-4 py-3 text-center">
+                        {row.line_user_id ? (
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 8L6.5 11.5L13 5" stroke="#06C755" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
                       </td>
                     </tr>
                   ))

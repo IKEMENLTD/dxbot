@@ -82,9 +82,16 @@ WHERE EXISTS (
 ORDER BY latest_msg.last_message_at DESC NULLS LAST;
 
 -- ---------------------------------------------------------------------------
--- STEP 3: read / read_at 同期トリガー (migration 015)
+-- STEP 3: chat_messages.read カラム追加 + read/read_at 同期トリガー
 -- ---------------------------------------------------------------------------
 
+-- read カラムが欠落している場合に追加
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS read BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- read_at から read を初期同期
+UPDATE chat_messages SET read = TRUE WHERE read_at IS NOT NULL AND read = FALSE;
+
+-- 同期トリガー
 CREATE OR REPLACE FUNCTION sync_read_columns()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -103,9 +110,8 @@ CREATE TRIGGER trg_sync_read_columns
   FOR EACH ROW
   EXECUTE FUNCTION sync_read_columns();
 
--- 既存データの同期
-UPDATE chat_messages SET read = TRUE WHERE read_at IS NOT NULL AND read = FALSE;
-UPDATE chat_messages SET read = FALSE WHERE read_at IS NULL AND read = TRUE;
+-- 未読インデックス
+CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages (user_id, read) WHERE read = FALSE;
 
 -- ---------------------------------------------------------------------------
 -- STEP 4: seed data のキー名修正 (migration 015)
